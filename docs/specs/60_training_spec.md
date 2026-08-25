@@ -490,8 +490,136 @@ checkpoint 必须保存：
 - C4: 样本种子 SHALL 按 SeedSequence 分支规则派生；任何生成器 SHALL NOT 自选随机源。
 - C5: 生成配置变化 SHALL 递增数据版本号；不同版本数据 SHALL NOT 混用，除非在 manifest 中登记。
 - C6: manifest SHALL 包含参数分块留出信息（块维度 |γ|、块区间、分位派生与各子集样本数）。
+- C7: 项目 SHALL 维护 `environment.yml`（conda 标准，见 `60` [S15] 15.5）锁定依赖；新机器复现 SHALL 跑 `conda env create -f environment.yml`；每个训练开始前 SHALL 跑 `python scripts/check_env.py` 校验依赖版本。
+- C8: 每个训练 SHALL 在 `results/<EXP>/seeds.json` 记录：master_seed、scheme_A_seed_0/1、scheme_B_seed_0/1、scheme_C_seed_0/1、data_seeds（数据生成 seed_i）。文件 SHALL 随 checkpoint 一起保存；stage_report.md 引用之。
 
 ---
+
+---
+
+## [S15] 项目存储规范（含命名扩展性）
+
+本节定义项目级存储规范，覆盖脚本、数据集、训练产物、可视化、报告与 conda 环境。命名约定预留扩展维度以适应未来多配置 / 多重跑 / 跨实验对比需求。
+
+### 15.1 完整文件树
+
+```
+project_root/
+├── README.md / README.en.md          # 项目门面（中英）
+├── LICENSE                           # MIT
+├── CONTRIBUTING.md                   # 开发约定
+├── progress.md                       # Agent 维护的进度（00 [S13.4]）
+├── environment.yml                   # conda 环境（见 15.5）
+├── spec_claim_index.md               # 自动生成的全 spec claim 索引
+├── .gitignore
+├── .github/                          # PR/Issue 模板
+├── src/                              # 生产代码（git tracked）
+│ ├── generators/                   # 20 f_beam, f_deg, f_prior
+│ ├── models/                       # 50 模型 A/B/C
+│ ├── training/                     # 60 训练脚本
+│ ├── evaluation/                   # 70 评估脚本
+│ └── utils/                        # 通用工具
+├── data/<data_version>/            # 数据集（60 [S14]）
+│ ├── train.h5 / val.h5 / test_id.h5
+│ ├── test_pb.h5 / test_ood.h5
+│ ├── test_exp03.h5 / test_exp04.h5
+│ └── manifest.json
+├── results/<EXP_id>_<arm>_<seed>_<run_tag>/  # 实验结果（见 15.2 命名约定）
+│ ├── config.yaml                   # 含 code/data/spec version 三元组
+│ ├── checkpoints/
+│ │ ├── best_val.ckpt
+│ │ └── last.ckpt
+│ ├── logs/
+│ │ ├── train.log / val.log
+│ │ ├── gpu_utils.log               # GPU 利用率（80 [S3]）
+│ │ └── gpu_memory.log              # 显存使用
+│ ├── metrics.csv / summary.json
+│ ├── seeds.json                    # 种子集合（[S14] C8）
+│ ├── visuals/                       # 可视化（15.3）
+│ ├── stage_report.md               # 阶段报告（00 [S13.3]）
+│ └── patches/                       # R2 修复 patch（80 [S12] C3）
+├── assets/                           # 最终报告引用的图
+├── final_report.md                  # M6 最终报告（90 [S2]）
+├── scripts/                          # 项目级工具
+│ ├── check_env.py                  # 环境校验
+│ └── check_spec_consistency.py     # spec 一致性自动检查
+└── docs/
+ ├── specs/                         # spec 集（00-99）
+ └── wang2026_*.pdf                  # 本地保留，不追踪
+```
+
+### 15.2 命名约定（预留扩展维度）
+
+实验目录命名格式：
+```
+<EXP_id>_<arm>_<seed>_<run_tag>[_<config_tag>]
+```
+
+各段含义与扩展性：
+
+| 段 | 格式 | 必填 | 用途与扩展 |
+|---|---|---|---|
+| `<EXP_id>` | `EXP-NN` | ✓ | 实验编号（80 [S3]） |
+| `<arm>` | `A` / `B` / `C` | ✓ | 方案标识 |
+| `<seed>` | `seed<N>`（N=0/1）| ✓ | 种子序号 |
+| `<run_tag>` | `run<N>` / `run<N>_R2` | ✗ | 重跑标签；初次为 `run1`；R2 重跑为 `run2_R2` |
+| `<config_tag>` | `D2` / `Level1` / `sigma_K=1.5` | ✗ | 配置标签；不同标定/不同复杂度时附加 |
+
+**示例**：
+- 首次主实验：`EXP-02_A_seed0_run1_D`
+- R2 重跑：`EXP-02_A_seed0_run2_R2_D`
+- 强度退化测试：`EXP-03_A_seed0_run1_D3`
+- Level 2 OOD：`EXP-05_A_seed0_run1_Level2`
+
+**命名规则**：
+- 全小写
+- 用 `_` 分隔
+- 同一 `<EXP_id>_<arm>_<seed>` 下允许多 run（重跑/扩集）
+- 跨实验对比时，使用 `<EXP_id>_vs_<EXP_id>_<arm>_<arm>` 格式的对比目录或图
+
+### 15.3 图片可视化规范
+
+格式：**PNG（位图）+ PDF（矢量副本）**——论文级图同时存 PNG 与 PDF
+
+命名约定：
+- 5 张核心图（90 [S3]）：`figure_0<N>_<type>.<png|pdf>`
+ - `figure_01_2d_phasespace.png`
+ - `figure_02_1d_profile.png`
+ - `figure_03_physics_error_bar.png`
+ - `figure_04_error_vs_gamma_scatter.png`
+ - `figure_05_residual_map.png`
+- 中间可视化（results/<EXP>/visuals/）：`vis_<EXP_id>_<sample_id>_<channel>.png`
+ - 例：`vis_EXP-02_sample0042_L.png`
+
+### 15.4 代码脚本分类
+
+| 类型 | 位置 | git tracked |
+|---|---|---|
+| 生产代码 | `src/` | ✓ |
+| 项目级工具 | `scripts/` | ✓ |
+| 实验脚本 | `results/<EXP>/scripts/` | ✗（gitignore）|
+| 临时调试 | `debug/` | ✗（gitignore）|
+
+### 15.5 环境管理
+
+项目 SHALL 维护 `environment.yml`（conda 标准）锁定依赖。新机器复现：
+```bash
+conda env create -f environment.yml
+conda activate llm
+python scripts/check_env.py  # 验证
+```
+
+每个训练开始前 SHALL 跑 `scripts/check_env.py`；不通过仅警告、登记 99，不视为失败。
+
+### Claims
+
+- C1: 项目 SHALL 按 15.1 文件树组织文件（实验目录命名按 15.2）。
+- C2: HDF5 数据集 SHALL 按 60 [S14] 字段 schema + 压缩 gzip level 4 + 按 sample 切分。
+- C3: 图片 SHALL 按 15.3 格式（PNG + PDF）与命名。
+- C4: 生产代码 SHALL 在 `src/`；实验脚本 SHALL 在 `results/<EXP>/scripts/`。
+- C5: 环境 SHALL 由 `environment.yml` 锁定；每个训练开始前 SHALL 跑 `check_env.py`。
+- C6: spec 一致性 SHALL 由 `scripts/check_spec_consistency.py` 自动检查；broken refs SHALL 写入 `spec_claim_index.md` 索引。
+
 
 ## Global Constraints
 

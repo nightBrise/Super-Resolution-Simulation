@@ -1,0 +1,20 @@
+name: llm
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pytorch::pytorch=2.4.0
+  - pytorch::torchvision=0.19.0
+  - numpy=1.26.4
+  - h5py=3.11.0
+  - scipy=1.13.0
+  - matplotlib=3.9.0
+  - pillow=10.4.0
+  - scikit-learn=1.5.0
+  - pip
+  - pip:
+    - tensorboard==2.17.0
+
+# 注：本环境即用户指定 llm conda 环境；缺失包用 `conda install` 或 `pip install` 补充；
+#     改动后请同步更新此文件并跑 `python scripts/check_env.py` 验证

@@ -121,12 +121,15 @@
 | 2026-08-25 | v0.1 | 00 | Changed | 草案审查批次六（语义澄清：普通变更 vs 重大需求变更）：`[S9]` 新增规则 7（普通变更包含执行方案调整——标定采用值、阈值、详细实现细节等，按 99 [S5] 流程增量修订，无需立新 spec；预注册阈值的修订属此类）+ Claims C3；`[S10]` 10.1「评估判据与预注册阈值」行加注释（预注册阈值修订属普通变更，不触动不可变核心）；`[S10]` 10.3 规则 4 改写（冻结后普通变更仍可适用，仅触动不可变核心才走重大需求变更） | 用户澄清"无人值守"真实含义：每个阶段根据报告调整后续 spec 是研究方法的正常演化，不是每次都要立新 spec；当前 spec 语义不足以区分"调整执行方案"（普通变更）与"重大需求变更"——填补边界以支持"阶段性冻结 + 普通变更增量"的工作流模式 | 00, 90 | Implemented |
 | 2026-08-25 | v0.1 | 80 | Changed | 草案审查批次七（语义重定义：算力预算 → GPU 使用质量）：`80 [S3]`「算力预算登记表」改为「GPU 使用质量登记表」——本项目为本地 2× RTX 6000 Ada/NVLink，GPU 时间不计费，监控重点为 GPU 利用率（≥80%）与多卡并行策略，不是预算上限；C6 改为按 GPU 使用质量登记表管理，不触发"算力降配"；`80 [S11]` R8 风险登记由「算力超预算 → 正式降配」改为「GPU 利用率持续不足 → 提升 num_workers / 调整 batch / 代码审查 + 登记 99」」 | 用户澄清：本地多卡 GPU 不计费，"算力预算"概念不适用；真正的关切是 GPU 利用率（不闲置）、计算完整性（该 GPU 的全 GPU）、多卡并行策略。语义重定义后将监控重点从"超预算降配"转为"提升利用率" | 80, 90 | Implemented |
 | 2026-08-25 | v0.1 | 00, 80 | Added | 草案审查批次八（Agent 自主能力补强，最高优先 3 条漏洞）：`00 [S13]` 新增 Agent 工作模式章节（[S13.1] 三段式流程；[S13.2] 执行前必检项 6 条：上阶段交付物 / config.yaml 三元组 / spec 通读 / 跨文档一致性 / 标定值 / 阶段报告生成；[S13.3] 阶段报告模板 6 章节）；`80` 末尾新增附录 A 失败路径决策规则（5 级优先级：最低成本 / 不影响三方案公平 / 不偏离研究问题 / 不消耗 GPU / 不可变核心不触动；超出路径升级用户）；仓库根 `progress.md` 由 Agent 自动维护（更新规则进 spec） | 用户决定补最高优先 3 条漏洞：Agent 工作模式 / 失败路径决策规则 / 进度追踪——这是无人值守能否成立的关键支撑 | 00, 80 | | Implemented |
+| 2026-08-25 | v0.1 | 60, 80, 90, 99, scripts | Added | 草案审查批次九（补全中优+低优 6 个漏洞 + 命名扩展性分析）：`N1` GPU 利用率分档（`80 [S3]`：标准 ≥80% / 代理 ≥70% / Debug ≥60%）；`N2` `60 [S15]` 新增完整存储规范（含命名扩展性维度：配置标签 / 重跑 run 标签 / 跨实验比较）；`2.3 强化` `environment.yml`（conda 锁定 llm 环境）+ `60 [S14] C8 seeds.json` + `scripts/check_env.py`；`3.1 强化` `00 [S13.3]` 阶段报告模板 + `90 [S2]` 最终报告模板 + `90 [S7]` 阶段 vs 最终报告区分 + 5 张图详细图注；`3.3` `99 [S3] C4+C5`（Implemented 判定规则 + 同 commit Approved→Implemented 允许）；`2.1` `scripts/check_spec_consistency.py` + `spec_claim_index.md` | 用户反馈：(1) 小模型达不到 80% 利用率；(2) 环境用 llm conda；(3) 报告需详细格式+图注；(4) 完整存储规范（脚本/数据/图片/命名/文件树）；(5) 命名扩展性分析。补全后无人值守基础完整。 | 60, 80, 90, 99, scripts | Implemented |
 
 ### Claims
 
 - C1: 每次修改任何 Spec 文件 SHALL 在变更日志明细中新增一行记录，且该行 SHALL 包含 Date、Version、Module、Type、Description、Reason、Impact、Status 八个字段。
 - C2: Type 字段 SHALL 取值仅为 `Added` / `Changed` / `Removed` / `Fixed` 之一。
 - C3: Status 字段 SHALL 取值仅为 `Proposed` / `Approved` / `Implemented` 之一。
+- C4: Status = `Implemented` 的判定 SHALL 同时满足：(a) spec 文件已修改（git diff 显示改动）；(b) 跨文档引用一致性自动检查通过（`scripts/check_spec_consistency.py`）；(c) 修改涉及的所有 claim 仍可验证（指向文件/测试/可测量指标）；(d) 必要时附 `stage_report.md` 或验证脚本输出。
+- C5: Status = `Approved` → `Implemented` 之间允许同一次 commit 完成；但 commit message SHALL 显式引用 99 行号（如 `Refs 99:R5-2026-08-25`），便于追溯。
 - C4: 变更日志中 Module 与 Impact 字段 SHALL 使用 `00`-`99` 文档编号标识受影响的文档。
 
 ---
