@@ -28,13 +28,6 @@
 - **物理复杂度起点**：Level 1（非高斯剖面 + 不对称 + 局部厚度变化 + 三阶中心线 + 二/三阶压缩折叠）
 - **退化协议**：256 → 64 下采样 + 高斯模糊 + 高斯噪声，标定采用值（$\sigma_K$ / $\sigma_n$ / $\sigma_{\mathrm{smooth}}$）登记于 `config.yaml` 与 `99_change_log.md`
 
-### 理论支撑
-
-本项目借鉴 ICLR 2026 论文 *Breaking Scale Anchoring*（wang2026_breaking-scale-anchoring）的两个核心洞察：
-
-- **Scale Anchoring / 频谱偏差**：纯空间域 L1 损失会使网络优先拟合低频、抹平精细结构；引入频域损失 $\mathcal{L}_{\mathrm{spec}}$ 作为 $\mathcal{L}_{\mathrm{space}}$ 的补充，迫使网络恢复高频折叠。
-- **信息论限制**：退化使高频成分落入噪声底以下；物理先验（$P_2$ 或 $c_{\mathrm{prior}}$）本质上就是"噪声底以下缺失信息的条件锚点"——这是先验形式必要性的理论背书。
-
 ---
 
 ## 仓库结构
@@ -61,7 +54,6 @@
     │   ├── 99_change_log.md
     │   └── archive/
     │       └── chat-超分辨率增强模拟1.txt                 # 原始对话归档
-    # 参考论文 PDF 按 .gitignore 约定不上传仓库（本地保留），引用请走下方 arXiv URL
 
 # 实现阶段将创建：
 #   src/                    # 源代码（生成器 / 模型 / 训练 / 评估）
@@ -109,14 +101,6 @@
 2. [`docs/specs/00_master_spec.md`](docs/specs/00_master_spec.md) — 总纲（必读）；
 3. 按当前任务精读对应模块的子 Spec（10–90）；
 4. 任何变更先登记 [`docs/specs/99_change_log.md`](docs/specs/99_change_log.md)，批准后修改，落地后置 Implemented。
-
----
-
-## 引用文献
-
-本项目借鉴：
-
-- **Wang et al. (ICLR 2026)**. *Breaking Scale Anchoring: Frequency Representation Learning for Zero-Shot Super-Resolution*. arXiv:[2512.05132v2](https://arxiv.org/abs/2512.05132)。PDF 按 `.gitignore` 约定不上传仓库，本地保留作阅读。
 
 ---
 

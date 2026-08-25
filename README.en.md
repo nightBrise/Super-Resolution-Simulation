@@ -26,13 +26,6 @@ This project generates strictly paired $(H, L, P)$ data via a lightweight longit
 - **Starting complexity**: Level 1 (non-Gaussian profile + asymmetry + local thickness variation + 3rd-order center line + 2nd/3rd-order compression folds).
 - **Degradation**: $256 \rightarrow 64$ downsampling + Gaussian blur + Gaussian noise, with calibrated values ($\sigma_K$ / $\sigma_n$ / $\sigma_{\mathrm{smooth}}$) recorded in `config.yaml` and `99_change_log.md`.
 
-### Theoretical grounding
-
-Inspired by ICLR 2026 *Breaking Scale Anchoring* (arXiv:2512.05132v2):
-
-- **Scale Anchoring / spectral bias**: pure spatial L1 loss causes the network to fit low frequencies first and smear out fine structures; a frequency-domain loss term is added to push the network to recover high-frequency folds.
-- **Information-theoretic limit**: degradation pushes high-frequency content below the noise floor; physical priors ($P_2$ or $c_{\mathrm{prior}}$) are the *conditional anchors* for that sub-noise-floor information — the theoretical backing for why a prior is necessary at all.
-
 ---
 
 ## Repository layout
@@ -59,7 +52,6 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring* (arXiv:2512.05132v2):
     │   ├── 99_change_log.md
     │   └── archive/
     │       └── chat-超分辨率增强模拟1.txt                 # Archived original conversation
-    # Reference PDFs are intentionally NOT versioned (see .gitignore); cite via arXiv URL below
 
 # To be created at implementation stage:
 #   src/                    # Source code (generators / models / training / evaluation)
@@ -107,14 +99,6 @@ Full phase–gate–milestone–experiment mapping: [`docs/specs/80_experiment_m
 2. [`docs/specs/00_master_spec.md`](docs/specs/00_master_spec.md) — Master spec (must-read);
 3. Read the relevant sub-spec for the current task (10–90);
 4. Any change: first record in [`docs/specs/99_change_log.md`](docs/specs/99_change_log.md); only after approval, edit; once landed, mark Implemented.
-
----
-
-## Citation
-
-This project draws on:
-
-- **Wang et al. (ICLR 2026)**. *Breaking Scale Anchoring: Frequency Representation Learning for Zero-Shot Super-Resolution*. arXiv:[2512.05132v2](https://arxiv.org/abs/2512.05132). PDF intentionally NOT versioned (see `.gitignore`); local copy retained for reading.
 
 ---
 
