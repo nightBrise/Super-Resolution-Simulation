@@ -97,6 +97,22 @@
 ![Figure N](assets/figure_0N_<type>.png)
 *图 N：<图注>*
 ```
+
+#### 格式约定（PNG vs PDF）
+
+最终报告 SHALL 同时提供 PNG 与 PDF 两种格式：
+
+| 格式 | 用途 | 必含 |
+|---|---|---|
+| PNG | README、final_report.md 嵌入、Web 展示 | ✓ 必含 |
+| PDF | 论文级出版（矢量、可在 LaTeX 中引用） | ✓ 必含（M6 最终报告） |
+
+存放位置：
+- PNG：`assets/figure_0N_<type>.png`
+- PDF：`assets/figure_0N_<type>.pdf`
+
+两者内容 SHALL 一致；agent 在生成图时 SHALL 同时保存两种格式（PNG 用于位图展示、PDF 用于矢量出版）。
+
 ## [S3] 核心图表清单
 
 报告中必须包含以下 5 张核心图表，缺一不可：

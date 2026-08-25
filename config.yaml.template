@@ -1,0 +1,180 @@
+# config.yaml 模板（每个实验的 results/<EXP>/config.yaml 必含字段）
+#
+# 本文件由 src/utils/write_config.py 加载并写入 results/<EXP>/config.yaml。
+# Agent 在实验开始前 SHALL 自动填充此文件；任一字段缺失视为验收失败
+# （参见 90 [S5] N8 预注册对账）。
+#
+# 字段来源：
+# - 三元组（code_version / data_version / spec_version）：80 [S12] C2、60 [S14] C1
+# - 标定采用值（σ_K / σ_n / σ_smooth）：30 [S12]、40 [S5]
+# - 评估参数（DoG 核尺度）：70 [S5.3]
+# - 训练超参数（lr / batch / steps）：60 [S9]
+# - 预注册阈值（τ / 触发率 / ρ）：70 [S4]
+# - 网络结构（C₀ / 残差块数）：50 [S7]
+
+# ============================================================
+# 必填：版本三元组（缺失视为验收失败）
+# ============================================================
+code_version: "<git rev-parse HEAD>"  # 代码 commit hash
+data_version: "<data/<版本>/>"      # 数据集版本号
+spec_version: "<git describe --tags>" # spec 集版本（v0.x 或 v1.x）
+
+# ============================================================
+# 必填：实验标识
+# ============================================================
+experiment_id: "EXP-XX"            # 实验编号
+scheme: "A|B|C"                    # 方案标识
+seed_index: 0                       # 种子序号（0 或 1）
+run_tag: "run1"                    # run 标签（run1 / run2_R2 / ...）
+config_tag: ""                     # 配置标签（可选，如 D2 / Level2 / sigma_K=1.5）
+
+# ============================================================
+# 必填：种子集合（来自 60 [S14] C8）
+# ============================================================
+master_seed: 42                    # 主种子
+data_seeds:
+  train: 11111                     # 训练集数据生成 seed_i
+  val: 22222                       # 验证集
+  test_id: 33333
+  test_pb: 44444
+scheme_seeds:
+  scheme_A_seed_0: 12345
+  scheme_A_seed_1: 67890
+  scheme_B_seed_0: 13579
+  scheme_B_seed_1: 24680
+  scheme_C_seed_0: 11223
+  scheme_C_seed_1: 33445
+
+# ============================================================
+# 必填：标定采用值（来自 EXP-01 标定后登记，30 [S12] / 40 [S5]）
+# ============================================================
+calibration:
+  sigma_K: 0.0                     # 高斯模糊核标准差（EXP-01 标定）
+  sigma_n: 0.0                     # 高斯噪声标准差（EXP-01 标定）
+  sigma_smooth:                    # 先验平滑标准差（40 [S5]）
+    sigma_smooth_H: 0.0            # 真值平滑（边缘检测用）
+    sigma_smooth_P: 0.0            # 先验平滑
+
+# ============================================================
+# 必填：退化参数（30）
+# ============================================================
+degradation:
+  r: 4                              # 下采样倍数（30 [S12] C1）
+  method: "block_average"            # 下采样方法
+  noise_model: "L = max(0, L_clean + n)"  # 30 [S4] C4
+  snr_hf_threshold: 0.1             # 30 [S6] SNR_hf 判据
+
+# ============================================================
+# 必填：评估参数（70）
+# ============================================================
+evaluation:
+  tau: 0.05                         # 物理指标阈值（70 [S4] C5）
+  trigger_rate: 0.20                # 一票否决触发率（70 [S4] C4）
+  primary_metric: "ε_high^mask"      # 主指标（70 [S7] C1）
+  secondary_metrics:                # 次指标
+    - "ε_z_relative"
+    - "I_peak_relative"
+    - "sigma_z_relative"
+    - "sigma_delta_relative"
+  dog:                              # DoG 核尺度（70 [S5.1]）
+    sigma_outer: 0.0               # 按 f_c=1/8 处衰减50%反算
+    sigma_inner_factor: 0.5         # σ_inner = σ_outer / 2
+  ci_width_min: 0.05                # 最小可信 CI 宽度（90 N8）
+  mde: 0.05                         # 最小可检出效应量（90 N8）
+  max_expansion_factor: 2.0         # 扩集上限（90 N8）
+
+# ============================================================
+# 必填：物理一致性判据（70 [S4]）
+# ============================================================
+hallucination:
+  delta_threshold: 0.05             # τ（70 [S4] C5）
+  trigger_rate_max: 0.20            # 70 [S4] C4
+  one_veto_enabled: true             # 物理指标一票否决开关
+
+# ============================================================
+# 必填：网络结构（50）
+# ============================================================
+network:
+  backbone: "unet"
+  C0: 48                            # 基础通道宽（50 [S7]）
+  num_residual_blocks: 2            # 每级残差块数（50 [S7]）
+  num_levels: 5                     # 下采样级数（50 [S7]）
+  scheme_C_film_injection: "bottleneck_and_decoder"  # 50 [S10] C5
+  input_channels: 2                  # 50 [S7]（A: concat(L_up, 0); B: concat(L_up, P2); C: concat(L_up, 0)）
+
+# ============================================================
+# 必填：训练超参数（60 [S9]）
+# ============================================================
+training:
+  optimizer: "AdamW"                # 60 [S9] C1
+  learning_rate: 3.0e-4
+  weight_decay: 1.0e-4
+  beta1: 0.9
+  beta2: 0.999
+  batch_size: 16                    # 三方案必须一致
+  max_steps: 100000                 # 60 [S10]
+  early_stopping:
+    patience: 10                    # 60 [S10] C3
+    min_step_fraction: 0.5          # 60 [S10] C4
+  lambda_spec: 1.0                  # 60 [S2] C3（冻结）
+  data_loading:
+    num_workers: 4                  # 60 [S7] 推荐值
+    pin_memory: true
+  precision: "fp32"                 # 或 "fp16" / "bf16"
+
+# ============================================================
+# 必填：数据集划分（60 [S8]）
+# ============================================================
+dataset:
+  version: "v1"                     # data/<版本>/
+  split: "train+val+test_id+test_pb"
+  train_size: 20000
+  val_size: 2000
+  test_id_size: 1000                # 同分布留出
+  test_pb_block:                    # 参数分块留出（60 [S8] C4）
+    dimension: "abs(gamma)"
+    range: [0.3, 0.4]               # 块区间
+  ood_test_path: "data/v1/test_ood.h5"  # Level 2 数据
+
+# ============================================================
+# 必填：GPU 配置（80 [S3]）
+# ============================================================
+gpu:
+  device: "cuda:0,cuda:1"           # 多卡并行
+  utilization_target:                # 分档阈值
+    standard: 0.80
+    proxy: 0.70
+    debug: 0.60
+  config_class: "standard"           # standard / proxy / debug
+  memory_limit_mb: 45000            # 预留 3GB 给框架开销（48GB 卡）
+  parallelism: "2_cards_3_batches"  # 80 [S3]：6 训练 ≤ 3 批次
+
+# ============================================================
+# 必填：复现性字段（00 [S6] 约束8）
+# ============================================================
+reproducibility:
+  python_version: "3.11"
+  torch_version: "2.4.0"
+  numpy_version: "1.26.4"
+  env_lock_file: "environment.yml"   # 锁定文件路径
+
+# ============================================================
+# 必填：checkpoint 路径
+# ============================================================
+checkpoint:
+  best_val_path: "results/<EXP>/checkpoints/best_val.ckpt"
+  last_path: "results/<EXP>/checkpoints/last.ckpt"
+
+# ============================================================
+# 可选：可视化配置（按需）
+# ============================================================
+visualization:
+  num_samples: 50                   # 80 [S8] C6：抽样 50 个样本
+  log_scale: true                   # 90 [S3] Fig.1 用对数色标
+  format: "png"                     # png / pdf / svg（90 [S2] 引用 png）
+
+# ============================================================
+# 可选：实验备注
+# ============================================================
+notes: |
+  实验目的、特殊配置、注意事项等

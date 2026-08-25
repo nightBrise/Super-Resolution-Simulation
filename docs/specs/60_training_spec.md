@@ -656,6 +656,7 @@ python scripts/check_env.py  # 验证
 - C8: 实验脚本（`results/<EXP>/scripts/`） SHALL 保留至 M6 验收通过；M6 验收通过后可清理或压缩归档。
 - C9: 失败诊断输出 SHALL 保留至对应 99 未决问题 Closed 后清理。
 - C10: Stage checkpoint 中间存档 SHALL 在最终 `best_val.ckpt` 选定后清理，仅保留 best_val.ckpt + last.ckpt。
+- C11（新增）：`config.yaml` 模板 SHALL 维护于仓库根 `config.yaml.template`；模板 SHALL 含本文件 [S15] 15.1 目录结构对应的所有必填字段（三元组、种子、标定、退化、评估、网络、训练、数据集、GPU 配置、可复现性、checkpoint 路径、可视化、备注）；Agent 实验开始前 SHALL 按模板填充 `results/<EXP>/config.yaml`；任一必填字段缺失视为验收失败（与 `80` [S8] C2 + `90` [S5] N8 协调）。
 
 
 
