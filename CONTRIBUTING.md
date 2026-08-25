@@ -312,7 +312,52 @@ git push origin v1.0.0
 
 ---
 
-## 10. 后续可扩展（不在本文件范围）
+## 10. 提交频率与粒度
+
+### 10.1 核心原则
+
+- **每个 commit 是独立完整单元**：可单独 revert 不破坏其他 commit
+- **commit 粒度 = 一次逻辑动作**：不是每次按键、不是每月一次
+- **push 与 commit 同步**：避免本地堆积（堆积 = 风险）
+- **PR 与 commit 一致**：GitHub Flow 推荐 squash merge，一个 PR = 一个 commit
+
+### 10.2 本项目推荐频率
+
+| 项目阶段 | 推荐频率 | 触发条件 |
+|---|---|---|
+| **M0 规范阶段** | 每批审查一个 commit | 改动 ≥ 1 个 spec 文档或 ≥ 1 个配置文件 |
+| **M1/M3 实现阶段** | 每个子任务一个 commit | 单元测试通过 → commit；不要写一半就 commit |
+| **M2 数据集生成** | 一次性 commit | 数据生成脚本 + manifest + 工件契约 |
+| **M4 主实验** | 每个 EXP 一个 commit + R2 修复分支独立 commit | 主实验 squash merge；R2 走 `r2-fix/` 分支独立 commit |
+| **M5 推理级消融** | 每个 EXP 一个 commit | EXP-03/04/07/08 各一个 |
+| **M6 收尾** | 每天 1–3 次 | 最终报告 / 评估 / 修 bug |
+
+### 10.3 不应该的频率
+
+- **太低**（几天才一次）：风险积累，回滚困难，审计失败
+- **太高**（每个文件改动就 commit）：噪声多，审查困难，PR 历史碎
+- **不一致**（时而频繁时而稀疏）：难建立预期，协作困难
+
+### 10.4 自检清单（commit 前）
+
+- [ ] commit message 符合 Conventional Commits（[§ 3](#3-commit-message-规范conventional-commits)）
+- [ ] commit footer 引用了对应 spec 行号或 99 变更日志（如 `Refs spec/50[S10]`、`Refs 99:R4-2026-09-01`）
+- [ ] 改动独立完整：本次 commit 不依赖未提交的改动
+- [ ] 所有本地测试通过
+- [ ] `config.yaml` 三元组（code/data/spec version）已更新（如适用）
+- [ ] 工作树干净（除本次 commit 改动外无其他未提交文件）
+
+### 10.5 push 频率原则
+
+- **每个 commit 后立即 push**——本地堆积超过 1 个 commit 应立即 push
+- **同一 commit 多次 push 重试** 是网络异常，不是错误（见下方备注）
+- **推送失败后**：先 `git status` 确认本地状态，再 `git push` 重试；若重试 ≥ 3 次仍失败，检查网络或临时切换到 SSH
+
+> **本会话备注**：批次六、七推送时 GitHub 网络偶发超时（133+ 秒），经 1–2 次重试后成功。这是 GitHub 端偶发问题，不是配置错误。
+
+---
+
+## 11. 后续可扩展（不在本文件范围）
 
 - CI/CD 配置（`.github/workflows/`）：测试、lint、训练 smoke test；
 - `CODEOWNERS`：指定审查者（如未来多人协作）；
