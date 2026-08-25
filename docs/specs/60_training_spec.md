@@ -530,7 +530,15 @@ project_root/
 ├── .gitignore
 ├── .github/                          # PR/Issue 模板
 ├── src/                              # 生产代码（git tracked）
-│ ├── generators/                   # 20 f_beam, f_deg, f_prior
+│ ├── generators/                   # 20 f_beam, f_deg, f_prior + 交叉生成工具（批次十五用户拍板）
+│ │ ├── f_beam.py                   # 20 物理生成（含掩膜 W1–W8）
+│ │ ├── f_deg.py                    # 30 退化
+│ │ ├── f_prior.py                  # 40 先验
+│ │ ├── sampling.py                 # 参数采样（压缩三态 + 联合约束，20 [S9]）
+│ │ ├── masks.py                    # W1–W8 掩膜检查
+│ │ ├── dataset_builder.py          # 划分（60 [S8]）+ HDF5 落盘 + manifest（60 [S14]）
+│ │ ├── calibration.py              # EXP-01b/c/d 标定（σ_K/σ_n/σ_smooth）
+│ │ └── probe.py                    # G0 受控探针法（ρ≥0.1，80 [S9] G0(b)）
 │ ├── models/                       # 50 模型 A/B/C
 │ ├── training/                     # 60 训练脚本
 │ ├── evaluation/                   # 70 评估脚本
@@ -633,6 +641,7 @@ python scripts/check_env.py  # 验证
 - C2: HDF5 数据集 SHALL 按 60 [S14] 字段 schema + 压缩 gzip level 4 + 按 sample 切分。
 - C3: 图片 SHALL 按 15.3 格式（PNG + PDF）与命名。
 - C4: 生产代码 SHALL 在 `src/`；实验脚本 SHALL 在 `results/<EXP>/scripts/`。
+- C4b（批次十五用户拍板）：交叉生成工具（数据划分 / 标定 / G0 探针 / 数据集落盘）SHALL 归属 `src/generators/`（sampling.py / masks.py / dataset_builder.py / calibration.py / probe.py），以保证可复现；不同 agent 实现同一 EXP 时使用相同的模块归属与接口。
 - C5: 环境 SHALL 由 `environment.yml` 锁定；每个训练开始前 SHALL 跑 `check_env.py`。
 - C6: spec 一致性 SHALL 由 `scripts/check_spec_consistency.py` 自动检查；broken refs SHALL 写入 `spec_claim_index.md` 索引。
 
