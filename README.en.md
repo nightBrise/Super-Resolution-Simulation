@@ -37,7 +37,7 @@ This project generates strictly paired $(H, L, P)$ data via a lightweight longit
 ├── LICENSE                                                # MIT
 ├── .gitignore
 ├── CONTRIBUTING.md                                        # Dev conventions (GitHub Flow + Conventional Commits)
-├── environment.yml                                        # conda env lock (llm)
+├── environment.yml                                        # conda env lock (sr-sim)
 ├── config.yaml.template                                   # Experiment config template (required fields)
 ├── progress.md                                            # Agent-maintained project progress
 ├── spec_claim_index.md                                    # Auto-generated claim index

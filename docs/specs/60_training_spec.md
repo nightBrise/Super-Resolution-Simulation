@@ -633,7 +633,7 @@ project_root/
 项目 SHALL 维护 `environment.yml`（conda 标准）锁定依赖。新机器复现：
 ```bash
 conda env create -f environment.yml
-conda activate llm
+conda activate sr-sim
 python scripts/check_env.py  # 验证
 ```
 

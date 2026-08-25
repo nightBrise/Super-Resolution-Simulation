@@ -1,0 +1,30 @@
+# 项目元数据与 pytest 配置（05 [S3.1] 配套文件）。
+#
+# markers 登记四层测试（unit / integration / smoke / acceptance）、资源标记
+#（slow / gpu）与里程碑绑定（m1–m6），全部经 --strict-markers 强制注册。
+# 默认 addopts 只跑 L0+L1（unit or integration）；acceptance 与 smoke 需要
+# 显式 -m 选择（05 [S2]）。
+
+[project]
+name = "super-resolution-simulation"
+version = "0.1.0"
+description = "FEL 纵向相空间超分辨率研究：合成生成函数驱动的替代验证范式"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: L0 单元测试（纯 CPU，单次 ≤2 分钟，05 [S2]）",
+    "integration: L1 集成测试（模块间接口与数据契约，05 [S2]）",
+    "smoke: L2 冒烟测试（单卡 GPU 快速管线验证，05 [S4]）",
+    "acceptance: L3 里程碑验收测试（05 [S5]）",
+    "slow: 长耗时测试（如网格收敛），按需显式运行",
+    "gpu: 需要 GPU 的测试；GPU 缺失时跳过并显式标注（05 [S7] C 类）",
+    "m1: 里程碑 M1 生成器绑定（05 [S5]）",
+    "m2: 里程碑 M2 数据集绑定（05 [S5]）",
+    "m3: 里程碑 M3 基线绑定（05 [S5]）",
+    "m4: 里程碑 M4 主实验绑定（05 [S5]）",
+    "m5: 里程碑 M5 消融绑定（05 [S5]）",
+    "m6: 里程碑 M6 交付绑定（05 [S5]）",
+]
+addopts = "-m \"unit or integration\" --strict-markers --timeout=120"

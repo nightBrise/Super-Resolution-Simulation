@@ -39,7 +39,7 @@
 ├── LICENSE                                                # MIT
 ├── .gitignore
 ├── CONTRIBUTING.md                                        # 开发约定（GitHub Flow + Conventional Commits）
-├── environment.yml                                        # conda 环境锁定（llm）
+├── environment.yml                                        # conda 环境锁定（sr-sim）
 ├── config.yaml.template                                   # 实验配置模板（必填字段契约）
 ├── progress.md                                            # Agent 维护的项目进度
 ├── spec_claim_index.md                                    # 自动生成的全 spec Claim 索引

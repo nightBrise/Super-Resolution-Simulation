@@ -53,6 +53,8 @@ docs/*.pdf
 # part of the spec / source-code release artefact.
 data/
 results/
+results/test_reports/
+debug/
 checkpoints/
 models/
 final_report.md
