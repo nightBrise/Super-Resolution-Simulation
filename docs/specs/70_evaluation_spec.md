@@ -94,7 +94,14 @@ $$
 
 即方案 $X$ 在该样本上图像指标优于 A，但 $\varepsilon_z$ 或 $I_{\text{peak}}$ 的相对误差比 A 差超过阈值 $\tau$（固定 5 个百分点，$\tau = 0.05$）。$e_q$ 与 $\tau$ 均为无单位相对量（小数表示）；否决比较的是预测与基线的相对误差之差。
 
-方案级聚合：记触发率 $P(F; X) = \frac{1}{N}\sum_i F_i(X)$，否决量 $q$ 的方案级配对平均增益 $\bar{G}_q(X) = \frac{1}{N}\sum_i \big( e_q(A, i) - e_q(X, i) \big)$（增益方向与 [S6] 一致，正值表示误差降低）。当 $P(F; X) > 20\%$ 且净物理增益为负（$\bar{G}_{\varepsilon_z}(X) \le 0$ 且 $\bar{G}_{I_{\text{peak}}}(X) \le 0$）时，判定该先验形式在方案 $X$ 所处的实验条件下物理幻觉失效；当 $P(F; X) > 20\%$ 且净增益非双负（混合增益，如 $\bar{G}_{\varepsilon_z}(X) > 0$ 而 $\bar{G}_{I_{\text{peak}}}(X) \le 0$）时，判定为「部分失效（混合增益）」；当 $P(F; X) \le 20\%$ 时判定为局部失效，须结合参数空间分布解读。
+方案级聚合（两层判据，批次十四用户拍板）：记触发率 $P(F; X) = \frac{1}{N}\sum_i F_i(X)$，否决量 $q$ 的方案级配对平均增益 $\bar{G}_q(X) = \frac{1}{N}\sum_i \big( e_q(A, i) - e_q(X, i) \big)$（增益方向与 [S6] 一致，正值表示误差降低）。
+
+- **第一层（量）**：触发率 $P(F; X) > 20\%$；
+- **第二层（质，区分噪声 vs 系统性）**：对配对差 $d_i = e_q(X, i) - e_q(A, i)$（同一样本配对），其 bootstrap 95% CI 的**下界 > 0**（即方案 X 相对 A 的物理量恶化统计显著，非随机波动）。
+
+两层**同时满足** → 判定该先验形式在方案 $X$ 所处的实验条件下物理幻觉失效；WHEN $P(F; X) > 20\%$ 但配对差 CI 含 0（统计不显著）→ 判定为噪声波动，SHALL NOT 触发方案级否决，报告须注明「触发率达标但统计不显著」；WHEN $P(F; X) > 20\%$ 且净增益非双负（混合增益，如 $\bar{G}_{\varepsilon_z}(X) > 0$ 而 $\bar{G}_{I_{\text{peak}}}(X) \le 0$）时，判定为「部分失效（混合增益）」；WHEN $P(F; X) \le 20\%$ 时判定为局部失效，须结合参数空间分布解读。
+
+**跨种子辅助证据**：两个种子（`60` [S11] C4）均满足两层判据 → 高置信判定；仅一个种子满足 → 报告须标注不确定性（另一种子未触发或统计不显著）。
 
 物理量互相冲突与幻觉形态须分类报告：
 
@@ -108,7 +115,7 @@ $$
 - C3: $h_{\text{eff}}$ SHALL 按 $C_{z\delta} / \sigma_z^2$ 计算，$\varepsilon_z$ SHALL 按 $\sqrt{\sigma_z^2 \sigma_\delta^2 - C_{z\delta}^2}$ 计算。
 - C4: 样本级幻觉标志 $F_i(X)$ SHALL 按本节正文定义判定：$\text{PSNR}_i(X) > \text{PSNR}_i(A)$，且 $e_{\varepsilon_z}$ 或 $e_{I_{\text{peak}}}$ 相对 A 的恶化量超过阈值 $\tau$；$F_i(X)$ SHALL 只对先验方案（B、C）计算，SHALL NOT 应用于方案 A 自身。
 - C5: $\tau$ SHALL 固定为 0.05（5 个百分点，预注册阈值，不做数据标定；$\tau$ 为可接受性判据而非待估量）。
-- C6: 方案级判定 SHALL 使用触发率 $P(F; X)$ 与净物理增益：WHEN $P(F; X) > 20\%$ 且 $\bar{G}_{\varepsilon_z}(X) \le 0$ 且 $\bar{G}_{I_{\text{peak}}}(X) \le 0$，THEN SHALL 判定该先验形式在此实验条件下物理幻觉失效；WHEN $P(F; X) > 20\%$ 且净增益非双负（混合增益，如 $\bar{G}_{\varepsilon_z}(X) > 0$ 而 $\bar{G}_{I_{\text{peak}}}(X) \le 0$），THEN SHALL 判定为「部分失效（混合增益）」：SHALL 按物理量逐个报告通过/失败向量，结论 SHALL 限定于通过的量，失败的量 SHALL 进入失效分析章节，且 SHALL 在报告显著位置披露 $P(F; X)$ 数值；WHEN $P(F; X) \le 20\%$，THEN SHALL 判定为局部失效，且 SHALL 报告触发样本在参数空间的分布（结合 `90` 要求的「误差 vs $c_{\text{high}}$」散点图）。
+- C6: 方案级判定 SHALL 使用两层判据（触发率 + 配对差统计显著性）：(a) 第一层 $P(F; X) > 20\%$；(b) 第二层配对差 $d_i = e_q(X,i) - e_q(A,i)$ 的 bootstrap 95% CI 下界 $> 0$。WHEN 两层同时满足且净物理增益为负（$\bar{G}_{\varepsilon_z}(X) \le 0$ 且 $\bar{G}_{I_{\text{peak}}}(X) \le 0$），THEN SHALL 判定该先验形式在此实验条件下物理幻觉失效；WHEN $P(F; X) > 20\%$ 但配对差 CI 含 0（统计不显著），THEN SHALL 判定为噪声波动、SHALL NOT 触发方案级否决，且 SHALL 在报告注明「触发率达标但统计不显著」；WHEN $P(F; X) > 20\%$ 且净增益非双负（混合增益），THEN SHALL 判定为「部分失效（混合增益）」：SHALL 按物理量逐个报告通过/失败向量，结论 SHALL 限定于通过的量，失败的量 SHALL 进入失效分析章节，且 SHALL 在报告显著位置披露 $P(F; X)$ 数值；WHEN $P(F; X) \le 20\%$，THEN SHALL 判定为局部失效，且 SHALL 报告触发样本在参数空间的分布（结合 `90` 要求的「误差 vs $c_{\text{high}}$」散点图）。
 - C7: 物理量互相冲突（部分改善、部分恶化）时，报告 SHALL 给出逐物理量的「通过/失败向量」（通过 = 该量方案级配对平均增益 $\ge 0$），SHALL NOT 使用加权标量聚合。
 - C8: 触发样本（$F_i(X) = 1$）SHALL 按 $I_{\text{peak}}$ 带符号相对误差的方向分为过冲型（高估）与平滑型（低估）分类报告，且过冲型中 $\mathcal{E}_{\text{peak}}$ 优于 A 的样本占比 SHALL 单独给出。
 - C9: 每个测试样本的物理量误差 SHALL 以相对误差（与真值 $m$ 相比）或绝对误差明确标注，并保持同一量纲定义。

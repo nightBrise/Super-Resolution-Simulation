@@ -41,7 +41,7 @@ $$
 \mathcal{L}_{\text{space}} = \frac{1}{N^2} \sum_{i,j} \left| \hat{H}_{ij} - H_{ij} \right|
 $$
 
-$\mathcal{L}_{\text{spec}}$ 为加权谱 L1：对归一化后的 $\hat{H}$、$H$ 取 2D FFT，按径向频率划分 5 个倍频程频带
+$\mathcal{L}_{\text{spec}}$ 为加权谱 L1：对归一化后的 $\hat{H}$、$H$ 取 2D FFT（**归一化 $\div N^2$**，保证与空域 L1 同量级，使冻结的 $\lambda = 1.0$ 等权；批次十四用户拍板），按径向频率划分 5 个倍频程频带
 
 $$
 \left[0, \frac{f_c}{4}\right],\quad \left[\frac{f_c}{4}, \frac{f_c}{2}\right],\quad \left[\frac{f_c}{2}, f_c\right],\quad \left[f_c, 2f_c\right],\quad \left[2f_c, f_N\right]
@@ -54,6 +54,13 @@ $$
 $$
 
 等权分带的原因：避免低频分量主导谱损失。$H$ 已归一化至总强度 1，而 $\hat{H}$ 未归一化（$\hat{H} = \text{Softplus}(\text{Base} + R)$），两侧 DC 项并不相等，其差异保留于 $\mathcal{L}_{\text{spec}}$ 内，作为总强度匹配信号。
+
+**L_spec 实现约定（批次十四用户拍板）**：
+- **FFT 归一化**：2D FFT 结果除以 $N^2$（$N=256$），使频域损失与空域 L1 同量级——否则 $\lambda = 1.0$（冻结）下频域损失将主导（约 100×），网络忽略空域保真；
+- **绝对值**：$|\mathcal{F}(\hat H) - \mathcal{F}(H)|$ 取**复数模**（幅度谱差异），相位差异亦被惩罚（交叉项含相位差）；
+- **频带划分**：径向频率 $f = \sqrt{k_x^2 + k_y^2}$，环形掩膜 5 带；边界像素归入低频带；掩膜仅生成一次（$256 \times 256$ 固定），三方案共享，不引入方案间差异；
+- **角点处理**：$f > f_N$ 的像素（2D 网格角点）SHALL NOT 计入任何频带（无物理意义，避免高频带混入角落伪影）；
+- 每带内取 mean，5 带等权。
 
 权重 $\lambda$ SHALL 冻结为 1.0（预注册常数，不做代理选择）；三方案使用完全相同的 $\mathcal{L}_{\text{total}}$。λ 恒为 1.0，无选择步骤。
 
@@ -323,6 +330,7 @@ $L_{\text{clean}}$ 不用于主训练输入，但可用于：调试；消融实�
 - C1: 第一版主实验数据集规模 SHALL 为 20,000 train / 2,000 val / 2,000 test；调试阶段 SHALL 使用 2,000 / 500 / 500。
 - C2: 数据集 SHALL 至少划分 in-distribution validation 与 in-distribution test；in-distribution test 数据 SHALL NOT 参与训练与早停；划分 SHALL 先按内容参数 `c` 进行，同一 `c` 的噪声实现 SHALL NOT 跨训练/验证/测试划分。
 - C3: OOD 数据的生成与保留 SHALL 为第一版必做，限定当前可定义子集：EXP-06 极端参数集与更强退化集（见 `80`）；Level 2 数据生成义务与 `20` [S8] 参数范围预注册时点绑定。OOD 评估（EXP-05/06）第一版可选（Phase 4 Could）；不执行时，报告 SHALL 标注证据缺失（`90` [S2] C11）。
+- C3b（批次十四用户拍板）：`test_ood.h5` SHALL 分两部分生成——子集 A（EXP-06 极端参数 + 更强退化，随主数据集 M2 必做）与子集 B（Level 2，待 `20` [S8] 参数范围预注册后补生成）；子集 B 补充时 SHALL 按 [S14] C5 递增数据版本号，子集 A 数据 SHALL NOT 重复生成。
 - C4: in-distribution test SHALL 由同分布留出子集（test_id）与参数分块留出子集（test_pb）构成，标准 demo 规模下两者 1:1（test_id 1,000 / test_pb 1,000）；test_pb 的块维度 SHALL 为 |γ|（幅度坐标），块区间 SHALL 为 $|\gamma| \in [0.3, 0.4]$（$|\gamma| \sim U[0.1, 0.6]$ 分位秩 $[0.4, 0.6]$，即幅度中央 20% 分位带；带符号 $\gamma \in [-0.4, -0.3] \cup [0.3, 0.4]$），按固定总体分位数确定，SHALL NOT 采用经验样本分位数；train / val / test_id 样本 SHALL 经块外条件采样（拒绝块内候选）全部落在块外，test_pb SHALL 由块内条件采样恰 1,000 个样本构成。
 
 ---
