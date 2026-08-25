@@ -8,6 +8,7 @@
 | 编号 | 文档 | 作用 | 状态 |
 |---|---|---|---|
 | `00` | [`00_master_spec.md`](00_master_spec.md) | 项目总纲、全局符号、文档索引、里程碑、变更规则 | 草案（待审查） |
+| `05` | [`05_testing_spec.md`](05_testing_spec.md) | 测试策略（分层、目录、里程碑绑定、失败处理）| 草案（待审查） |
 | `10` | [`10_research_plan.md`](10_research_plan.md) | 研究假设、实验逻辑、成功标准 | 草案（待审查） |
 | `20` | [`20_physics_generator_spec.md`](20_physics_generator_spec.md) | 高分辨率真值 `H` 与物理标签生成 | 草案（待审查） |
 | `30` | [`30_degradation_spec.md`](30_degradation_spec.md) | 低分辨率观测 `L` 退化生成 | 草案（待审查） |

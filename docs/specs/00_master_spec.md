@@ -304,6 +304,7 @@ Agent 在执行前 SHALL 完成以下六项检查；任一项不通过 SHALL 先
 - [ ] 跨文档引用一致性已检查（自动 grep）
 - [ ] 标定值已就位（σ_K, σ_n, σ_smooth）
 - [ ] 上阶段报告已生成（按 [S13.3] 模板）
+- [ ] 对应层测试套件通过（`05_testing_spec.md`：M1 前 unit/、M2 前 dataset、M3 前 models+smoke 等）
 
 ### 13.3 阶段报告模板（详细）
 
