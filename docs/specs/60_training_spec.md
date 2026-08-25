@@ -484,7 +484,7 @@ checkpoint 必须保存：
 
 ### Claims
 
-- C1: 数据集 SHALL 按本节的目录、文件与字段契约落盘；三方案训练与全部实验 SHALL 消费同一版本的数据文件。
+- C1: 数据集 SHALL 按本节的目录、文件与字段契约落盘；三方案训练与全部实验 SHALL 消费同一版本的数据文件；`manifest.json` SHALL 显式登记 `code_version`（生成该数据集时使用的 git commit hash）、`data_version`、`spec_version` 三元组（与 `00` [S6] 全局约束 8、`80` [S12] C2 配套）；任一字段缺失视为验收失败（参见 `90` [S5] N8 预注册对账）。
 - C2: 每个样本 SHALL 具有唯一 `sample_id`；`80` [S8] 的逐样本结果记录 SHALL 以 `sample_id` 与数据集联接。
 - C3: manifest SHALL 包含主种子、划分指派、标定采用值与版本信息，保证「相同数据、相同划分」可完整复现。
 - C4: 样本种子 SHALL 按 SeedSequence 分支规则派生；任何生成器 SHALL NOT 自选随机源。

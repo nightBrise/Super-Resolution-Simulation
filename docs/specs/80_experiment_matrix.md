@@ -345,6 +345,20 @@ results/
 
 ---
 
+## [S12] 代码与过程文件管理（最小集）
+
+本节定义代码与过程文件的最小管理约束，是 `00` [S6] 全局约束 8 的镜像扩展；详细 git 工作流（GitHub Flow + Conventional Commits + 分支命名 + PR/Tag）见仓库根 [`CONTRIBUTING.md`](../../CONTRIBUTING.md)，spec 仅规定与冻结纪律、可复现性、R2 流程互锁的硬约束。
+
+### Claims
+
+- C1: 项目 SHALL 使用 git 管理代码；主分支 SHALL 命名为 `main`；冻结后的 `main` SHALL NOT 被 force-push 或 reset，所有改动 SHALL 通过 PR 或显式批准机制合并。
+- C2: 每个实验的 `config.yaml` SHALL 记录 `code_version`（commit hash）、`data_version`、`spec_version` 三元组（与 `00` [S6] 全局约束 8、`60` [S14] C1 配套）；任何缺失视为验收失败（参见 `90` [S5] N8 预注册对账）。
+- C3: R2 重跑（见本文件 [S11] R2 行）SHALL 在 `r2-fix/<YYYY-MM-DD>-<N>` 修复分支上完成；修复 commit SHALL 在 footer 引用 `99_change_log.md` 对应行号（如 `Refs 99:R2-<日期>`）；修复 SHALL 经 squash merge 回 `main`，并 SHALL 同时将 patch 文件保存于 `results/<EXP>/patches/r2_fix_<序号>.patch`；修复后 SHALL 在代理尺度复现归因后再走全量重跑。
+- C4: `main` SHALL NOT 被直接 push（即使 GitHub 免费版允许管理员绕过）；个人开发者 SHALL 按 `CONTRIBUTING.md` § 1–2 创建分支、开 PR、合并、删分支的标准流程操作；分支保护纪律与 spec 冻结纪律（`00` [S9] C2）互为镜像。
+- C5: Spec 修改（按 `00` [S9]）与代码修改（按本节 + `CONTRIBUTING.md`）SHALL 同步写入 `99_change_log.md`，且 SHALL 互为镜像——任何代码改动 SHALL 在对应 commit footer 引用 spec 行号或 99 行号（如 `Refs spec/50[S10]`、`Refs 99:R4-2026-09-01`）。
+
+---
+
 ## Global Constraints
 
 - 三方案公平（`00`）：A / B / C 使用相同数据、相同空域-频域混合损失训练目标（见 `60` [S2]）、相同主干网络、相同训练配置与相同评估指标。
