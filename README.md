@@ -6,7 +6,7 @@
 
 ![版本](https://img.shields.io/badge/version-0.x.x-yellow)
 ![状态](https://img.shields.io/badge/status-spec%20draft-orange)
-![Spec](https://img.shields.io/badge/spec-v0.1%20%E8%8D%89%E6%A1%88-lightgrey)
+![Spec](https://img.shields.io/badge/spec-v0.1%2012%E6%89%B9%E5%AE%A1%E6%9F%A5-lightgrey)
 
 > 直线加速器驱动的 FEL 束流诊断中，从低分辨率纵向相空间观测恢复高分辨率精细结构的配对监督模拟研究。
 
@@ -38,6 +38,12 @@
 ├── README.en.md                                           # English version
 ├── LICENSE                                                # MIT
 ├── .gitignore
+├── CONTRIBUTING.md                                        # 开发约定（GitHub Flow + Conventional Commits）
+├── environment.yml                                        # conda 环境锁定（llm）
+├── config.yaml.template                                   # 实验配置模板（必填字段契约）
+├── progress.md                                            # Agent 维护的项目进度
+├── spec_claim_index.md                                    # 自动生成的全 spec Claim 索引
+├── scripts/                                               # 项目级工具（check_env / check_spec_consistency）
 └── docs/
     ├── specs/                                             # Spec 集（v0.1 草案，待审查）
     │   ├── README.md                                      # Spec 索引

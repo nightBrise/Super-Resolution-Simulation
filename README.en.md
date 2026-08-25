@@ -36,6 +36,12 @@ This project generates strictly paired $(H, L, P)$ data via a lightweight longit
 ├── README.en.md                                           # English version (this file)
 ├── LICENSE                                                # MIT
 ├── .gitignore
+├── CONTRIBUTING.md                                        # Dev conventions (GitHub Flow + Conventional Commits)
+├── environment.yml                                        # conda env lock (llm)
+├── config.yaml.template                                   # Experiment config template (required fields)
+├── progress.md                                            # Agent-maintained project progress
+├── spec_claim_index.md                                    # Auto-generated claim index
+├── scripts/                                               # Project tools (check_env / check_spec_consistency)
 └── docs/
     ├── specs/                                             # Spec set (v0.1 draft, pending review)
     │   ├── README.md                                      # Spec index

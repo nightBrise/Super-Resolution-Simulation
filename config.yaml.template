@@ -79,6 +79,8 @@ evaluation:
   dog:                              # DoG 核尺度（70 [S5.1]）
     sigma_outer: 0.0               # 按 f_c=1/8 处衰减50%反算
     sigma_inner_factor: 0.5         # σ_inner = σ_outer / 2
+  rho_threshold: 0.1                # 高频存活比阈值 ρ ≥ 0.1（90 N8、80 [S9] G0(b)）
+  ood_degradation_threshold: 0.20   # OOD 退化阈值（90 [S6] C5：相对退化 ≤20%）
   ci_width_min: 0.05                # 最小可信 CI 宽度（90 N8）
   mde: 0.05                         # 最小可检出效应量（90 N8）
   max_expansion_factor: 2.0         # 扩集上限（90 N8）
