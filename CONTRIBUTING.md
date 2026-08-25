@@ -318,6 +318,8 @@ git push origin v1.0.0
 
 - **每个 commit 是独立完整单元**：可单独 revert 不破坏其他 commit
 - **commit 粒度 = 一次逻辑动作**：不是每次按键、不是每月一次
+- **一个逻辑批次 = 一个 commit**：spec 变更按 `99_change_log.md` 登记的批次粒度提交——一个批次（99 一行）的所有改动（多文档 + 配套文件）合并为一个 commit，不中途拆散、不碎片化提交
+- **批次讨论期间不推送**：与用户讨论/审查一个批次的过程中，即使已确认单个改动，也等到该批次全部落地后再统一 commit + push
 - **push 与 commit 同步**：避免本地堆积（堆积 = 风险）
 - **PR 与 commit 一致**：GitHub Flow 推荐 squash merge，一个 PR = 一个 commit
 
