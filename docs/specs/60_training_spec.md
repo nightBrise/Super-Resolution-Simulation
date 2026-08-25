@@ -330,7 +330,7 @@ $L_{\text{clean}}$ 不用于主训练输入，但可用于：调试；消融实�
 - C1: 第一版主实验数据集规模 SHALL 为 20,000 train / 2,000 val / 2,000 test；调试阶段 SHALL 使用 2,000 / 500 / 500。
 - C2: 数据集 SHALL 至少划分 in-distribution validation 与 in-distribution test；in-distribution test 数据 SHALL NOT 参与训练与早停；划分 SHALL 先按内容参数 `c` 进行，同一 `c` 的噪声实现 SHALL NOT 跨训练/验证/测试划分。
 - C3: OOD 数据的生成与保留 SHALL 为第一版必做，限定当前可定义子集：EXP-06 极端参数集与更强退化集（见 `80`）；Level 2 数据生成义务与 `20` [S8] 参数范围预注册时点绑定。OOD 评估（EXP-05/06）第一版可选（Phase 4 Could）；不执行时，报告 SHALL 标注证据缺失（`90` [S2] C11）。
-- C3b（批次十四用户拍板）：`test_ood.h5` SHALL 分两部分生成——子集 A（EXP-06 极端参数 + 更强退化，随主数据集 M2 必做）与子集 B（Level 2，待 `20` [S8] 参数范围预注册后补生成）；子集 B 补充时 SHALL 按 [S14] C5 递增数据版本号，子集 A 数据 SHALL NOT 重复生成。
+- C3b（批次十四 + 二十一修订）：`test_ood.h5` SHALL 分两部分生成——子集 A（**EXP-06 极端参数**，**M2 用 D2 初始值退化生成**，EXP-01 标定后随主数据集重生成并递增版本，批次二十一 Z5 定死）与子集 B（Level 2，**降级为仅当执行 Phase 4 时按 `99` 流程预注册参数范围后生成**，不绑定 M2）；「更强退化集」显式等同 EXP-03/04 正交档（由 `test_exp03.h5`/`test_exp04.h5` 承载，不再作为 test_ood 子集 A 的一部分）。
 - C4: in-distribution test SHALL 由同分布留出子集（test_id）与参数分块留出子集（test_pb）构成，标准 demo 规模下两者 1:1（test_id 1,000 / test_pb 1,000）；**调试规模（test 500）同样 1:1（test_id 250 / test_pb 250）且执行块外采样**（批次二十 Q9 定死）；test_pb 的块维度 SHALL 为 |γ|（幅度坐标），块区间 SHALL 为 $|\gamma| \in [0.3, 0.4]$（$|\gamma| \sim U[0.1, 0.6]$ 分位秩 $[0.4, 0.6]$，即幅度中央 20% 分位带；带符号 $\gamma \in [-0.4, -0.3] \cup [0.3, 0.4]$），按固定总体分位数确定，SHALL NOT 采用经验样本分位数；train / val / test_id 样本 SHALL 经块外条件采样（拒绝块内候选）全部落在块外，test_pb SHALL 由块内条件采样恰 1,000 个样本构成。
 
 ---

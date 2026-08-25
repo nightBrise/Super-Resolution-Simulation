@@ -152,7 +152,7 @@ tests/
 |---|---|---|
 | **M1 生成器** | 全部 unit/ + test_pipeline_hlp + acceptance/test_m1 | 20 [S10] AC1–12、30 [S11] D1–D12、40 [S12] AC1–AC14 全量；含网格收敛（slow：512 网格渲染与 256 结构一致）|
 | **M2 数据集** | test_dataset_builder 全量 + acceptance/test_m2 | G0 三项测试化：(a) ≥2000 候选 W8 比例 ≥60%；(b) 探针法 3 参数 ×200 样本 min(s_x)<0.5（slow，CPU 并行）；(c) SNR_hf 批量中位数 <0.1；探针集与训练集 sample_id 不相交；20000/2000/1000/1000 计数与三元组 manifest |
-| **M3 基线** | smoke/ 全部 + acceptance/test_m3 | 读 EXP-01 产物：A/B/C 损失下降、Ĥ≥0、形状正确；A 的 ε_z、I_peak 相对误差中位数 ≤5%（M3 退出）；σ_K/σ_n/σ_smooth 已写入 config 且 99 有登记；R_E(D2)/R_E(D1)≤60% 比率门可计算并被执行 |
+| **M3 基线** | smoke/ 全部 + acceptance/test_m3 | 读 EXP-01 产物：A/B/C 损失下降、Ĥ≥0、形状正确（M3 退出）；**ε_z、I_peak 相对误差中位数作为诊断量记录（不断言阈值，批次二十一 Z2 与铁律 1 一致）**；σ_K/σ_n/σ_smooth 已写入 config 且 99 有登记；R_E(D2)/R_E(D1)≤60% 比率门可计算并被执行 |
 | **M4 主实验** | 全部 unit/+integration/ 回归 + acceptance/test_m4 | 读 EXP-02 产物：三分类统计产出完整（Wilcoxon p、bootstrap CI、均值/中位数、标签）；主统计仅在 test_id、test_pb 分报；6 run 的 config 公平性复核；seeds.json 每方案恰 2 种子；评估用 best_val.ckpt。**任何三分类标签均合法**——测试只验协议不验结论 |
 | **M5 消融** | acceptance/test_m5 | EXP-03/04 h5 配对（H 逐位同、L 变）；EXP-07 复用 EXP-02 B 权重且输入 P1；EXP-08 K=8 同 H 同退化参数仅噪声种子不同；报告字段含 R_E 联合判读分类、一票否决四分支标签、过冲/平滑型分类 |
 | **M6 交付** | acceptance/test_m6 | 90 [S5] N1–N8：五类资产存在性与 schema；**N8 预注册对账**——从 final_report.md 与各 config.yaml 提取 λ、τ、触发率、主/次指标、ρ=0.1、CI 宽度 5%、MDE 5%、扩集上限与预注册常量一致；5 图 PNG+PDF 成对存在；metrics.csv 含 c_high 列；summary.json 含三组增益 |
