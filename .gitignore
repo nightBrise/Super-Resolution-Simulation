@@ -56,7 +56,7 @@ results/
 results/test_reports/
 debug/
 checkpoints/
-models/
+/models/
 final_report.md
 assets/
 
