@@ -145,7 +145,7 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring*:
 
 ## 许可证 / License
 
-待定 / TBD。
+[MIT](LICENSE)。
 
 ---
 
