@@ -105,6 +105,7 @@ network:
   num_levels: 5                     # 下采样级数（50 [S7]）
   scheme_C_film_injection: "bottleneck_and_decoder"  # 50 [S10] C5
   input_channels: 2                  # 50 [S7]（A: concat(L_up, 0); B: concat(L_up, P2); C: concat(L_up, 0)）
+  work_scale: 65536                 # 输出工作尺度 S=N²（50 [S12] C5 坍缩修复：Softplus 在 Σ=1 空间数值失配）
 
 # ============================================================
 # 必填：训练超参数（60 [S9]）

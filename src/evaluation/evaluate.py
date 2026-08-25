@@ -161,14 +161,19 @@ def infer_predictions(
     device: str,
     batch_size: int = 16,
 ) -> np.ndarray:
-    """推理整个数据集，返回 ``(N, 256, 256)`` 的 Ĥ（原始输出，未归一化）。"""
+    """推理整个数据集，返回 ``(N, 256, 256)`` 的 Ĥ（Σ=1 空间，已 ÷S 还原）。
+
+    模型输出为工作尺度（Softplus(S·Base+R)，50 [S12] C5），评估/推理还原为
+    ``Ĥ = Ĥ_work / S`` 以便与总强度归一化真值直接比较。
+    """
     model.eval()
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_samples)
+    scale = float(getattr(model, "work_scale", 65536.0))
     preds: list[np.ndarray] = []
     with torch.no_grad():
         for batch in loader:
             H_hat = forward_scheme(model, batch, device)
-            preds.append(H_hat.cpu().numpy()[:, 0])
+            preds.append(H_hat.cpu().numpy()[:, 0] / scale)
     return np.concatenate(preds, axis=0)
 
 

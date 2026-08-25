@@ -74,9 +74,10 @@ def test_output_shape_and_nonneg(models, images, c_prior_raw):
 
 
 def test_residual_base_hook(models, images, c_prior_raw):
-    """N4/N5/N6：残差学习——置零末层输出 → Ĥ == Softplus(Base)。
+    """N4/N5/N6：残差学习——置零末层输出 → Ĥ == Softplus(S·Base)。
 
-    方案 A/C 的 Base = L_up，方案 B 的 Base = P2（50 [S3]–[S5]）。
+    方案 A/C 的 Base = L_up，方案 B 的 Base = P2（50 [S3]–[S5]）；工作尺度
+    S = work_scale（50 [S12] C5 坍缩修复，2026-08-26）。
     """
     for scheme, model in models.items():
         def zero_head(_mod, _inp, out):
@@ -91,7 +92,7 @@ def test_residual_base_hook(models, images, c_prior_raw):
             base = images["P2"]
         else:
             base = images["L_up"]
-        assert torch.allclose(out, F.softplus(base), atol=1e-6), scheme
+        assert torch.allclose(out, F.softplus(model.work_scale * base), atol=1e-6), scheme
 
 
 def test_a_c_second_channel_zero(models, images, c_prior_raw):

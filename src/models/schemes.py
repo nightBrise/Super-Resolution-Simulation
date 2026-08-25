@@ -54,6 +54,7 @@ class SchemeModel(nn.Module):
         num_residual_blocks: int = 2,
         z_dim: int = 64,
         mlp_hidden: int = 128,
+        work_scale: float = 65536.0,
     ) -> None:
         super().__init__()
         self.network_config = {
@@ -63,6 +64,11 @@ class SchemeModel(nn.Module):
             "z_dim": int(z_dim),
             "mlp_hidden": int(mlp_hidden),
         }
+        #: 工作尺度 S = N² = 65536（50 [S12] C5，2026-08-26 坍缩修复）：Softplus
+        #: 在 Σ=1 空间像素 ~1.5e-5 上落入指数区（梯度 sigmoid 消失），输出坍缩为
+        #: 平凡零预测器；工作尺度使结构像素预激活落在 [0.6, 3.3]、梯度门健康。
+        #: S 为固定常数，三方案相同，不引入可训练参数；评估输出还原 Ĥ_work/S。
+        self.work_scale = float(work_scale)
         self.backbone = UNetBackbone(
             in_channels=2,
             C0=C0,
@@ -113,7 +119,7 @@ class SchemeA(SchemeModel):
         zeros = torch.zeros_like(L_up)
         x = torch.cat([L_up, zeros], dim=1)
         R = self.backbone(x)
-        return nn.functional.softplus(L_up + R)
+        return nn.functional.softplus(self.work_scale * L_up + R)
 
 
 class SchemeB(SchemeModel):
@@ -124,7 +130,7 @@ class SchemeB(SchemeModel):
     def forward(self, L_up: torch.Tensor, P2: torch.Tensor) -> torch.Tensor:
         x = torch.cat([L_up, P2], dim=1)
         R = self.backbone(x)
-        return nn.functional.softplus(P2 + R)
+        return nn.functional.softplus(self.work_scale * P2 + R)
 
 
 class SchemeC(SchemeModel):
@@ -144,7 +150,7 @@ class SchemeC(SchemeModel):
         c_tilde = self._preprocess(c_prior_raw)
         z_c = self.c_prior_encoder(c_tilde)
         R = self.backbone(x, z_c)
-        return nn.functional.softplus(L_up + R)
+        return nn.functional.softplus(self.work_scale * L_up + R)
 
     def _preprocess(self, c_prior_raw: torch.Tensor) -> torch.Tensor:
         """正参数取对数 + 训练集 z-score（50 [S10] C1/C2）。"""
@@ -179,6 +185,7 @@ def build_scheme_model(config: dict) -> SchemeModel:
         num_residual_blocks=int(network.get("num_residual_blocks", 2)),
         z_dim=int(network.get("z_dim", 64)),
         mlp_hidden=int(network.get("mlp_hidden", 128)),
+        work_scale=float(network.get("work_scale", 65536.0)),
     )
 
 
@@ -193,6 +200,7 @@ def build_scheme_model_from_checkpoint(ckpt: dict) -> SchemeModel:
         num_residual_blocks=int(network.get("num_residual_blocks", 2)),
         z_dim=int(network.get("z_dim", 64)),
         mlp_hidden=int(network.get("mlp_hidden", 128)),
+        work_scale=float(network.get("work_scale", 65536.0)),
     )
 
 

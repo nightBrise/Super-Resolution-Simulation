@@ -195,7 +195,8 @@ def _validate(model, loader, loss_fn, device: str) -> float:
     with torch.no_grad():
         for batch in loader:
             H_hat = forward_scheme(model, batch, device)
-            loss = loss_fn(H_hat, batch["H"].to(device))
+            target = batch["H"].to(device) * model.work_scale
+            loss = loss_fn(H_hat, target)
             total += float(loss.sum().item())
             count += H_hat.shape[0]
     return total / count if count else float("nan")
@@ -362,7 +363,12 @@ def train(
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast("cuda", dtype=torch.float16, enabled=use_amp):
             H_hat = forward_scheme(model, batch, device)
-            loss = loss_fn(H_hat, batch["H"].to(device)).mean()
+            # 工作尺度目标：H×S（60 [S2] 实现约定：损失在工作尺度空间计算，
+            # L' = S·L 一阶齐次，最优解不变；见 50 [S12] C5 坍缩修复）
+            target = batch["H"].to(device) * model.work_scale
+            loss = loss_fn(H_hat, target).mean()
+            l_space = loss_fn.l_space(H_hat, target)
+            l_spec = loss_fn.l_spec(H_hat, target).mean()
         scaler.scale(loss).backward()
         if grad_clip is not None:
             scaler.unscale_(optimizer)
@@ -381,6 +387,8 @@ def train(
             record = {
                 "step": step,
                 "train_loss": loss_val,
+                "l_space": float(l_space.item()),
+                "l_spec": float(l_spec.item()),
                 "out_min": out_min,
                 "out_max": out_max,
                 "out_sum": out_sum,
