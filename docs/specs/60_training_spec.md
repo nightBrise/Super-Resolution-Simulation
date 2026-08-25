@@ -369,6 +369,8 @@ batch size 按显存选择（图像为 $256 \times 256$，本机 GPU 为 2× Qua
 
 三个方案必须使用相同 batch size。
 
+**batch_size 语义（批次十九用户拍板）**：`config.yaml` 的 `batch_size` = **每卡 batch**；DDP 2 卡时全局有效 batch = 2 × batch_size，`effective_batch_size` 字段 SHALL 记录于 `config.yaml`；三方案 SHALL 使用相同 `batch_size`（每卡）与相同 `effective_batch_size`。
+
 **precision 说明**：本机 GPU 为 Turing 架构（Compute Capability 7.5）：
 - **fp32**：默认，全部支持；
 - **fp16**：可用（Turing 有 Tensor Core），可用于加速；
@@ -699,6 +701,13 @@ python scripts/check_env.py  # 验证
 - 输出目录默认 `results/<EXP_id>_<arm>_<seed>_<run_tag>/`（60 [S15] 15.2 命名约定）；
 - 评估默认读 `checkpoints/best_val.ckpt`（60 [S12] C3），可用 `--checkpoint` 覆盖；
 - 全部命令 SHALL 先跑 `python scripts/check_env.py` 校验环境。
+
+**DDP 实现约定（批次十九用户拍板）**：
+- `torch.distributed` 初始化（nccl backend）；
+- **DistributedSampler** 控制数据分片（每卡取不同子集；三方案各训练使用相同数据分片——A/B/C 看到完全相同的数据，保证公平）；
+- **每卡 seed 一致**（数据不重复由 sampler 保证，不依赖不同 seed）；
+- **checkpoint 保存主进程（rank 0）**，加载时广播到所有卡；
+- 单卡运行（fallback）时 SHALL 使用相同数据顺序（同一 shuffle seed 的单卡等价实现）。
 
 
 
