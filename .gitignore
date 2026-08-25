@@ -41,6 +41,12 @@ Thumbs.db
 .ipynb_checkpoints/
 *.ipynb
 
+# ----- Reference papers (not versioned; keep local copies only) -----
+# Per user direction: PDFs of cited papers are intentionally NOT pushed to
+# the repository. Use the arXiv URL in README / spec citations instead.
+*.pdf
+docs/*.pdf
+
 # ----- Project-specific data, results, checkpoints (per spec 60/80/90) -----
 # These directories will be created at implementation stage and contain
 # generated artefacts (datasets, training outputs, reports). They are NOT

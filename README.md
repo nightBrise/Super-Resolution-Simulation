@@ -61,7 +61,7 @@
     │   ├── 99_change_log.md
     │   └── archive/
     │       └── chat-超分辨率增强模拟1.txt                 # 原始对话归档
-    └── wang2026_breaking-scale-anchoring_2512.05132v2.pdf  # ICLR 2026 参考论文
+    # 参考论文 PDF 按 .gitignore 约定不上传仓库（本地保留），引用请走下方 arXiv URL
 
 # 实现阶段将创建：
 #   src/                    # 源代码（生成器 / 模型 / 训练 / 评估）
@@ -116,7 +116,7 @@
 
 本项目借鉴：
 
-- **Wang et al. (ICLR 2026)**. *Breaking Scale Anchoring: Frequency Representation Learning for Zero-Shot Super-Resolution*. arXiv:2512.05132v2. 归档于 [`docs/wang2026_breaking-scale-anchoring_2512.05132v2.pdf`](docs/wang2026_breaking-scale-anchoring_2512.05132v2.pdf)。
+- **Wang et al. (ICLR 2026)**. *Breaking Scale Anchoring: Frequency Representation Learning for Zero-Shot Super-Resolution*. arXiv:[2512.05132v2](https://arxiv.org/abs/2512.05132)。PDF 按 `.gitignore` 约定不上传仓库，本地保留作阅读。
 
 ---
 

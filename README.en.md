@@ -59,7 +59,7 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring* (arXiv:2512.05132v2):
     │   ├── 99_change_log.md
     │   └── archive/
     │       └── chat-超分辨率增强模拟1.txt                 # Archived original conversation
-    └── wang2026_breaking-scale-anchoring_2512.05132v2.pdf  # ICLR 2026 reference paper
+    # Reference PDFs are intentionally NOT versioned (see .gitignore); cite via arXiv URL below
 
 # To be created at implementation stage:
 #   src/                    # Source code (generators / models / training / evaluation)
@@ -114,7 +114,7 @@ Full phase–gate–milestone–experiment mapping: [`docs/specs/80_experiment_m
 
 This project draws on:
 
-- **Wang et al. (ICLR 2026)**. *Breaking Scale Anchoring: Frequency Representation Learning for Zero-Shot Super-Resolution*. arXiv:2512.05132v2. Archived at [`docs/wang2026_breaking-scale-anchoring_2512.05132v2.pdf`](docs/wang2026_breaking-scale-anchoring_2512.05132v2.pdf).
+- **Wang et al. (ICLR 2026)**. *Breaking Scale Anchoring: Frequency Representation Learning for Zero-Shot Super-Resolution*. arXiv:[2512.05132v2](https://arxiv.org/abs/2512.05132). PDF intentionally NOT versioned (see `.gitignore`); local copy retained for reading.
 
 ---
 
