@@ -2,13 +2,13 @@
 
 # Physics-Prior-Guided Longitudinal Phase Space Super-Resolution
 
+[English version available →](README.en.md)
+
 ![版本](https://img.shields.io/badge/version-0.x.x-yellow)
 ![状态](https://img.shields.io/badge/status-spec%20draft-orange)
 ![Spec](https://img.shields.io/badge/spec-v0.1%20%E8%8D%89%E6%A1%88-lightgrey)
 
 > 直线加速器驱动的 FEL 束流诊断中，从低分辨率纵向相空间观测恢复高分辨率精细结构的配对监督模拟研究。
->
-> Paired-data simulation study on recovering high-resolution fine structures of the longitudinal phase space $(z, \delta)$ from low-resolution observations in FEL beam diagnostics, guided by physical priors.
 
 ---
 
@@ -37,36 +37,13 @@
 
 ---
 
-## English
-
-In free-electron laser (FEL) beam diagnostics, the longitudinal phase space $(z, \delta)$ is the central object for beam-quality assessment. TDS (transverse deflecting structure) + spectrometer setups output low-resolution observations, while high-resolution fine structures (compression folds, thin spikes, current peaks, local energy-spread variation) are physically critical but not resolvable from the low-resolution image alone.
-
-This project generates strictly paired $(H, L, P)$ data via a lightweight longitudinal phase space simulator (independent of elegant / Ocelot), trains super-resolution neural networks, and asks **one core question**: under low-resolution observation, can physical priors help the network recover the high-resolution longitudinal phase space more accurately and more consistently with physics?
-
-### Approach
-
-- **Three-arm matched comparison** (identical data, loss, backbone, training config, evaluation metrics):
-  - A: No prior (baseline)
-  - B: Image prior + residual
-  - C: Parametric prior + FiLM
-- **Training objective**: space-frequency hybrid loss; $\lambda$ is **frozen at 1.0** (pre-registered, no proxy selection).
-- **Starting complexity**: Level 1 (non-Gaussian profile + asymmetry + local thickness variation + 3rd-order center line + 2nd/3rd-order compression folds).
-- **Degradation**: $256 \rightarrow 64$ downsampling + Gaussian blur + Gaussian noise, with calibrated values ($\sigma_K$ / $\sigma_n$ / $\sigma_{\mathrm{smooth}}$) recorded in `config.yaml` and `99_change_log.md`.
-
-### Theoretical grounding
-
-Inspired by ICLR 2026 *Breaking Scale Anchoring*:
-
-- **Scale Anchoring / spectral bias**: pure spatial L1 loss causes the network to fit low frequencies first and smear out fine structures; a frequency-domain loss term is added to push the network to recover high-frequency folds.
-- **Information-theoretic limit**: degradation pushes high-frequency content below the noise floor; physical priors are the *conditional anchors* for that sub-noise-floor information.
-
----
-
-## 仓库结构 / Repository Layout
+## 仓库结构
 
 ```text
 .
-├── README.md                                              # 本文件 / this file
+├── README.md                                              # 中文版（本文件）
+├── README.en.md                                           # English version
+├── LICENSE                                                # MIT
 ├── .gitignore
 └── docs/
     ├── specs/                                             # Spec 集（v0.1 草案，待审查）
@@ -86,16 +63,16 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring*:
     │       └── chat-超分辨率增强模拟1.txt                 # 原始对话归档
     └── wang2026_breaking-scale-anchoring_2512.05132v2.pdf  # ICLR 2026 参考论文
 
-# 实现阶段将创建 / to be created at implementation stage:
+# 实现阶段将创建：
 #   src/                    # 源代码（生成器 / 模型 / 训练 / 评估）
-#   data/<版本>/            # 数据集（train / val / test_id / test_pb / test_ood / test_exp03 / test_exp04 + manifest.json）
-#   results/<EXP>.../       # 实验结果（config.yaml / checkpoints/ / metrics.csv / summary.json / visuals/）
+#   data/<版本>/            # 数据集
+#   results/<EXP>.../       # 实验结果
 #   final_report.md         # 最终研究报告
 ```
 
 ---
 
-## 当前状态 / Current Status
+## 当前状态
 
 | 项目 | 状态 |
 |---|---|
@@ -105,12 +82,12 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring*:
 | 数据集 | 未生成 |
 | 最终报告 | 未产出 |
 
-### 版本号约定 / Version Numbering
+### 版本号约定
 
 - **0.x.x（当前）**：Spec 集 v0.1 草案、代码未实现、流程未跑通；
 - **1.x.x（目标）**：全部阶段流程（M0 → M6）跑通、`final_report.md` 产出、经用户审查通过后一次性升级到 1.0.0；后续按变更幅度递增 1.x.y。
 
-### 里程碑 / Milestones
+### 里程碑
 
 | 里程碑 | 名称 | 入口条件 | 退出判据 |
 |---|---|---|---|
@@ -126,7 +103,7 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring*:
 
 ---
 
-## 阅读顺序 / Reading Order
+## 阅读顺序
 
 1. [`docs/specs/README.md`](docs/specs/README.md) — Spec 索引；
 2. [`docs/specs/00_master_spec.md`](docs/specs/00_master_spec.md) — 总纲（必读）；
@@ -135,7 +112,7 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring*:
 
 ---
 
-## 引用文献 / Citation
+## 引用文献
 
 本项目借鉴：
 
@@ -143,12 +120,12 @@ Inspired by ICLR 2026 *Breaking Scale Anchoring*:
 
 ---
 
-## 许可证 / License
+## 许可证
 
 [MIT](LICENSE)。
 
 ---
 
-## 联系方式 / Contact
+## 联系方式
 
-待补充 / TBD。
+待补充。
