@@ -6,11 +6,11 @@
 
 | 项目 | 值 |
 |---|---|
-| **当前阶段** | M2 完成 → M3 待启动 |
-| **当前任务** | M2 数据集生成已完成（`60 [S8]` 划分 + `60 [S14]` 工件契约 + G0 门禁通过）；4 项预注册判据修订待用户批准后启动 M3 |
-| **进度** | 2/7 里程碑（M1、M2 完成；v1.0 Spec 冻结）|
-| **下一步** | M3 方案 A baseline（EXP-01，G1(a)）——待 OQ-40-02/40-03/80-01/30-02 四项裁定批准 |
-| **最近一次报告** | [`results/M2_dataset/stage_report.md`](results/M2_dataset/stage_report.md)（M2 数据集 + G0 门禁，2026-08-26）；[`results/M1_generators/stage_report.md`](results/M1_generators/stage_report.md)（M1 生成器）|
+| **当前阶段** | M3 执行中（EXP-01a 完成 + 坍缩修复；σ_K 标定被 R_E 门阻塞）|
+| **当前任务** | 待用户 P0 报批（σ_smooth,H 修订 + OQ-40-02/30-02/30-03 裁定 + 坍缩修复 spec 修订）；批准后 dev1 重生成 → 标定重跑 → G1(a) |
+| **进度** | 2.5/7 里程碑（M1、M2 完成；M3 部分完成：EXP-01a 三方案健康）|
+| **下一步** | P0 报批 → dev1 数据重生成（σ_smooth,H=0.125×w_fine）→ EXP-01 标定重跑（01b/c/d）→ G1(a) 判定 |
+| **最近一次报告** | [`results/EXP-01_summary/stage_report.md`](results/EXP-01_summary/stage_report.md)（M3 EXP-01a + 标定，2026-08-26）；[`results/M2_dataset/stage_report.md`](results/M2_dataset/stage_report.md)（M2）|
 
 ## 阶段完成历史
 
@@ -18,6 +18,7 @@
 
 | 日期 | 阶段 | 结论 | 报告链接 |
 |---|---|---|---|
+| 2026-08-26 | M3 | 部分通过（EXP-01a 三方案健康完成：坍缩修复 + 哨兵全过；EXP-01b σ_K 标定被 R_E 门阻塞 OQ-30-03 → 共性根因 σ_smooth,H 待 P0 报批）| [`results/EXP-01_summary/stage_report.md`](results/EXP-01_summary/stage_report.md) |
 | 2026-08-26 | M2 | 通过（dev1/v1 数据集 + manifest + G0 三判据 pass；L0+L1 111 通过、acceptance M2 全部通过；B 类登记：探针差分操作化 OQ-80-01、σ_n 判据互斥 OQ-30-02、hp 预算比主判据失效 OQ-40-03、EXP-06 读法 OQ-80-02）| [`results/M2_dataset/stage_report.md`](results/M2_dataset/stage_report.md) |
 | 2026-08-26 | M1 | 通过（20/30/40 全部 AC；L0+L1 90 通过、acceptance 24 通过 + 1 xfail 为 B 类待裁定）| [`results/M1_generators/stage_report.md`](results/M1_generators/stage_report.md) |
 
@@ -46,9 +47,11 @@
 
 | ID | 状态 | 摘要 |
 |---|---|---|
-| OQ-40-02 | Open（待用户拍板）| AC14 SSIM 门在总强度归一化口径下无判别力（恒≈1.0）；Qwen 裁定推荐方案 C（SSIM 降为诊断量），已呈报用户 |
-| OQ-40-03 | Investigating（待用户拍板）| σ_smooth,P 主判据升级：40 [S5] C5 hp 能量预算比不可操作（全档≈0.14 对旋钮无灵敏度）；Qwen 裁定方案 A（全频 L1 残差预算替代，锚点 0.55）|
-| OQ-80-01 | Investigating（待用户拍板）| G0(b) 探针字面 ρ 不可操作（恒≈2.75 对 c_high 不敏感）；实现用差分形式通过；Qwen 裁定接受并建议修订 80 [S9] 文本 |
-| OQ-30-02 | Investigating（待用户拍板）| 30 [S12] C4（σ_n 尾部 SNR 2–5）与 [S6] C8（SNR_hf<0.1）在 σ_K=2×median 下互斥；M2 采用 σ_K=11.0+σ_n=1.22e-4 通过；Qwen 裁定修订 C4 增补"与 C8 不相容时"分支 |
-| OQ-80-02 | Investigating | EXP-06 放大读法：Qwen 裁定字面=仅上界放大；修正并入标定后 test_ood 重生成 |
-| OQ-30-01 | Closed | 下采样"块平均"措辞与"保总强度"公式矛盾，实现按块求和；措辞修订列入下批变更 |
+| OQ-20-03 | Investigating（待 P0 报批）| **共性根因**：σ_smooth,H=0.5×w_fine 按构造抹杀精细结构（能量 5e-5）；推荐 0.125×w_fine（保留 54%）→ 数据重生成 + 高频判据复验 |
+| OQ-30-03 | Investigating（待 P0 报批）| σ_K 标定 R_E 比率门不可操作（2.58>0.60，D2 反常大于 D1）；推荐先修 σ_smooth,H 再复评原门 + 后备分支 |
+| OQ-40-02 | Open（待用户拍板）| AC14 SSIM 门无判别力（恒≈1.0）；Qwen 推荐方案 C（SSIM 降诊断量） |
+| OQ-40-03 | Investigating（待 P0 报批）| σ_smooth,P 主判据：hp 预算比不可操作（同根 OQ-20-03）；根因修复后复验原判据，方案 A（全频 L1）为后备 |
+| OQ-80-01 | Investigating（待 P0 报批）| G0 探针字面 ρ 不可操作（同根 OQ-20-03）；差分形式已实现通过；根因修复后复验字面量 |
+| OQ-30-02 | Investigating（待用户拍板）| σ_n 判据互斥；Qwen 推荐 C4 增补"与 C8 不相容"分支 |
+| OQ-80-02 | Investigating | EXP-06 放大读法：字面=仅上界放大；修正并入标定后重生成 |
+| OQ-30-01 | Closed | 下采样"块平均"措辞与公式矛盾，实现按块求和 |
