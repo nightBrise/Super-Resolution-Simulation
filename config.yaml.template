@@ -120,9 +120,9 @@ training:
     min_step_fraction: 0.5          # 60 [S10] C4
   lambda_spec: 1.0                  # 60 [S2] C3（冻结）
   data_loading:
-    num_workers: 4                  # 60 [S7] 推荐值
+    num_workers: 16                 # 60 [S9]：本机 CPU 112 线程，推荐 16–32
     pin_memory: true
-  precision: "fp32"                 # 或 "fp16" / "bf16"
+  precision: "fp32"                 # fp32 或 fp16（Turing 7.5 不支持 bf16）
 
 # ============================================================
 # 必填：数据集划分（60 [S8]）
@@ -148,7 +148,7 @@ gpu:
     proxy: 0.70
     debug: 0.60
   config_class: "standard"           # standard / proxy / debug
-  memory_limit_mb: 45000            # 预留 3GB 给框架开销（48GB 卡）
+  memory_limit_mb: 22000            # 预留 2GB 给框架开销（24GB 卡，实测硬件见 80 [S3]）
   parallelism: "2_cards_3_batches"  # 80 [S3]：6 训练 ≤ 3 批次
 
 # ============================================================

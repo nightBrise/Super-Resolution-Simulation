@@ -345,18 +345,26 @@ $$
 | beta1 | 0.9 |
 | beta2 | 0.999 |
 | gradient clipping | 可选，max norm 1.0 |
+| num_workers | 本机 16–32（CPU 112 线程，见 `80` [S3]）|
 
 若训练不稳定，可先降低学习率。
 
-batch size 按显存选择（图像为 $256 \times 256$）：
+batch size 按显存选择（图像为 $256 \times 256$，本机 GPU 为 2× Quadro RTX 6000 24GB，实测硬件见 `80` [S3]）：
 
 | 显存情况 | batch size |
 |---|---:|
-| 小显存 | 4–8 |
-| 中等显存 | 16 |
-| 大显存 | 32 |
+| 小显存（≤16GB） | 4–8 |
+| 中等显存（16–24GB，本机） | 8–16 |
+| 大显存（>24GB） | 16–32 |
+
+本机（24GB/卡）建议：**batch size = 8–16**（M1 短程剖析实测显存占用后确定，登记 `config.yaml`）。
 
 三个方案必须使用相同 batch size。
+
+**precision 说明**：本机 GPU 为 Turing 架构（Compute Capability 7.5）：
+- **fp32**：默认，全部支持；
+- **fp16**：可用（Turing 有 Tensor Core），可用于加速；
+- **bf16**：**不支持**（7.5 无 bf16 原生支持）——三方案 SHALL 统一使用 fp32 或 fp16，SHALL NOT 使用 bf16。
 
 ### Claims
 
