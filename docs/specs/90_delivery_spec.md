@@ -64,6 +64,26 @@
 
 #### 5 张核心图图注规范（最终报告附录 A 必含）
 
+#### 阶段报告索引（最终报告附录 B）
+
+最终报告 SHALL 在附录 B 列出每个阶段报告的路径与一句话设计理由引用，**不重复展开** 详细设计理由。详细理由见 `results/<EXP>/stage_report.md` 第 7 章（00 [S13.3]）。
+
+格式：
+```markdown
+## 附录 B：阶段报告索引
+
+| 阶段 | 报告路径 | 设计理由引用 |
+|---|---|---|
+| M1 | `results/EXP-01/stage_report.md` | 模拟函数设计：见该报告 § 7.1 |
+| M2 | `results/EXP-02/stage_report.md` | 数据集划分：见该报告 § 7.7 |
+| M3 | `results/EXP-01_Main/stage_report.md` | 网络结构：见该报告 § 7.3 |
+| M4 | `results/EXP-02_Main/stage_report.md` | 训练协议 + 先验：见该报告 § 7.4 + § 7.5 |
+| M5 | `results/EXP-03_Main/stage_report.md` 等 | 评估指标 + 门禁：见该报告 § 7.6 + § 7.8 |
+```
+
+读者如需了解某设计选择的理由，**点击链接**到对应阶段报告第 7 章查阅。
+
+
 | 图号 | 文件 | 内容 | 图注 |
 |---|---|---|---|
 | Fig. 1 | `assets/figure_01_2d_phasespace.png` | 2D 相空间对比（log 色标）| 典型样本的 2D 相空间对比（log 色标）。L_up 是双线性插值后归一化的低分辨率观测；H 是高分辨率真值；Ĥ_A、Ĥ_B、Ĥ_C 分别是方案 A、B、C 的预测。 |
