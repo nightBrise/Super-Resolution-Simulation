@@ -620,6 +620,44 @@ python scripts/check_env.py  # 验证
 - C5: 环境 SHALL 由 `environment.yml` 锁定；每个训练开始前 SHALL 跑 `check_env.py`。
 - C6: spec 一致性 SHALL 由 `scripts/check_spec_consistency.py` 自动检查；broken refs SHALL 写入 `spec_claim_index.md` 索引。
 
+### 15.6 临时文件生命周期（删除时机）
+
+不同类型文件的保留期与删除时机：
+
+| 类型 | 位置 | 保留期 | 删除时机 | git tracked |
+|---|---|---|---|---|
+| **项目级工具** | `scripts/` | 永久 | 仅当被新版本替代 | ✓ |
+| **实验脚本** | `results/<EXP>/scripts/` | 至 M6 验收通过 | M6 验收通过后可清理；归档可压缩 `.zip` | ✗ |
+| **临时调试** | `debug/` | 任务结束 | 当前调试任务完成时立即删除 | ✗ |
+| **失败诊断输出** | `results/<EXP>/diagnostics/` | 至 99 对应问题关闭 | 99 未决问题 Closed 后清理 | ✗ |
+| **一次性 Bash / Python** | （不保存文件）| 不适用 | 不留文件 | — |
+| **Stage checkpoint 中间存档** | `results/<EXP>/checkpoints/intermediate/` | 至 EXP 完成 | 最终 `best_val.ckpt` 选定后可清理 | ✗ |
+| **中间日志** | `results/<EXP>/logs/intermediate/` | 至 stage_report 生成 | 阶段报告生成后可压缩归档 | ✗ |
+
+#### 一次性 Python heredoc 的处理原则
+
+临时用 Bash heredoc 或 Python `-c` 执行的脚本（如本会话多次用 Python heredoc 批量改 spec）：
+
+- **不保存文件**——保留为可复现命令需另算
+- **不沉淀**——除非使用 ≥2 次且有复用价值（如 `scripts/batch_edit_specs.py`）
+- **不视为"实验脚本"**——它是绕过工具的实现细节，不是规范流程
+
+如果同样的批量修改预计会重复使用 → 沉淀为 `scripts/` 下工具，进版本控制。
+
+#### 自动清理机制（推荐）
+
+- `debug/`：每次任务结束 Agent 自动 `rm -rf debug/`
+- `results/<EXP>/checkpoints/intermediate/`：EXP 完成后 Agent 自动归档或删除（保留 best_val.ckpt + last.ckpt）
+- `results/<EXP>/logs/intermediate/`：stage_report.md 生成后 Agent 压缩为 `.tar.gz`
+
+#### Claims
+
+- C7: 临时调试脚本（`debug/`） SHALL 在当前任务完成时删除，SHALL NOT 进入版本控制。
+- C8: 实验脚本（`results/<EXP>/scripts/`） SHALL 保留至 M6 验收通过；M6 验收通过后可清理或压缩归档。
+- C9: 失败诊断输出 SHALL 保留至对应 99 未决问题 Closed 后清理。
+- C10: Stage checkpoint 中间存档 SHALL 在最终 `best_val.ckpt` 选定后清理，仅保留 best_val.ckpt + last.ckpt。
+
+
 
 ## Global Constraints
 

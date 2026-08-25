@@ -3,7 +3,7 @@
 > 由 `scripts/check_spec_consistency.py` 自动生成。
 > 维护：每次 spec 修改后重新跑此脚本刷新本文件。
 
-总计 525 个 Claim。
+总计 529 个 Claim。
 
 | Claim ID | 文档 | 章节 | 简述（前 80 字）|
 |---|---|---|---|
@@ -329,6 +329,10 @@
 | 60.S15.C4 | 60 | [S15] | 生产代码 SHALL 在 `src/`；实验脚本 SHALL 在 `results/<EXP>/scripts/`。 |
 | 60.S15.C5 | 60 | [S15] | 环境 SHALL 由 `environment.yml` 锁定；每个训练开始前 SHALL 跑 `check_env.py`。 |
 | 60.S15.C6 | 60 | [S15] | spec 一致性 SHALL 由 `scripts/check_spec_consistency.py` 自动检查；broken refs SHALL 写入 `... |
+| 60.S15.C7 | 60 | [S15] | 临时调试脚本（`debug/`） SHALL 在当前任务完成时删除，SHALL NOT 进入版本控制。 |
+| 60.S15.C8 | 60 | [S15] | 实验脚本（`results/<EXP>/scripts/`） SHALL 保留至 M6 验收通过；M6 验收通过后可清理或压缩归档。 |
+| 60.S15.C9 | 60 | [S15] | 失败诊断输出 SHALL 保留至对应 99 未决问题 Closed 后清理。 |
+| 60.S15.C10 | 60 | [S15] | Stage checkpoint 中间存档 SHALL 在最终 `best_val.ckpt` 选定后清理，仅保留 best_val.ckpt + last.c... |
 | 60.S2.C1 | 60 | [S2] | 三方案总损失 SHALL 为空域-频域混合损失 $\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{space}}... |
 | 60.S2.C2 | 60 | [S2] | 第一版训练 SHALL NOT 使用 $\mathcal{L}_{\text{moment}}$、$\mathcal{L}_{\text{marginal}}$... |
 | 60.S2.C3 | 60 | [S2] | $\lambda$ SHALL 冻结为 1.0（预注册常数，不做代理选择）；三方案 SHALL 使用完全相同的 $\mathcal{L}_{\text{tota... |
