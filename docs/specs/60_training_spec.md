@@ -261,7 +261,7 @@ $L_{\text{clean}}$ 不用于主训练输入，但可用于：调试；消融实�
 
 ### Claims
 
-- C1: 主训练输入 `L` SHALL 为带噪声图像 $L = \max(0, L_{\text{clean}} + n)$，其中 $n \sim \mathcal{N}(0, \sigma_n^2)$。
+- C1: 主训练输入 `L` SHALL 为带噪声图像 $L = \max(0, L_{\text{clean}} + n)$，其中 $n \sim \mathcal{N}(0, \sigma_n^2)$；**训练 SHALL 读取已落盘的 `L`，SHALL NOT 在线重采样噪声**（批次二十 Q7 定死，与可复现契约最相容）。
 - C2: 训练目标 SHALL 为干净 `H`。
 - C3: $L_{\text{clean}}$ SHALL NOT 作为主训练输入，SHALL 保留用于调试、消融与后续实验。
 
@@ -331,7 +331,7 @@ $L_{\text{clean}}$ 不用于主训练输入，但可用于：调试；消融实�
 - C2: 数据集 SHALL 至少划分 in-distribution validation 与 in-distribution test；in-distribution test 数据 SHALL NOT 参与训练与早停；划分 SHALL 先按内容参数 `c` 进行，同一 `c` 的噪声实现 SHALL NOT 跨训练/验证/测试划分。
 - C3: OOD 数据的生成与保留 SHALL 为第一版必做，限定当前可定义子集：EXP-06 极端参数集与更强退化集（见 `80`）；Level 2 数据生成义务与 `20` [S8] 参数范围预注册时点绑定。OOD 评估（EXP-05/06）第一版可选（Phase 4 Could）；不执行时，报告 SHALL 标注证据缺失（`90` [S2] C11）。
 - C3b（批次十四用户拍板）：`test_ood.h5` SHALL 分两部分生成——子集 A（EXP-06 极端参数 + 更强退化，随主数据集 M2 必做）与子集 B（Level 2，待 `20` [S8] 参数范围预注册后补生成）；子集 B 补充时 SHALL 按 [S14] C5 递增数据版本号，子集 A 数据 SHALL NOT 重复生成。
-- C4: in-distribution test SHALL 由同分布留出子集（test_id）与参数分块留出子集（test_pb）构成，标准 demo 规模下两者 1:1（test_id 1,000 / test_pb 1,000）；test_pb 的块维度 SHALL 为 |γ|（幅度坐标），块区间 SHALL 为 $|\gamma| \in [0.3, 0.4]$（$|\gamma| \sim U[0.1, 0.6]$ 分位秩 $[0.4, 0.6]$，即幅度中央 20% 分位带；带符号 $\gamma \in [-0.4, -0.3] \cup [0.3, 0.4]$），按固定总体分位数确定，SHALL NOT 采用经验样本分位数；train / val / test_id 样本 SHALL 经块外条件采样（拒绝块内候选）全部落在块外，test_pb SHALL 由块内条件采样恰 1,000 个样本构成。
+- C4: in-distribution test SHALL 由同分布留出子集（test_id）与参数分块留出子集（test_pb）构成，标准 demo 规模下两者 1:1（test_id 1,000 / test_pb 1,000）；**调试规模（test 500）同样 1:1（test_id 250 / test_pb 250）且执行块外采样**（批次二十 Q9 定死）；test_pb 的块维度 SHALL 为 |γ|（幅度坐标），块区间 SHALL 为 $|\gamma| \in [0.3, 0.4]$（$|\gamma| \sim U[0.1, 0.6]$ 分位秩 $[0.4, 0.6]$，即幅度中央 20% 分位带；带符号 $\gamma \in [-0.4, -0.3] \cup [0.3, 0.4]$），按固定总体分位数确定，SHALL NOT 采用经验样本分位数；train / val / test_id 样本 SHALL 经块外条件采样（拒绝块内候选）全部落在块外，test_pb SHALL 由块内条件采样恰 1,000 个样本构成。
 
 ---
 
@@ -492,7 +492,7 @@ checkpoint 必须保存：
 
 - 目录结构：`data/<版本>/`，包含 `train.h5`、`val.h5`、`test_id.h5`（同分布留出）、`test_pb.h5`（参数分块留出）、`test_ood.h5`（Level 2 部分待 `20` [S8] 参数范围预注册后补）、`test_exp03.h5`、`test_exp04.h5`（见下）、`manifest.json`。
 - 每个样本记录包含：
-  - 图像字段：`H`（256×256，float32，总强度 1）、`L`（64×64）、`L_up`（256×256，bilinear 插值后归一化，见 `50` [S8]/[S13]）、`P2`（256×256，见 `40` [S5]）；
+  - 图像字段：`H`（256×256，float32，总强度 1）、`L`（64×64）、`L_clean`（64×64，**存盘**，供 SNR_hf 批量检查与 G0(b) 探针使用，批次二十 Q4 定死）、`L_up`（256×256，bilinear 插值后归一化，见 `50` [S8]/[S13]）、`P2`（256×256，见 `40` [S5]）；
   - 元数据字段：`sample_id`（字符串，格式 `<划分>-<序号>`）、全部内容参数 `c`（c_low/c_mid/c_high 全字段）与元数据 `m`（见 `00` [S4]）、导出物理量（$\varepsilon_z$、$I_{\text{peak}}$、能谱剖面 $S(\delta)$，供 `70` [S3]/[S4] 使用）、`seed_i`、掩膜标记（`20` [S9] W1–W8 通过/拒绝）、退化配置标记（D1 / D2 / EXP-03 / EXP-04）与退化元数据 `m_L`（`30` [S9]）。
 - EXP-03/04 测试工件：`test_exp03.h5`、`test_exp04.h5` 由 EXP-02 测试 `H`（test_id ∪ test_pb）重退化生成，逐样本配对（见 `80` [S6]）。
 - `manifest.json` 包含：主种子、数据版本号、各划分样本数与 `sample_id` 清单（即 [S8] 划分结果落盘）、参数分块留出信息（块维度 |γ|、块区间、分位派生与各子集样本数）、σ_K/σ_n/σ_smooth 标定采用值（标定后按版本更新）、生成时间戳与代码版本。
@@ -592,10 +592,12 @@ project_root/
 | `<config_tag>` | `D2` / `Level1` / `sigma_K=1.5` | ✗ | 配置标签；不同标定/不同复杂度时附加 |
 
 **示例**：
-- 首次主实验：`EXP-02_A_seed0_run1_D`
-- R2 重跑：`EXP-02_A_seed0_run2_R2_D`
-- 强度退化测试：`EXP-03_A_seed0_run1_D3`
+- 首次主实验：`EXP-02_A_seed0_run1_D2`
+- R2 重跑：`EXP-02_A_seed0_run2_R2_D2`
+- 强模糊测试：`EXP-03_A_seed0_run1_exp03`（config_tag 用 EXP-03 档，非 D3——`30` [S7] 无 D3 等级，批次二十 Q5 修正）
 - Level 2 OOD：`EXP-05_A_seed0_run1_Level2`
+
+**EXP 级聚合目录（批次二十 Q5 定死）**：`results/<EXP_id>_summary/` 存该 EXP 的 stage_report.md、跨 arm/seed 汇总 metrics.csv、summary.json（与 run 级目录 `results/<EXP_id>_<arm>_<seed>_<run_tag>/` 区分；`80` [S8] 的 `EXP-02_Main/` 示例与 90 附录 B 引用统一改指聚合目录）。
 
 **命名规则**：
 - 全小写
@@ -695,6 +697,9 @@ python scripts/check_env.py  # 验证
 | `python -m src.evaluation.evaluate --config <path> --split <test_id\|test_pb\|test_ood\|exp03\|exp04>` | 评估测试集（输出 metrics.csv + summary.json）|
 | `python -m src.evaluation.infer --config <path> --split <...> --out <dir>` | 推理（复用 checkpoint 输出预测）|
 | `python -m src.evaluation.plots --config <path> --out <visuals_dir>` | 生成 5 张核心图 + 中间可视化（PNG+PDF）|
+| `python -m src.generators.build_dataset --config <path> [--split train\|val\|test_id\|test_pb\|test_ood]` | 数据集生成与划分（60 [S8] + [S14]，批次二十补）|
+| `python -m src.generators.calibrate --config <path>` | EXP-01 标定（σ_K/σ_n/σ_smooth，批次二十补）|
+| `python -m src.generators.probe --config <path>` | G0 受控探针法（ρ≥0.1，批次二十补）|
 
 约定：
 - 三方案统一由 `--config` 指定（config.yaml 内含 `scheme` 字段）；

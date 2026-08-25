@@ -71,11 +71,13 @@ evaluation:
   tau: 0.05                         # 物理指标阈值（70 [S4] C5）
   trigger_rate: 0.20                # 一票否决触发率（70 [S4] C4）
   primary_metric: "ε_high^mask"      # 主指标（70 [S7] C1）
-  secondary_metrics:                # 次指标
+  secondary_metrics:                # 次指标（70 [S7.1] C1：仅 ε_z 相对误差）
     - "ε_z_relative"
+  exploratory_metrics:               # 探索性指标（70 [S7.1]：不参与三分类/Holm）
     - "I_peak_relative"
     - "sigma_z_relative"
     - "sigma_delta_relative"
+    - "h_eff_relative"
   dog:                              # DoG 核尺度（70 [S5.1]）
     sigma_outer: 0.0               # 按 f_c=1/8 处衰减50%反算
     sigma_inner_factor: 0.5         # σ_inner = σ_outer / 2

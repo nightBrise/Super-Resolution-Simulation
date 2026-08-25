@@ -8,12 +8,16 @@ import torch
 import numpy
 import h5py
 import scipy
+import skimage
+import pytest
 
 EXPECTED = {
     'torch': '2.4.0',
     'numpy': '1.26.4',
     'h5py': '3.11.0',
     'scipy': '1.13.0',
+    'skimage': '0.24.0',
+    'pytest': '8',
 }
 
 ACTUAL = {
@@ -21,6 +25,8 @@ ACTUAL = {
     'numpy': numpy.__version__,
     'h5py': h5py.__version__,
     'scipy': scipy.__version__,
+    'skimage': skimage.__version__,
+    'pytest': pytest.__version__,
 }
 
 

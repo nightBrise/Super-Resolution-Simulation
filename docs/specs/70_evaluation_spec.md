@@ -46,10 +46,12 @@ $$
 |---|---|---|
 | MAE (L1) | $\|\hat{H} - H\|_1$ | 整体像素绝对误差，与训练 loss 对应 |
 | MSE (L2) | $\|\hat{H} - H\|_2^2$ | 对大误差（如尖峰位置偏移）更敏感 |
-| PSNR | $10 \log_{10}\left(\dfrac{\text{MAX}^2}{\text{MSE}}\right)$ | 经典图像质量指标，MAX 为像素峰值 |
+| PSNR | $10 \log_{10}\left(\dfrac{\text{MAX}^2}{\text{MSE}}\right)$ | 经典图像质量指标；**MAX = 1**（总强度归一化后像素峰值，批次二十 Q8 定死）|
 | SSIM | 结构相似性指数 | 评估亮度、对比度、结构的综合相似度 |
 
 PSNR 与 SSIM 高不代表物理上正确，仅作为基线参考。
+
+**SSIM 实现约定（批次二十 Q8 定死）**：使用 scikit-image `skimage.metrics.structural_similarity`，窗口 7×7、`data_range=1.0`、`gaussian_weights=True`；实现与参数预注册于 `config.yaml`（`evaluation.ssim` 段）。
 
 ### Claims
 
@@ -276,9 +278,11 @@ $$
 - C2: 掩膜 $M_{c_{\text{high}}}$ SHALL 由真值 $H$ 的高频能量分布构造（累计能量 90% 的最小像素集），SHALL NOT 依赖任何方案的输出，三方案 SHALL 使用同一掩膜，构造方法与参数 SHALL 记录于 `config.yaml`。
 - C3: 同一方案对比族内的全部假设检验 SHALL 使用 Holm 校正。
 - C4: 先验增益的统计推断 SHALL 基于逐样本配对差 $\{d_i\}$，并 SHALL 报告配对 Wilcoxon 符号秩检验 p 值、以配对差单元重采样的 bootstrap 95% 置信区间（10,000 次）以及均值与中位数。
+- C4b（批次二十 Q2 定死）：统计功效预估 SHALL 以代理尺度配对差 $d_i$ 的样本标准差 $s_d$ 估计 $n=2000$ 时 bootstrap 95% CI 半宽 $= 1.96 \times s_d / \sqrt{n}$；要求半宽 $\le 5\% \times$ 方案 A 主指标基线值；不满足时按 `80` G2 扩集。
 - C5: 结论 SHALL 按 bootstrap 95% CI 三分类：显著正增益（CI 不含零且为正）、等效（CI 含零）、显著负增益（CI 不含零且为负）；「等效」SHALL NOT 直接解读为「无增益」（门禁处理见 `80` G2）。
 - C6: 不确定性代理 SHALL 由 `80` EXP-08 执行（同一 $H$、$K = 8$ 个噪声实现重新退化、冻结权重推理）；报告 SHALL 给出 $\hat{H}$ 及其导出物理量的跨实现方差；$\mathrm{std}_B, \mathrm{std}_C < \mathrm{std}_A$ 可作为「先验降低不确定性」的引用证据，SHALL NOT 解读为标定后验不确定性。
 - C7: 预注册三分类主统计 SHALL 仅在 in-distribution test 的同分布留出子集 test_id 上执行；参数分块留出子集 test_pb 同法计算，但 SHALL 标注为补充/探索性，SHALL NOT 与 test_id 合并，且 SHALL NOT 并入同一 Holm 校正族。
+- C7b（批次二十 Q12 定死）：Holm 校正族边界 = 每（方案对 × 测试集）一族，族内仅含预注册主+次指标；探索性指标 SHALL NOT 入族、不校正、标注探索性。
 - C8: G1（代理尺度）SHALL 做一次功效预估并登记（保守口径：代理模型更差，方差更大）；WHEN 2,000 测试样本无法检出 5% 相对改善（相对方案 A 基线指标值），THEN SHALL 在 EXP-02 前按预注册规则扩测试集（纯生成成本）。
 - C9: 两种子的三分类判定 SHALL 一致；一致则采纳该结论；不一致 SHALL 归入 G2「诊断不确定」（跨种子不一致）并按 `80` [S9] G2 失败路径处理；报告 SHALL 同时给出逐种子与合并（concatenated）CI。
 
