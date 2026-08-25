@@ -683,6 +683,23 @@ python scripts/check_env.py  # 验证
 - C10: Stage checkpoint 中间存档 SHALL 在最终 `best_val.ckpt` 选定后清理，仅保留 best_val.ckpt + last.ckpt。
 - C11（新增）：`config.yaml` 模板 SHALL 维护于仓库根 `config.yaml.template`；模板 SHALL 含本文件 [S15] 15.1 目录结构对应的所有必填字段（三元组、种子、标定、退化、评估、网络、训练、数据集、GPU 配置、可复现性、checkpoint 路径、可视化、备注）；Agent 实验开始前 SHALL 按模板填充 `results/<EXP>/config.yaml`；任一必填字段缺失视为验收失败（与 `80` [S8] C2 + `90` [S5] N8 协调）。
 
+### 15.7 训练/评估 CLI 接口（批次十六用户拍板）
+
+统一命令行接口，保证不同 agent 实现同一 EXP 可复现：
+
+| 命令 | 用途 |
+|---|---|
+| `python -m src.training.train --config <path> [--smoke] [--steps N]` | 训练（`--smoke` 冒烟 100 步，可 `--steps` 覆盖）|
+| `python -m src.evaluation.evaluate --config <path> --split <test_id\|test_pb\|test_ood\|exp03\|exp04>` | 评估测试集（输出 metrics.csv + summary.json）|
+| `python -m src.evaluation.infer --config <path> --split <...> --out <dir>` | 推理（复用 checkpoint 输出预测）|
+| `python -m src.evaluation.plots --config <path> --out <visuals_dir>` | 生成 5 张核心图 + 中间可视化（PNG+PDF）|
+
+约定：
+- 三方案统一由 `--config` 指定（config.yaml 内含 `scheme` 字段）；
+- 输出目录默认 `results/<EXP_id>_<arm>_<seed>_<run_tag>/`（60 [S15] 15.2 命名约定）；
+- 评估默认读 `checkpoints/best_val.ckpt`（60 [S12] C3），可用 `--checkpoint` 覆盖；
+- 全部命令 SHALL 先跑 `python scripts/check_env.py` 校验环境。
+
 
 
 ## Global Constraints

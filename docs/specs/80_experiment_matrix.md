@@ -269,6 +269,35 @@ results/
 
 **关键要求**：`metrics.csv` 必须包含每个测试样本的 $c_{\text{high}}$ 参数值。由此可绘制「误差随 $c_{\text{high}}$（如 $\gamma$ 或 $b_1$）变化」的散点图，直观看出先验在哪种物理条件下开始失效。
 
+**metrics.csv 列名规范（批次十六用户拍板）**——长表格式（每行 = 一个方案 × 一个样本）：
+
+| 列 | 含义 |
+|---|---|
+| `sample_id` | 样本标识（60 [S14]）|
+| `scheme` | `A` / `B` / `C` |
+| `a_3`, `gamma`, `b_1` | c_high 参数（90 [S8] C4）|
+| `psnr`, `mae`, `mse`, `ssim` | 图像指标 |
+| `e_eps_z`, `e_I_peak`, `e_sigma_z`, `e_sigma_delta`, `e_h_eff` | 物理指标（相对误差）|
+| `e_high_doG`, `R_E` | 精细结构（DoG 高频误差、高频能量恢复率）|
+| `F_i` | 幻觉标志（0/1，70 [S4]）|
+
+**summary.json 字段规范**：
+
+```json
+{
+  "version": {"code_version": "...", "data_version": "...", "spec_version": "..."},
+  "metrics": {"A": {"psnr": {"mean": 0.0, "std": 0.0}, "mae": {...}, ...},
+              "B": {...}, "C": {...}},
+  "prior_gain": {
+    "M_A_minus_M_B": {"mean": 0.0, "ci95": [lo, hi]},
+    "M_A_minus_M_C": {"mean": 0.0, "ci95": [lo, hi]},
+    "M_B_minus_M_C": {"mean": 0.0, "ci95": [lo, hi]}
+  },
+  "three_class": {"verdict": "significant_positive|equivalent|significant_negative", "ci": [...]},
+  "one_veto": {"P_F_A": 0.0, "P_F_B": 0.0, "P_F_C": 0.0, "verdict": "no_veto|veto_B|veto_C"}
+}
+```
+
 ### Claims
 
 - C1: 每个实验 SHALL 生成标准化结果目录，包含 `config.yaml`、`checkpoints/`、`metrics.csv`、`summary.json`、`visuals/` 五项。
@@ -278,6 +307,7 @@ results/
 - C5: `summary.json` SHALL 记录测试集各指标的平均值、标准差与先验增益（$M_A - M_B$、$M_A - M_C$、$M_B - M_C$）。
 - C6: `visuals/` SHALL 包含抽样 50 个测试样本的可视化对比图：2D Log-scale 对比图、1D 剖面图与残差图。
 - C7: 总结报告 SHALL 包含「误差 vs $c_{\text{high}}$（如 $\gamma$ 或 $b_1$）」散点图分析，用于识别先验失效的物理条件。
+- C8: 5 张核心图（90 [S3]）与中间可视化 SHALL 由 `src/evaluation/plots.py` 生成（输入 metrics.csv + 预测输出，输出 visuals/ 与 assets/ 的 PNG+PDF）；图生成脚本 SHALL 在评估阶段复用同一实现，三方案一致。
 
 ---
 
