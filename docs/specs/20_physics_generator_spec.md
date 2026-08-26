@@ -44,15 +44,15 @@ $$
 H_{ij} = \int_{\text{pixel }ij} \rho(z,\delta)\,dz\,d\delta,\qquad H_{ij} \ge 0,\qquad \sum_{ij} H_{ij} = Q \ \text{（默认 } Q=1 \text{）}
 $$
 
-H 渲染平滑核 $\sigma_{\text{smooth},H} = 0.5 \times w_{\text{fine}}$ 批量中位数（与 `30` $\sigma_K$ 默认规则同口径）；取值 SHALL 通过本文件 `[S3]` C5 的网格收敛检查（必要条件）；登记于 `99` 与数据集 manifest（`60` `[S14]`）。
+H 渲染平滑核 $\sigma_{\text{smooth},H} = 0.125 \times w_{\text{fine}}$ 逐样本值（2026-08-26 P0 修订：原 $0.5 \times w_{\text{fine}}$ 使特征精细结构频率处能量保留 $T^2(1/w_{\text{fine}}) = \exp(-\pi^2/2) \approx 5.2\times10^{-5}$、按构造抹杀精细结构，废弃理由见 `99` OQ-20-03）；新口径能量保留 $\exp(-\pi^2/16) \approx 54\% \ge 50\%$，批量中位数 $\approx 0.55$ px 登记于 manifest；取值 SHALL 通过本文件 `[S3]` C5 的网格收敛检查（512→256 块平均对齐 L1 $\le 1\times10^{-3}$）；数据集 SHALL 满足高频能量预算守卫 $\|H_{\text{hp}}\|_1 / \sum H$ 批量中位数 $\ge 0.5\%$（生成期统计、记入 manifest）；登记于 `99` 与数据集 manifest（`60` `[S14]`）。
 
 ### Claims
 
 - C1: 纵向相空间坐标 `(z, δ)` SHALL 归一化到 `z, δ ∈ [-1, 1]`；`H` 与 `L` 覆盖相同物理坐标范围（`00` 全局约定）。
 - C2: `H_ij` SHALL 定义为 `ρ(z,δ)` 在像素 `ij` 上的积分，且 `H_ij ≥ 0` 恒成立。
 - C3: 总强度 SHALL 满足 `∑H_ij = Q`，默认 `Q = 1`（总强度由参数 `A` 控制）；归一化方式与像素-坐标映射 SHALL 在元数据中记录。
-- C4: 渲染 SHALL 使用光滑密度估计（如高斯核平滑），不得使用硬边直方图或宏粒子散点作为真值；H 渲染平滑核 $\sigma_{\text{smooth},H} = 0.5 \times w_{\text{fine}}$ 批量中位数（与 `30` $\sigma_K$ 默认规则同口径），取值 SHALL 通过本文件 `[S3]` C5 的网格收敛检查（必要条件），并登记于 `99` 与数据集 manifest（`60` `[S14]`）。
-- C5: 高分辨率图像 SHALL 通过网格收敛性检查：提高渲染网格分辨率不得显著改变图像结构。
+- C4: 渲染 SHALL 使用光滑密度估计（如高斯核平滑），不得使用硬边直方图或宏粒子散点作为真值；H 渲染平滑核 $\sigma_{\text{smooth},H} = 0.125 \times w_{\text{fine}}$ 逐样本值（2026-08-26 P0 修订，原 $0.5\times$ 废弃见 `99` OQ-20-03），取值 SHALL 通过 `[S3]` C5 的网格收敛检查（512→256 块平均对齐 L1 $\le 1\times10^{-3}$），并满足高频能量预算守卫 $\|H_{\text{hp}}\|_1/\sum H$ 批量中位数 $\ge 0.5\%$；登记于 `99` 与数据集 manifest（`60` `[S14]`）。
+- C5: 高分辨率图像 SHALL 通过网格收敛性检查：提高渲染网格分辨率不得显著改变图像结构（512→256 块平均对齐 L1 $\le 1\times10^{-3}$）。
 - C6: 物理窗口 SHALL 覆盖绝大多数束流分布；存在 halo 时窗口 SHALL 包含 halo，不得因窗口截断丢失有效结构。
 - C7: 默认分辨率 SHALL 为 `256×256`；若降至 `128×128`，SHALL 在元数据中标明。
 

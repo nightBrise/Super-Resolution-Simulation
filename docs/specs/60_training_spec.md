@@ -53,7 +53,7 @@ $$
 \mathcal{L}_{\text{spec}} = \frac{1}{5} \sum_{b=1}^{5} \; \underset{k \in \text{band}_b}{\mathrm{mean}} \, \left| \mathcal{F}(\hat{H})_k - \mathcal{F}(H)_k \right|
 $$
 
-等权分带的原因：避免低频分量主导谱损失。$H$ 已归一化至总强度 1，而 $\hat{H}$ 未归一化（$\hat{H} = \text{Softplus}(\text{Base} + R)$），两侧 DC 项并不相等，其差异保留于 $\mathcal{L}_{\text{spec}}$ 内，作为总强度匹配信号。
+等权分带的原因：避免低频分量主导谱损失。$H$ 已归一化至总强度 1，而 $\hat{H}$ 未归一化（$\hat{H} = \text{Softplus}(\text{Base} + R)$），两侧 DC 项并不相等。**勘误（2026-08-26 P0 修订）**：原表述"其差异保留于 $\mathcal{L}_{\text{spec}}$ 内，作为总强度匹配信号"数值上不成立——DC 差异经带 1 内约 200 像素均值稀释、再经 5 带等权，初始占比仅 ~0.1%；总强度匹配主要由空域项 $\mathcal{L}_{\text{space}}$ 承担。工作尺度（`50` [S12] C5）下损失按放大空间计算：$\mathcal{L}_{\text{total}}^{\text{work}} = S \cdot \mathcal{L}_{\text{total}}$（空域与频域项同因子缩放、一阶齐次），最优解不变、$\lambda = 1.0$ 等权关系不变；早停与验证损失数值随 $S$ 同因子缩放，无阈值受影响。
 
 **L_spec 实现约定（批次十四用户拍板）**：
 - **FFT 归一化**：2D FFT 结果除以 $N^2$（$N=256$），使频域损失与空域 L1 同量级——否则 $\lambda = 1.0$（冻结）下频域损失将主导（约 100×），网络忽略空域保真；

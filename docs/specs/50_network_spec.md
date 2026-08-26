@@ -241,12 +241,21 @@ $$
 
 第一版不强制总强度守恒（不作为训练约束），但必须记录输出总强度 `Q_Ĥ = Σ_{i,j} Ĥ_ij`，并在评估阶段与真值比较。
 
+**工作尺度输出（2026-08-26 P0 修订，C5 新增）**：Softplus 非尺度等变——在总强度归一化（Σ=1，像素 ~1.5e-5）下 Base 落指数区（Softplus(1.5e-5)≈0.693/像素），残差需 −11~−8 偏移使 sigmoid 梯度消失、输出坍缩（EXP-01a 实证）。因此最终输出 SHALL 在工作尺度 $S = N^2 = 65536$ 下计算：
+
+$$
+\hat{H}_{\text{work}} = \text{Softplus}(S \cdot \text{Base} + R)
+$$
+
+训练损失对 $S \cdot H$ 计算（`60` [S2]：损失一阶齐次，最优解不变）；评估与指标计算前 SHALL 还原 $\hat{H} = \hat{H}_{\text{work}} / S$（Σ=1 空间）。$S$ 为固定数值常数，三方案相同，不引入可训练参数，不引入方案间差异；`work_scale` SHALL 仅由 config 提供（缺省时抛异常，见 `60` [S15] 双空间契约）。
+
 ### Claims
 
-- C1: 最终输出 SHALL 为 `Ĥ = Softplus(Base + R)`，其中 `Base` SHALL 为 `L_up`（方案 A / C）或 `P2`（方案 B）。
+- C1: 最终输出 SHALL 为 `Ĥ_work = Softplus(S·Base + R)`（工作尺度，$S=N^2=65536$，2026-08-26 P0 修订），评估/指标计算前 SHALL 还原 `Ĥ = Ĥ_work / S`；`Base` SHALL 为 `L_up`（方案 A / C）或 `P2`（方案 B）。
 - C2: 输出 SHALL 满足 `Ĥ ≥ 0`。
 - C3: 第一版 SHALL NOT 将总强度守恒作为训练约束。
 - C4: 实现 SHALL 记录输出总强度 `Q_Ĥ = Σ_{i,j} Ĥ_ij`，供评估阶段与真值比较。
+- C5: 工作尺度 $S$ SHALL 为固定常数（N²=65536）、三方案相同、不引入可训练参数；`work_scale` 仅由 config 提供（缺省抛异常）。
 
 ---
 

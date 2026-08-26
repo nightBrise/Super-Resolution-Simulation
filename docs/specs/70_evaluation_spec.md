@@ -308,7 +308,7 @@ $$
 ### Claims
 
 - C1: 预注册主指标 SHALL 为 $c_{\text{high}}$ 掩膜内高频误差 $\mathcal{E}_{\text{high}}^{\text{mask}}$，次指标 SHALL 为 $\varepsilon_z$ 相对误差；其余指标 SHALL 标注为探索性指标。主指标构造 SHALL 遵循 `00` [S3.5] 测量原则（直接因果/差分敏感度/成分分解/先验独立可量化）——掩膜选择 SHALL 基于"对 c_high 的敏感度"（如 c_high 差分能量）而非"H 高频能量"（混合源），并强制披露掩膜能量成分分解（c_high/β/其余占比）。
-- C2: 掩膜 $M_{c_{\text{high}}}$ SHALL 由真值 $H$ 的高频能量分布构造（累计能量 90% 的最小像素集），SHALL NOT 依赖任何方案的输出，三方案 SHALL 使用同一掩膜，构造方法与参数 SHALL 记录于 `config.yaml`。
+- C2: 掩膜 $M_{c_{\text{high}}}$ SHALL 由真值 $H$ 的高频能量分布构造（累计能量 90% 的最小像素集），SHALL NOT 依赖任何方案的输出，三方案 SHALL 使用同一掩膜，构造方法与参数 SHALL 记录于 `config.yaml`。**成分分解与先验泄漏披露（2026-08-26 P0 修订，G2 分支乙）**：报告 SHALL 附掩膜能量成分分解表——在 $M_{c_{\text{high}}}$ 内分别计算 c_high 差分能量占比（$\text{ch}_{\text{in}} = \|(H - H_{\neg ch})_{\text{hp}}\|_1 / \|H_{\text{hp}}\|_1$，$H_{\neg ch}$ 为 $a_3=\gamma=b_1=0$ 清零版）、β 差分占比（$\text{b}_{\text{in}}$）、其余占比；三方案任一 $\text{b}_{\text{in}} > \text{ch}_{\text{in}} \times 1.5$ 时 MUST 附先验能量级泄漏分析。**先验泄漏指数 $\Pi_{\text{leak}}$ 强制报告**：$\Pi_{\text{leak}} = \|(P_2 - H_{\neg ch})_{\text{hp}} \odot M_{c_{\text{high}}}\|_1 / \|(H - H_{\neg ch})_{\text{hp}} \odot M_{c_{\text{high}}}\|_1$；$\Pi_{\text{leak}} > 0.5$ 视为先验在主指标区域结构性占优，final_report MUST 显式标注（方法见 `scripts_tmp/g2_c_high_leak.py` 归档版）。掩膜构造 SHALL 遵循 `00` [S3.5] 测量原则（直接因果/差分敏感度/成分分解/先验独立可量化）。
 - C3: 同一方案对比族内的全部假设检验 SHALL 使用 Holm 校正。
 - C4: 先验增益的统计推断 SHALL 基于逐样本配对差 $\{d_i\}$，并 SHALL 报告配对 Wilcoxon 符号秩检验 p 值、以配对差单元重采样的 bootstrap 95% 置信区间（10,000 次）以及均值与中位数。
 - C4b（批次二十 Q2 定死）：统计功效预估 SHALL 以代理尺度配对差 $d_i$ 的样本标准差 $s_d$ 估计 $n=2000$ 时 bootstrap 95% CI 半宽 $= 1.96 \times s_d / \sqrt{n}$；要求半宽 $\le 5\% \times$ 方案 A 主指标基线值；不满足时按 `80` G2 扩集。
