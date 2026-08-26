@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         PROJECT_ROOT,
         splits=args.split,
         workers=args.workers,
-        code_version=config.get("code_version") or git_head(),
+        code_version=git_head(),  # N4：以生成时 HEAD（完整 40 位）为准
     )
 
     version = config["dataset"]["version"]
