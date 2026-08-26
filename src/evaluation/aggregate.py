@@ -71,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
         description="跨方案评估聚合（G2/G3 判定输入）",
     )
     parser.add_argument("--runs", required=True, help="run 目录逗号分隔（A,B,C 三个方案）")
-    parser.add_argument("--split", required=True, choices=["test_id", "test_pb", "test_ood", "exp03", "exp04"])
+    parser.add_argument("--split", required=True,
+                        choices=["test_id", "test_pb", "test_ood", "exp03", "exp04", "exp07", "exp08"])
     parser.add_argument("--out", required=True, help="聚合输出目录（如 results/EXP-02_summary/seed0）")
     args = parser.parse_args(argv)
 

@@ -565,7 +565,8 @@ def run_evaluate(
     dataset_dir = PROJECT_ROOT / "data" / str(config["dataset"]["version"])
     # 60 [S14]：EXP-03/04 测试工件文件名为 test_exp03.h5 / test_exp04.h5
     # （--split exp03/exp04 映射到 test_exp03/test_exp04，T3 对齐）
-    filename = {"exp03": "test_exp03", "exp04": "test_exp04"}.get(split, split)
+    filename = {"exp03": "test_exp03", "exp04": "test_exp04",
+                "exp07": "test_exp07", "exp08": "test_exp08"}.get(split, split)
     split_file = dataset_dir / f"{filename}.h5"
     if not split_file.exists():
         raise FileNotFoundError(f"数据集不存在：{split_file}")
@@ -608,7 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--split",
         required=True,
-        choices=["test_id", "test_pb", "test_ood", "exp03", "exp04"],
+        choices=["test_id", "test_pb", "test_ood", "exp03", "exp04", "exp07", "exp08"],
         help="测试划分（HDF5 文件名：<split>.h5）",
     )
     parser.add_argument("--checkpoint", default=None, help="checkpoint 路径（默认 best_val.ckpt）")
