@@ -6,10 +6,10 @@
 
 | 项目 | 值 |
 |---|---|
-| **当前阶段** | M3 执行中（P0 已批；dev2 重生成完成；EXP-01 标定重跑中）|
-| **当前任务** | EXP-01a A/B/C 重训（dev2，σ_smooth_H=0.125×）→ EXP-01b σ_K 复评 → 01c/01d → G1(a) |
-| **进度** | 2.5/7 里程碑（M1、M2 完成；M3 执行中：P0 13 项 + 2 勘误已批准落地，dev2 数据重生成 + G0 复评 pass）|
-| **下一步** | EXP-01 标定重跑（01a→01b→01c→01d）→ G1(a) 判定 → M3 退出 → M4 启动门禁 |
+| **当前阶段** | M4 执行中（EXP-02 主实验批次 1 运行中）|
+| **当前任务** | EXP-02 六次训练（A/B/C × seed0/1，50k 步标准配置）：批次 1 A_seed0+B_seed0 → 批次 2 → 批次 3；每批 ~7.6h 墙钟 |
+| **进度** | 3/7 里程碑（M1/M2/M3 完成，G1(a) 通过；M4 启动门禁全部闭环：final_report 骨架落盘 + σ_smooth,P=15× 采用 + v1 数据重生成 + G0 复评 pass + R_E^max=10 + 测试全绿）|
+| **下一步** | EXP-02 批次 1-3 训练 → 评估 → G2 三分类判定 → M5 |
 | **最近一次报告** | [`results/EXP-01_summary/stage_report.md`](results/EXP-01_summary/stage_report.md)（M3 EXP-01a + 标定，2026-08-26）；[`results/M2_dataset/stage_report.md`](results/M2_dataset/stage_report.md)（M2）|
 
 ## 阶段完成历史
