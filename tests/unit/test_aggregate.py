@@ -80,7 +80,10 @@ def test_aggregate_merges_and_builds_prior_gain(three_runs, tmp_path):
         assert stat["verdict"] in VALID_VERDICTS
         assert len(stat["ci95"]) == 2
     assert summary["three_class"]["M_A_minus_M_B"]["verdict"] in VALID_VERDICTS
-    assert summary["one_veto"]["verdict"] in {"no_veto", "veto_B", "veto_C", "noise_fluctuation"}
+    for scheme in ("B", "C"):
+        assert summary["one_veto"][scheme]["verdict"] in {
+            "no_veto", "noise_fluctuation", "veto", "partial_failure", "local_failure",
+        }
     # 合并 metrics.csv：3 方案 × 8 样本
     with open(out / "metrics.csv", newline="") as fh:
         rows = list(csv.DictReader(fh))
