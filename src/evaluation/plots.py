@@ -40,40 +40,6 @@ from src.evaluation.metrics import bootstrap_ci  # noqa: E402
 from src.generators.f_beam import pixel_center_coordinates  # noqa: E402
 from src.utils.config_utils import load_config  # noqa: E402
 
-#: 系统中文字体候选（图内中文标签渲染；PDF 论文级出版要求字形完整，
-#: 90 [S3] 格式约定）。matplotlib 对 .ttc 只注册集合首面（本机为 JP），
-#: 其字形含全部 CJK 统一表意字符，可兜底简中标签；无 CJK 字体时退化为纯 DejaVu。
-_CJK_FONT_FILES = (
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-)
-
-
-def _setup_cjk_font() -> None:
-    """注册系统中文字体并设为 family 回退链（DejaVu 在前保拉丁字形，CJK 在后兜底中文）。
-
-    逐字形回退仅对 ``font.family`` 列表生效（matplotlib ≥3.6），
-    设置于 ``font.sans-serif`` 时中文仍缺字形——本函数固定用 family 列表。
-    """
-    from matplotlib import font_manager  # noqa: PLC0415
-
-    for fp in _CJK_FONT_FILES:
-        if Path(fp).exists():
-            try:
-                font_manager.fontManager.addfont(fp)
-            except Exception:
-                continue
-    cjk_families = sorted(
-        {f.name for f in font_manager.fontManager.ttflist if f.fname in _CJK_FONT_FILES},
-        key=lambda n: (not ("SC" in n or "CN" in n), n),
-    )
-    plt.rcParams["font.family"] = ["DejaVu Sans", *cjk_families]
-    plt.rcParams["axes.unicode_minus"] = False
-
-
-_setup_cjk_font()
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 #: 5 张核心图文件名（90 [S3]、60 [S15] 15.3；M6 对账用）。
@@ -205,14 +171,14 @@ def plot_physics_error_bar(
             width,
             yerr=[errs_lo, errs_hi],
             capsize=3,
-            label=f"方案 {scheme}",
+            label=f"Scheme {scheme}",
             color=colors[j],
         )
     ax.set_xticks(x)
     ax.set_xticklabels(metric_labels)
-    ax.set_ylabel("相对误差")
+    ax.set_ylabel("Relative error")
     ax.legend()
-    ax.set_title("物理指标相对误差（bootstrap 95% CI）")
+    ax.set_title("Physics metric relative error (bootstrap 95% CI)")
     fig.tight_layout()
     return _save_figure(fig, out_path)
 
@@ -231,11 +197,11 @@ def plot_error_vs_gamma_scatter(metrics_csv: str | Path, out_path: str | Path) -
     for j, scheme in enumerate(schemes):
         xs = [float(r["gamma"]) for r in rows if r["scheme"] == scheme]
         ys = [float(r["e_eps_z"]) for r in rows if r["scheme"] == scheme]
-        ax.scatter(xs, ys, s=10, alpha=0.45, color=colors[j], label=f"方案 {scheme}")
-    ax.set_xlabel("γ（精细结构参数）")
-    ax.set_ylabel("ε_z 相对误差")
+        ax.scatter(xs, ys, s=10, alpha=0.45, color=colors[j], label=f"Scheme {scheme}")
+    ax.set_xlabel("γ (fine-structure parameter)")
+    ax.set_ylabel("ε_z relative error")
     ax.legend(markerscale=2)
-    ax.set_title("误差 vs γ")
+    ax.set_title("Error vs γ")
     fig.tight_layout()
     return _save_figure(fig, out_path)
 
