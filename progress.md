@@ -6,10 +6,10 @@
 
 | 项目 | 值 |
 |---|---|
-| **当前阶段** | M3 执行中（EXP-01a 完成；标定/数据重生成待 P0 报批）|
-| **当前任务** | **等待用户 P0 报批**（6 项：σ_smooth,H 修订 + OQ-40-02/30-02/30-03 裁定 + 坍缩修复 spec 修订 + OQ-40-03/80-01 主方案确认）；批准后 dev1 重生成 → 标定重跑 → G1(a) |
-| **进度** | 2.5/7 里程碑（M1、M2 完成；M3 部分完成：EXP-01a 三方案健康 + 全部测试就绪）|
-| **下一步** | P0 批准 → dev1 数据重生成（σ_smooth,H=0.125×w_fine，已预演验证）→ EXP-01 标定重跑（01b/c/d）→ G1(a) 判定 |
+| **当前阶段** | M3 执行中（P0 已批；dev2 重生成完成；EXP-01 标定重跑中）|
+| **当前任务** | EXP-01a A/B/C 重训（dev2，σ_smooth_H=0.125×）→ EXP-01b σ_K 复评 → 01c/01d → G1(a) |
+| **进度** | 2.5/7 里程碑（M1、M2 完成；M3 执行中：P0 13 项 + 2 勘误已批准落地，dev2 数据重生成 + G0 复评 pass）|
+| **下一步** | EXP-01 标定重跑（01a→01b→01c→01d）→ G1(a) 判定 → M3 退出 → M4 启动门禁 |
 | **最近一次报告** | [`results/EXP-01_summary/stage_report.md`](results/EXP-01_summary/stage_report.md)（M3 EXP-01a + 标定，2026-08-26）；[`results/M2_dataset/stage_report.md`](results/M2_dataset/stage_report.md)（M2）|
 
 ## 阶段完成历史
