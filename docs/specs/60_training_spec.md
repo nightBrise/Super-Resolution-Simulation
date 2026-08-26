@@ -714,6 +714,14 @@ python scripts/check_env.py  # 验证
 - **checkpoint 保存主进程（rank 0）**，加载时广播到所有卡；
 - 单卡运行（fallback）时 SHALL 使用相同数据顺序（同一 shuffle seed 的单卡等价实现）。
 
+**双空间契约约定（2026-08-26 新增，任何含尺度变换的方案通用）**：
+任何"训练用尺度 X、评估用尺度 Y"的方案（如工作尺度 S=N²=65536 的训练空间 vs Σ=1 的评估空间），SHALL 遵循：
+1. **空间显式标注**：任何输出张量 MUST 在 docstring/字段名/日志中标注所在空间（如 `_work` 后缀或 `space` 字段）；模型 forward 返回值、checkpoint state、metrics 字段值、日志记录值 SHALL 显式标注；
+2. **转换点显式**：所有空间转换点（×S、÷S、log、softmax）MUST 在代码注释中说明"输入空间 → 输出空间"与"为什么需要这个转换"；
+3. **checkpoint 持久化尺度参数**：保存的 checkpoint MUST 持久化所有影响输出语义的尺度参数（如 work_scale、归一化统计量），不依赖嵌套 config 翻找；
+4. **加载时一致性断言**：加载 checkpoint 时 MUST 断言持久化的尺度参数与当前运行 config 一致，不一致 SHALL 报错终止并提示 R2 流程（`80` [S12]）；
+5. **日志值空间标注**：日志字段值若非最终评估空间（Σ=1），SHALL 以 `_work` 后缀命名或附 `space` 标注（建议写入时 ÷S 并改名去后缀，日志直接可读）。
+
 
 
 ## Global Constraints

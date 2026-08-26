@@ -160,7 +160,7 @@ EXP-04 生成后须通过 [S8] C4「任务保持超分而非去噪」校验：�
 - C4: 强退化测试 SHALL NOT 设独立退化等级，SHALL 由 EXP-03（强模糊）与 EXP-04（高噪声）两个正交配置替代（供 `80` EXP-03/04）。
 - C5: EXP-03 配置 SHALL 为 σ_K = 2×D2 标定值、σ_n = D2；EXP-04 配置 SHALL 为 σ_n 调至尾部区域信噪比 ≈ 1、σ_K = D2。
 - C6: EXP-03/EXP-04 的数值 SHALL 引用 EXP-01 标定的 D2 标定值（引用式定义），不引入独立待标定参数；预注册与对账口径与 `90` N8 协调，final_report 与 config.yaml 使用值 SHALL 与预注册值一致。
-- C7: EXP-04 生成后 SHALL 通过 [S8] C4「任务保持超分而非去噪」校验：主束区域平均信噪比 $\ge 2$，主束区域定义为 $M = \{(i,j): (L_{\text{clean}})_{ij} \ge 0.1 \cdot \max(L_{\text{clean}})\}$、$\text{SNR}_{\text{main}} = \text{mean}_M(L_{\text{clean}})/\sigma_n$。
+- C7: EXP-04 生成后 SHALL 通过 [S8] C4「任务保持超分而非去噪」校验：主束区域平均信噪比 $\ge 2$，主束区域定义为 $M = \{(i,j): (L_{\text{clean}})_{ij} \ge 0.1 \cdot \max(L_{\text{clean}})\}$、$\text{SNR}_{\text{main}} = \text{mean}_M(L_{\text{clean}})/\sigma_n$。**生成前可行性校验（2026-08-26 新增）**：EXP-04 的 σ_n 取值前 SHALL 先执行生成前可行性校验——在 D2 数据子集上计算 $\text{mean}_M(L_{\text{clean}})/\text{mean}_T(L_{\text{clean}})$ 批量中位数（$M$/$T$ 定义同 C7；该比值与 σ_n 无关，可行性可生成前判定）；WHEN 该比值 ×（目标尾部信噪比）< 2，THEN σ_n SHALL 回退至使 $\text{SNR}_{\text{main}} = 2$ 恰好成立的值，并将实际尾部信噪比登记为偏离值（实现见 `scripts_tmp/exp04_snr_main.py` 归档版）。本原则（生成前可行性校验）适用于一切"先选参后生成"的实验——不通过时 SHALL 调整参数至满足，不调整判据（防事后偏袒）。
 
 ---
 

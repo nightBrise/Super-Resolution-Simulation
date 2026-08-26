@@ -166,7 +166,7 @@
 | N5 | 对「物理幻觉」进行了定量分析（误差 vs $c_{\text{high}}$）。 |
 | N6 | 所有代码、配置、数据生成脚本已归档并可复现。 |
 | N7 | 迷你版 EXP-03/04（仅推理）已执行，[S6] 出口决策矩阵要求的四类外部效度证据已在报告中预埋。 |
-| N8 | 预注册对账：`final_report.md` 与 `config.yaml` 中使用的判据与阈值（$\lambda$、$\tau$、触发率、主/次指标、OOD 退化阈值、高频存活比阈值 $\rho \ge 0.1$（`80` [S9] G0(b)）、最小可信 CI 宽度 5%、最小可检出效应量 5% 相对改善、扩集上限）SHALL 与预注册值一致；任何不一致视为验收失败。 |
+| N8 | 预注册对账：`final_report.md` 与 `config.yaml` 中使用的判据与阈值（$\lambda$、$\tau$、触发率、主/次指标、OOD 退化阈值、高频存活比阈值 $\rho \ge 0.1$（`80` [S9] G0(b)）、最小可信 CI 宽度 5%、最小可检出效应量 5% 相对改善、扩集上限）SHALL 与预注册值一致；任何不一致视为验收失败。**对账清单扩展（2026-08-26 新增）**：SHALL 同时对账门禁判据类（G0(a) W8 覆盖率 ≥60%、G0(b) ρ、SNR_hf <0.1、σ_smooth,H 守卫 ‖H_hp‖₁/ΣH ≥0.5%、G1 主/次指标正增益、G2 三分类、G3 EXP-03/04 方向不反转、G4 EXP-05/06 OOD 退化 ≤20%）、标定判据类（σ_n 标定口径、σ_K 标定 R_E 比率门或后备分支、σ_smooth,P 全频 L1 区间 (0.2,0.9) 锚点 0.55）、数据生成类（work_scale S=N²、σ_smooth,H 0.125×w_fine、c_high 掩膜构造、γ 块边界 [0.3,0.4]）、三元组与版本（code_version 完整 40 位 git hash、data_version 含 mask_revalidation、spec_version v1.0+批次日期格式）。自动对账工具 `scripts/registration_audit.py` SHALL 扫描 `config.yaml` + `summary.json` + 99 OQ + 99 Approved 批次输出对账表。 |
 
 ### Claims
 
