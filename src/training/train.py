@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset
 from torch.utils.data.distributed import DistributedSampler
 
+from src.generators.dataset_builder import git_head
 from src.models.schemes import build_scheme_model, forward_scheme
 from src.training.loss import HybridLoss
 from src.utils.checkpoint import save_checkpoint, write_seeds_json
@@ -568,6 +570,18 @@ def run_check_env() -> None:
         print(f"[check_env] 无法运行：{exc}", file=sys.stderr)
 
 
+def _ensure_code_version(config: dict) -> None:
+    """N4 纪律落地：code_version SHALL 为启动时 git HEAD 完整 40 位 hash（60 [S15] C11）。
+
+    覆盖缺失或占位符值（如 ``<git rev-parse HEAD 完整 40 位 hash>``）——占位符非空，
+    ``setdefault`` / ``or`` 回填不会替换，导致 config 三元组失去可复现性
+    （EXP-02 批次 config 创建脚本先例，99 登记 2026-08-26）。
+    """
+    cv = str(config.get("code_version", ""))
+    if not re.fullmatch(r"[0-9a-f]{40}", cv):
+        config["code_version"] = git_head()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m src.training.train",
@@ -586,6 +600,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"config 不存在：{config_path}", file=sys.stderr)
         return 1
     config = load_config(config_path)
+    _ensure_code_version(config)
     max_steps = args.steps
     if args.smoke and max_steps is None:
         max_steps = 100
