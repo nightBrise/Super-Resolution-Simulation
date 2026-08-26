@@ -554,7 +554,7 @@
 | 99.S2.C3 | 99 | [S2] | 状态字段 SHALL 按 Draft → Approved → Released 演进，其中 Released 表示正式交付 Agent 执行。 |
 | 99.S3.C1 | 99 | [S3] | 每次修改任何 Spec 文件 SHALL 在变更日志明细中新增一行记录，且该行 SHALL 包含 Date、Version、Module、Type、Descri... |
 | 99.S3.C2 | 99 | [S3] | Type 字段 SHALL 取值仅为 `Added` / `Changed` / `Removed` / `Fixed` 之一。 |
-| 99.S3.C3 | 99 | [S3] | Status 字段 SHALL 取值仅为 `Proposed` / `Approved` / `Implemented` 之一。 |
+| 99.S3.C3 | 99 | [S3] | Status 字段 SHALL 取值仅为 `Proposed` / `Approved` / `Approved-PendingTests` / `Implem... |
 | 99.S3.C4 | 99 | [S3] | Status = `Implemented` 的判定 SHALL 同时满足：(a) spec 文件已修改（git diff 显示改动）；(b) 跨文档引用一致性... |
 | 99.S3.C4 | 99 | [S3] | 变更日志中 Module 与 Impact 字段 SHALL 使用 `00`-`99` 文档编号标识受影响的文档。 |
 | 99.S3.C5 | 99 | [S3] | Status = `Approved` → `Implemented` 之间允许同一次 commit 完成；但 commit message SHALL 显式引... |
