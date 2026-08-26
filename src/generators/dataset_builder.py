@@ -668,7 +668,9 @@ def build_dataset(
     """
     version = str(config["dataset"]["version"])
     master_seed = int(config["master_seed"])
-    code_version = code_version or config.get("code_version") or git_head()
+    # N4 版本对账：code_version 以生成时 git HEAD（完整 40 位）为准，
+    # config 中的旧/占位值不得覆盖（00 [S6] 约束 8）
+    code_version = code_version or git_head()
 
     calibration = config.get("calibration", {})
     sigma_K = float(calibration.get("sigma_K") or 0.0)
