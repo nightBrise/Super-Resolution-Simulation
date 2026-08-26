@@ -207,3 +207,110 @@ def test_evaluate_sample_rejects_nonpositive_total():
          "I_peak": 0.1, "I_z": np.zeros(N), "S_delta": np.zeros(N)}
     with pytest.raises(ValueError):
         evaluate_sample(np.zeros((N, N)), _gaussian_density(0.3, 0.2), m, 1.5)
+
+
+# ---------------------------------------------------------------------------
+# 感知一致性评估（70 [S3] C3/C4，2026-08-26 新增）
+# ---------------------------------------------------------------------------
+def test_visual_normalize_protocol():
+    """视觉归一化协议（70 [S3]）：逐图 1%/99% 分位归一化到 [0,1]（clip）。
+
+    分位口径抗离群：单个极值像素不改变归一化结果；输出落在 [0,1]。
+    """
+    from src.evaluation.metrics import visual_normalize
+
+    rng = np.random.default_rng(20260826)
+    img = rng.normal(size=(64, 64))
+    img[0, 0] = 1e6  # 离群极值（1%/99% 分位不受影响）
+    vis = visual_normalize(img)
+    assert vis.min() >= 0.0 and vis.max() <= 1.0
+    assert (vis.max() >= 0.99) and (vis.min() <= 0.01)
+    # 常数图：分位差为 0 → 返回全零（无归一化语义）
+    assert np.all(visual_normalize(np.full((16, 16), 0.5)) == 0.0)
+
+
+def test_ssim_vis_discriminative(truth_labels):
+    """SSIM_vis 有判别力（70 [S3] C3）：同一图像 = 1，不同图像 < 0.99。
+
+    消除 Σ=1 空间 data_range=1.0 下常数项主导、恒 ≈ 1.0 的问题——
+    两个视觉形态不同的图像在视觉归一化后 SSIM 显著低于 1。
+    """
+    from src.evaluation.metrics import ssim_vis
+
+    H, _ = truth_labels
+    assert ssim_vis(H, H) == pytest.approx(1.0, abs=1e-6)
+    # 峰位移但方差相近（防「物理量同但看起来不同」的典型形态差异）
+    shifted = _gaussian_density(0.3, 0.2, mu_z=0.25, mu_delta=-0.2, chirp=0.4)
+    assert ssim_vis(H, shifted) < 0.99
+    # 折叠翻转形态（负 chirp）
+    flipped = _gaussian_density(0.3, 0.2, mu_z=0.0, mu_delta=0.0, chirp=-0.4)
+    assert ssim_vis(H, flipped) < 0.99
+
+
+def test_cne_properties(truth_labels):
+    """CNE 性质（70 [S3] C3）：同一图像 = 0；不同图像 > 0；量纲为逐像素
+    L1（局部对比度归一化后比较，人眼对局部对比度最敏感）。"""
+    from src.evaluation.metrics import contrast_normalized_error
+
+    H, _ = truth_labels
+    assert contrast_normalized_error(H, H) == pytest.approx(0.0, abs=1e-12)
+    shifted = _gaussian_density(0.3, 0.2, mu_z=0.25, mu_delta=-0.2, chirp=0.4)
+    assert contrast_normalized_error(H, shifted) > 0.0
+    # 乘性缩放基本不变（视觉归一化对尺度不变；clip 边界舍入 → 用宽松容差）
+    assert contrast_normalized_error(3.0 * H, H) < 1e-2
+
+
+def test_evaluate_sample_reports_perceptual_metrics(truth_labels, sigma_outer):
+    """evaluate_sample 输出含感知指标（70 [S3] C3 强制报告指标）。"""
+    H, m = truth_labels
+    rng = np.random.default_rng(7)
+    H_hat = H * (1.0 + 0.05 * rng.normal(size=H.shape))
+    met = evaluate_sample(H_hat, H, m, sigma_outer, e_high_baseline=0.0)
+    assert "ssim_vis" in met and "cne" in met
+    assert 0.0 <= met["ssim_vis"] <= 1.0
+    assert met["cne"] >= 0.0
+
+
+def test_component_breakdown_and_pi_leak(consistent_c, sigma_smooth_H_px):
+    """掩膜成分分解与 Π_leak（70 [S7.1] C2，2026-08-26 P0 修订）基本性质。
+
+    - c_high 清零版与真值相同 → ch_in = 0（差分基准自洽）；
+    - ch_in/b_in 为敏感度读数，非负；
+    - Π_leak 分母非零时有限；P2 与 H_neg_ch 相同时 Π_leak = 1。
+    """
+    from src.evaluation.metrics import (
+        c_high_component_breakdown,
+        c_high_mask_from_hp,
+        high_pass_fft,
+        prior_leak_index,
+    )
+    from src.generators.f_beam import render_level1_density
+    from src.generators.f_prior import prior_parameters
+
+    c = dict(consistent_c)
+    H = render_level1_density(c, sigma_smooth=sigma_smooth_H_px)
+    c_neg_ch = dict(c)
+    for key in ("a3", "gamma", "b1"):
+        c_neg_ch[key] = 0.0
+    H_neg_ch = render_level1_density(c_neg_ch, sigma_smooth=sigma_smooth_H_px)
+    c_neg_b = dict(c_neg_ch, beta=0.0)
+    H_neg_b = render_level1_density(c_neg_b, sigma_smooth=sigma_smooth_H_px)
+    c_p2 = prior_parameters(c, "P2")
+    P2 = render_level1_density(c_p2, sigma_smooth=sigma_smooth_H_px)
+
+    mask = c_high_mask_from_hp(high_pass_fft(H))
+    comp = c_high_component_breakdown(H, H_neg_ch, mask, H_neg_b=H_neg_b)
+    assert comp["ch_in"] >= 0.0
+    assert comp["b_in"] >= 0.0
+    # 差分基准自洽：H == H_neg_ch → ch_in = 0
+    comp0 = c_high_component_breakdown(H, H, mask, H_neg_b=H_neg_b)
+    assert comp0["ch_in"] == pytest.approx(0.0, abs=1e-9)
+    # H_neg_b 缺省 → b_in 记 nan（旧数据无 β 清零缓存时的可选行为）
+    comp_nob = c_high_component_breakdown(H, H_neg_ch, mask)
+    assert np.isnan(comp_nob["b_in"]) and np.isnan(comp_nob["other"])
+    # Π_leak：P2 == H_neg_ch → 分子为 0 → Π_leak = 0
+    pi0 = prior_leak_index(H_neg_ch, H_neg_ch, H, mask)
+    assert pi0 == pytest.approx(0.0, abs=1e-9)
+    pi = prior_leak_index(P2, H_neg_ch, H, mask)
+    assert np.isfinite(pi)
+    assert pi >= 0.0

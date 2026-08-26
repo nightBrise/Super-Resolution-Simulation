@@ -62,8 +62,9 @@ def w_fine_px(consistent_c) -> float:
 
 @pytest.fixture(scope="session")
 def sigma_smooth_H_px(w_fine_px) -> float:
-    """H 渲染平滑核 σ_smooth,H = 0.5×w_fine（20 [S3] C4，批量中位数口径）。"""
-    return 0.5 * w_fine_px
+    """H 渲染平滑核 σ_smooth,H = 0.125×w_fine（20 [S3] C4 逐样本口径，
+    2026-08-26 P0 修订：原 0.5× 废弃见 99 OQ-20-03）。"""
+    return 0.125 * w_fine_px
 
 
 @pytest.fixture(scope="session")

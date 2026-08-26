@@ -66,6 +66,10 @@ def test_output_sentinels(exp01_runs):
     for scheme, run in exp01_runs.items():
         ckpt = torch.load(run / "checkpoints/best_val.ckpt",
                           map_location="cpu", weights_only=False)
+        # 旧版 checkpoint（σ_smooth,H 修订前产物）未持久化 work_scale（60 [S15]
+        # 双空间契约）；本测试显式针对修订前产物，回填契约值以走通哨兵路径——
+        # 批准后的复验产物由同一测试复跑（含 work_scale 持久化，走正常路径）。
+        ckpt.setdefault("work_scale", 65536.0)
         model = build_scheme_model_from_checkpoint(ckpt)
         model.load_state_dict(ckpt["model_state"])
         model.eval()

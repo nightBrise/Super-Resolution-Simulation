@@ -34,7 +34,7 @@ def chain_samples():
     seed_seq = np.random.SeedSequence(20260825).spawn(N_CHAIN_SAMPLES)
     chains = []
     for params, ss in zip(params_list, seed_seq):
-        sigma_smooth_h = 0.5 * float(fine_structure_width(params) / DELTA_PX)
+        sigma_smooth_h = 0.125 * float(fine_structure_width(params) / DELTA_PX)
         H, m, c_rec = f_beam(params, sigma_smooth=sigma_smooth_h)
         sigma_n = float(H.sum() / 64.0**2 / 3.0)
         noise_seed = int(ss.generate_state(1, dtype=np.uint32)[0])
@@ -102,7 +102,7 @@ def test_chain_prior_invariant_to_c_high(chain_samples):
     """链上 P2 对 c_high 扰动逐位不变（★ 泄露防护的集成层复证）。"""
     for ch in chain_samples:
         c_mod = dict(ch["c"], a3=0.045, gamma=0.52, b1=0.17)
-        sigma_smooth_h = 0.5 * float(fine_structure_width(ch["c"]) / DELTA_PX)
+        sigma_smooth_h = 0.125 * float(fine_structure_width(ch["c"]) / DELTA_PX)
         P_mod, _ = f_prior(c_mod, level="P2", sigma_smooth=2.0 * sigma_smooth_h)
         assert np.array_equal(ch["P"], P_mod)
 

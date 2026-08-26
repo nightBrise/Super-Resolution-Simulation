@@ -15,9 +15,9 @@
 # ============================================================
 # 必填：版本三元组（缺失视为验收失败）
 # ============================================================
-code_version: "<git rev-parse HEAD>"  # 代码 commit hash
+code_version: "<git rev-parse HEAD 完整 40 位 hash>"  # 代码 commit hash（00 [S6] 约束 8 N4：持久化载体一律完整 hash）
 data_version: "<data/<版本>/>"      # 数据集版本号
-spec_version: "<git describe --tags>" # spec 集版本（v0.x 或 v1.x）
+spec_version: "<v1.0+<99 最近批准批次日期>>" # spec 集版本（00 [S6] 约束 8 N4：v1.0+<最新 99 批准批次>，如 v1.0+2026-08-26）
 
 # ============================================================
 # 必填：实验标识
@@ -82,6 +82,7 @@ evaluation:
     sigma_outer: 0.0               # 按 f_c=1/8 处衰减50%反算
     sigma_inner_factor: 0.5         # σ_inner = σ_outer / 2
   rho_threshold: 0.1                # 高频存活比阈值 ρ ≥ 0.1（90 N8、80 [S9] G0(b)）
+  r_e_max: 10                       # R_E 守卫上限（80 [S4] C3b：EXP-01b 复评后定死并登记，建议初值 10；超限不否决、标注"锐化伪影档"）
   ood_degradation_threshold: 0.20   # OOD 退化阈值（90 [S6] C5：相对退化 ≤20%）
   ci_width_min: 0.05                # 最小可信 CI 宽度（90 N8）
   mde: 0.05                         # 最小可检出效应量（90 N8）
@@ -105,7 +106,7 @@ network:
   num_levels: 5                     # 下采样级数（50 [S7]）
   scheme_C_film_injection: "bottleneck_and_decoder"  # 50 [S10] C5
   input_channels: 2                  # 50 [S7]（A: concat(L_up, 0); B: concat(L_up, P2); C: concat(L_up, 0)）
-  work_scale: 65536                 # 输出工作尺度 S=N²（50 [S12] C5 坍缩修复：Softplus 在 Σ=1 空间数值失配）
+  work_scale: 65536                 # 输出工作尺度 S=N²（50 [S12] C5 坍缩修复：Softplus 在 Σ=1 空间数值失配）。必填（60 [S15] 双空间契约：checkpoint 持久化并加载断言一致，缺省报错）
 
 # ============================================================
 # 必填：训练超参数（60 [S9]）

@@ -22,6 +22,7 @@ from src.models.schemes import (  # noqa: E402
     SchemeB,
     SchemeC,
     build_scheme_model,
+    build_scheme_model_from_checkpoint,
 )
 from src.training.loss import F_C  # noqa: E402
 from src.utils.config_utils import resolve_precision  # noqa: E402
@@ -255,3 +256,42 @@ def test_no_physical_loss_in_models(models):
     source = inspect.getsource(schemes) + inspect.getsource(unet)
     for token in ("HybridLoss", "evaluate", "psnr", "ssim"):
         assert token not in source
+
+
+def test_build_scheme_model_requires_work_scale():
+    """60 [S15] 双空间契约：network.work_scale 为必填（2026-08-26 P0 修订，
+    config 缺省时抛 ValueError；原默认值 65536.0 已移除）。"""
+    base = {"scheme": "A", "network": {"C0": 8, "num_levels": 3,
+                                       "num_residual_blocks": 1}}
+    with pytest.raises(ValueError):
+        build_scheme_model(base)
+    with pytest.raises(ValueError):
+        build_scheme_model({"scheme": "B", "network": {}})
+    # 显式配置 work_scale → 正常构造且三方案一致使用该值
+    for scheme in ("A", "B", "C"):
+        model = build_scheme_model(
+            {"scheme": scheme, "network": {"C0": 8, "num_levels": 3,
+                                           "num_residual_blocks": 1,
+                                           "work_scale": 65536.0}}
+        )
+        assert model.work_scale == 65536.0
+        assert model.network_config["work_scale"] == 65536.0  # 随配置持久化
+
+
+def test_build_scheme_model_from_checkpoint_requires_work_scale():
+    """checkpoint 缺 work_scale（旧版）→ ValueError 并提示 R2（60 [S15]、
+    80 [S12]）；顶层持久化键优先于 network_config。"""
+    legacy = {"model_class": "SchemeA", "network_config": {"C0": 8}}
+    with pytest.raises(ValueError):
+        build_scheme_model_from_checkpoint(legacy)
+    # 顶层 work_scale（新 checkpoint 持久化键）优先
+    model = build_scheme_model_from_checkpoint(
+        {"model_class": "SchemeA", "network_config": {"C0": 8, "work_scale": 123.0},
+         "work_scale": 65536.0}
+    )
+    assert model.work_scale == 65536.0
+    # 仅 network_config 携带时回退
+    model2 = build_scheme_model_from_checkpoint(
+        {"model_class": "SchemeA", "network_config": {"C0": 8, "work_scale": 42.0}}
+    )
+    assert model2.work_scale == 42.0

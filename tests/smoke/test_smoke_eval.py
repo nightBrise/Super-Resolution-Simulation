@@ -24,11 +24,13 @@ from tests.smoke.conftest import smoke_config  # noqa: E402
 
 pytestmark = [pytest.mark.smoke, pytest.mark.gpu, pytest.mark.m3]
 
-#: metrics.csv 必含列（80 [S8] 列名规范子集 + split 列）。
+#: metrics.csv 必含列（80 [S8] 列名规范子集 + split 列 + P0 新字段）。
 REQUIRED_COLUMNS = {
     "sample_id", "split", "scheme",
     "a_3", "gamma", "b_1",
     "psnr", "mae", "mse", "ssim",
+    "ssim_vis", "cne",                     # 70 [S3] C3 感知指标
+    "ch_in_mask", "b_in_mask", "pi_leak",  # 70 [S7.1] C2（旧数据记 nan）
     "e_eps_z", "e_I_peak", "e_sigma_z", "e_sigma_delta", "e_h_eff",
     "e_high_doG", "R_E", "e_high_mask", "e_peak",
     "e_profile_I", "e_profile_S",
@@ -42,6 +44,7 @@ def _write_random_checkpoint(path: Path, scheme: str) -> None:
     save_checkpoint(path, {
         "model_class": type(model).__name__,
         "network_config": model.network_config,
+        "work_scale": model.work_scale,  # 60 [S15]：checkpoint 持久化尺度参数
         "model_state": model.state_dict(),
     })
 
@@ -116,3 +119,21 @@ def test_smoke_eval_pipeline(smoke_device, smoke_indices, tmp_path):
     baseline = summary.get("baseline", {}).get("L_up", {})
     assert "e_high_doG_mean" in baseline and "R_E_mean" in baseline
     assert np.isfinite(baseline["e_high_doG_mean"])
+
+    # ---- P0 新字段（70 [S3] C3 / 70 [S7.1] C2 / 80 [S4] C3b）-------------
+    mask_comp = summary.get("mask_composition", {})
+    for col in ("ch_in_mask", "b_in_mask", "pi_leak"):
+        assert col in mask_comp, f"summary 缺 mask_composition.{col}"
+        assert "median" in mask_comp[col] and "n" in mask_comp[col]
+    assert "b_in_exceeds_ch_in_x1.5" in mask_comp
+    assert "pi_leak_gt_0.5" in mask_comp
+    guard = summary.get("re_guard", {})
+    assert "r_e_max" in guard and "per_scheme" in guard
+    for scheme in ("A", "B"):
+        stat = guard["per_scheme"].get(scheme)
+        assert stat is not None, f"re_guard 缺 {scheme}"
+        assert set(stat) >= {"median", "max", "passed", "label"}
+        assert stat["label"] in ("normal", "sharpening_artifact")
+    # 旧版本数据（v1）无 H_neg_ch 字段：ch_in_mask 等记 nan、n=0（C 类缺省）
+    assert mask_comp["ch_in_mask"]["n"] == 0
+    assert mask_comp["ch_in_mask"]["median"] is None

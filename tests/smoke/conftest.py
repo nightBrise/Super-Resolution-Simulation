@@ -67,7 +67,7 @@ def smoke_config(
         "calibration": {"sigma_K": 11.0, "sigma_n": 1.22e-4},
         "network": {"backbone": "unet", "C0": 24, "num_residual_blocks": 2,
                     "num_levels": 5, "scheme_C_film_injection": "bottleneck_and_decoder",
-                    "input_channels": 2},
+                    "input_channels": 2, "work_scale": 65536},
         "training": {"optimizer": "AdamW", "learning_rate": 1e-3, "weight_decay": 1e-4,
                      "beta1": 0.9, "beta2": 0.999, "batch_size": batch_size,
                      "max_steps": max_steps, "log_interval": 25,
@@ -81,5 +81,6 @@ def smoke_config(
         "evaluation": {"tau": 0.05, "trigger_rate": 0.20,
                        "primary_metric": "ε_high^mask",
                        "secondary_metrics": ["ε_z_relative"],
-                       "dog": {"sigma_outer": 0.0, "sigma_inner_factor": 0.5}},
+                       "dog": {"sigma_outer": 0.0, "sigma_inner_factor": 0.5},
+                       "r_e_max": 10},
     }

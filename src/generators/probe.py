@@ -102,7 +102,7 @@ def probe_lup(c: dict, sigma_K: float) -> tuple[np.ndarray, np.ndarray]:
 
     ``L_clean`` 为无噪声退化（σ_n = 0，L_clean 路径，80 [S9] G0(b)）。
     """
-    sigma_smooth_h = 0.5 * float(fine_structure_width(c) / DELTA_PX)
+    sigma_smooth_h = 0.125 * float(fine_structure_width(c) / DELTA_PX)
     H, _, _ = f_beam(c, sigma_smooth=sigma_smooth_h)
     L_clean = f_deg(H, sigma_K=sigma_K, sigma_n=0.0, seed=0)[1]
     L_up = normalize_intensity(upsample_4x_bilinear(L_clean))

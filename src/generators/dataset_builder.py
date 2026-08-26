@@ -17,15 +17,17 @@
 
 工件契约（60 [S14]）
 --------------------
-每划分一个 HDF5 文件：图像 ``H``(256²)/``L``(64²)/``L_clean``(64²)/
+每划分一个 HDF5 文件：图像 ``H``(256²)/``H_neg_ch``(256², c_high 清零版,
+70 [S7.1] C2)/``L``(64²)/``L_clean``(64²)/
 ``L_up``(256², bilinear)/``P2``(256²) 均 float32、gzip level 4、按样本切分
 （chunks=(1, H, W)）；元数据含 ``sample_id``（``<划分>-<序号>``）、全部
 内容参数 ``c``（c_low/c_mid/c_high 全字段）、物理标签 ``m``（全集）、导出
 物理量（``eps_z``、``I_peak``、能谱剖面 ``S_delta``）、``seed_i``、掩膜
 标记 W1–W8、退化配置标记（D2）与退化元数据 ``m_L``。另有 ``manifest.json``
 登记主种子、data_version、各划分样本数与 ``sample_id`` 清单、γ 块信息、
-标定采用初始值、生成时间戳、code_version（git commit hash）与
-spec_version。
+mask_revalidation（G3）、标定采用初始值、生成时间戳、code_version（完整
+40 位 git commit hash，00 [S6] 约束 8 N4）与 spec_version（``v1.0+<99 最
+近批准批次>``）。
 
 写入分工（60 [S14]）：20 写 ``H``/``c``/``m``/物理标签；30 追加
 ``L``/``L_clean``/``L_up``/``m_L``；40 追加 ``P2``——实现在单条管线内完成，
@@ -60,7 +62,7 @@ from src.generators.sampling import (
     sample_parameters,
 )
 
-#: 规格版本（与 00 [S6] 全局约束 8 配套的 spec_version）。
+#: 规格冻结版本（与 00 [S6] 全局约束 8 配套的 spec_version 基础版本）。
 SPEC_VERSION = "v1.0"
 
 #: γ 幅度采样范围（20 [S9]：γ = −sign(β)·[0.1, 0.6]）。
@@ -68,6 +70,45 @@ GAMMA_MAG_RANGE = (0.1, 0.6)
 
 #: |γ| 的固定总体分位秩（60 [S8] C4：幅度中央 20% 分位带）。
 GAMMA_QUANTILE_RANKS = (0.4, 0.6)
+
+
+def latest_approved_batch_date(change_log: str | Path | None = None) -> str:
+    """99 最近已批准批次的日期（00 [S6] 约束 8 N4 的 spec_version 批次标识）。
+
+    从 ``99_change_log.md`` 变更日志表提取 Status 为 ``Approved*``
+    （含 ``Approved-PendingTests``）或 ``Implemented`` 的行，取日期最大的
+    Date 字段（ISO 格式可直接排序）。例如 2026-08-26 P0 报批包 →
+    ``"2026-08-26"``。解析失败时返回空串。
+    """
+    if change_log is None:
+        change_log = (
+            Path(__file__).resolve().parents[2] / "docs" / "specs" / "99_change_log.md"
+        )
+    text = Path(change_log).read_text(encoding="utf-8")
+    dates: list[str] = []
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) < 8:
+            continue
+        status = cells[7]  # 表列为 Date/Version/Module/Type/Description/Reason/Impact/Status
+        if status.startswith("Approved") or status == "Implemented":
+            date = cells[0]
+            if len(date) == 10 and date.startswith("20"):
+                dates.append(date)
+    return max(dates) if dates else ""
+
+
+def resolve_spec_version(change_log: str | Path | None = None) -> str:
+    """spec_version = ``<冻结版本>+<最新 99 批准批次>``（00 [S6] 约束 8 N4）。
+
+    语义为「冻结版本文本 + 截至该批次的全部已批准变更」；持久化载体
+    （manifest、config.yaml、summary.json、训练日志）写入的 spec_version
+    SHALL 与生成时刻 99 最新已批准批次一致。解析失败时回退基础版本。
+    """
+    batch = latest_approved_batch_date(change_log)
+    return f"{SPEC_VERSION}+{batch}" if batch else SPEC_VERSION
 
 
 def gamma_block_interval() -> tuple[float, float]:
@@ -114,6 +155,10 @@ BRANCH_PROBE = 7
 INITIAL_TAIL_SNR = 2.0
 
 #: M1 采用的先验平滑倍数：σ_smooth,P = 2.6×σ_smooth,H（40 [S5] C5 候选上档）。
+#: 注：2026-08-26 P0 修订（σ_smooth,H = 0.125×w_fine）后，该 2.6× 仅为
+#: 管线默认值——40 [S5] C5/AC14 出口流程已按扩展候选集取 15×（见
+#: tests/acceptance/test_m1_generators.py）；数据集重建（EXP-01d 标定登记）
+#: 时按登记值更新本常量并递增数据版本。
 SIGMA_SMOOTH_P_MULTIPLE = 2.6
 
 #: EXP-06 极端参数放大倍数（80 [S7]：相对训练集采样范围上界放大 50%）。
@@ -132,8 +177,11 @@ BATCH_SIZE = 256
 DEFAULT_WORKERS = 32
 
 #: 图像字段（float32、chunks=(1, H, W)）。
+#: ``H_neg_ch`` 为 c_high（a₃/γ/b₁）清零版真值（70 [S7.1] C2 掩膜能量成分
+#: 分解与先验泄漏指数 Π_leak 的差分基准，2026-08-26 P0 报批包第 10 项）。
 IMAGE_KEYS: tuple[str, tuple[int, int], ...] = (
     ("H", (256, 256)),
+    ("H_neg_ch", (256, 256)),
     ("L", (64, 64)),
     ("L_clean", (64, 64)),
     ("L_up", (256, 256)),
@@ -195,7 +243,7 @@ def estimate_sigma_n_initial(
     )
     means = []
     for c in params:
-        sigma_smooth_h = 0.5 * float(fine_structure_width(c) / DELTA_PX)
+        sigma_smooth_h = 0.125 * float(fine_structure_width(c) / DELTA_PX)
         H, _, _ = f_beam(c, sigma_smooth=sigma_smooth_h)
         L_clean = f_deg(H, sigma_K=sigma_K, sigma_n=0.0, seed=0)[1]
         means.append(float(L_clean.mean()))
@@ -212,10 +260,17 @@ def _generate_sample(args: tuple) -> dict[str, Any]:
     """
     split, index, c, seed_i, sigma_K, sigma_n, deg_level = args
 
-    sigma_smooth_h = 0.5 * float(fine_structure_width(c) / DELTA_PX)
+    sigma_smooth_h = 0.125 * float(fine_structure_width(c) / DELTA_PX)
 
     # ---- 20：H、物理标签 m、内容参数 c（含导出物理量） ----
     H, m, c_rec = f_beam(c, sigma_smooth=sigma_smooth_h)
+
+    # 20：H_neg_ch = c_high 清零版真值（a₃=γ=b₁=0，70 [S7.1] C2 差分基准；
+    # 与 H 同 σ_smooth,H、同网格，仅供评估端成分分解/Π_leak 使用）。
+    c_neg_ch = dict(c)
+    for key in C_HIGH_KEYS:
+        c_neg_ch[key] = 0.0
+    H_neg_ch, _, _ = f_beam(c_neg_ch, sigma_smooth=sigma_smooth_h)
 
     # ---- 30：退化 L / L_clean / L_up 与退化元数据 m_L ----
     L, L_clean, d, m_L = f_deg(
@@ -235,6 +290,7 @@ def _generate_sample(args: tuple) -> dict[str, Any]:
         "index": index,
         "c": c_rec,
         "H": H,
+        "H_neg_ch": H_neg_ch,
         "m": m,
         "L": L,
         "L_clean": L_clean,
@@ -269,9 +325,10 @@ def _create_split_file(
     f = h5py.File(str(path), "w")
     f.attrs["split"] = split
     f.attrs["data_version"] = version
-    f.attrs["spec_version"] = SPEC_VERSION
+    f.attrs["spec_version"] = resolve_spec_version()
     f.attrs["code_version"] = code_version
     f.attrs["master_seed"] = int(master_seed)
+    f.attrs["has_h_neg_ch"] = True
     f.attrs["gzip_level"] = GZIP_LEVEL
     f.attrs["compression"] = "gzip"
     f.attrs["chunking"] = "per-sample"
@@ -406,6 +463,65 @@ def _write_batch(h5: h5py.File, records: list[dict], start: int) -> None:
         )
 
 
+def _mask_revalidation(
+    split: str, params: list[dict], stats: dict
+) -> dict[str, Any]:
+    """G3 掩膜复核（00 [S6] 约束 8 / 60 [S8] C4，2026-08-26 P0 报批包第 3 项）。
+
+    生成期复核 γ 块总体分位数、W8 覆盖率与 γ 块内外计数，给出
+    ``revalidation_verdict``（pass / drift）：
+
+    - γ 块总体分位数复核：块边界 ``|γ| ∈ [0.3, 0.4]``（总体分位秩
+      ``[0.4, 0.6]``）在样本分布上的经验分位秩，与块模式期望值比对
+      （outside 模式条件采样后 ``|γ| ~ U[0.1,0.3) ∪ (0.4,0.6]`` →
+      期望 ``(0.5, 0.5)``；inside 模式全部落块内 → 期望 ``(0.0, 1.0)``；
+      test_ood 豁免不做分位比对）；
+    - W8 覆盖率：``w8_fraction_among_w1_w7_passers ≥ 0.6``（20 [S9] C9，
+      OOD 豁免不计）；
+    - γ 块内外计数：样本的块内/块外计数。
+
+    复核不改变任何样本（纯记录性诊断，G3 提示用）；漂移仅触发 99 登记，
+    不影响数据本身。
+    """
+    gmag = np.abs(np.array([float(c["gamma"]) for c in params]))
+    lo, hi = GAMMA_BLOCK
+    n_inside = int(((gmag >= lo) & (gmag <= hi)).sum())
+    n_outside = int(len(gmag) - n_inside)
+    q_lo = float((gmag < lo).mean())
+    q_hi = float((gmag <= hi).mean())
+
+    w8_frac = stats.get("w8_fraction_among_w1_w7_passers")
+    w8_frac = (
+        float(w8_frac)
+        if isinstance(w8_frac, (int, float)) and w8_frac == w8_frac
+        else None
+    )
+
+    mode = SPLIT_BLOCK_MODE.get(split)
+    if mode == "inside":
+        expected = (0.0, 1.0)
+        quantile_checks = [abs(q_lo - 0.0) <= 0.05, abs(q_hi - 1.0) <= 0.05]
+    elif mode == "outside":
+        expected = (0.5, 0.5)
+        quantile_checks = [abs(q_lo - 0.5) <= 0.05, abs(q_hi - 0.5) <= 0.05]
+    else:  # test_ood：掩膜豁免，分位复核不计
+        expected = None
+        quantile_checks = []
+
+    w8_checks = [] if mode is None else [w8_frac is not None and w8_frac >= 0.6]
+    verdict = "pass" if all(quantile_checks) and all(w8_checks) else "drift"
+    return {
+        "split": split,
+        "gamma_block_quantile_ranks": {
+            "observed": [q_lo, q_hi],
+            "expected_by_mode": expected,
+        },
+        "w8_fraction_among_w1_w7_passers": w8_frac,
+        "gamma_block_counts": {"inside": n_inside, "outside": n_outside},
+        "revalidation_verdict": verdict,
+    }
+
+
 def build_split(
     split: str,
     n: int,
@@ -487,11 +603,17 @@ def build_split(
         "count": int(n),
         "sample_ids": sample_ids,
         "mask_stats": stats,
+        "mask_revalidation": _mask_revalidation(split, params, stats),
     }
 
 
 def git_head() -> str:
-    """当前 git commit hash（code_version；git 不可用时回退标记）。"""
+    """当前 git commit hash（code_version；git 不可用时回退标记）。
+
+    SHALL 为完整 40 位 hash（00 [S6] 约束 8 N4：7 位短 hash 仅可用于展示，
+    持久化载体一律使用完整 hash）；``git rev-parse HEAD`` 输出非 40 位时
+    回退 ``"working-tree"`` 标记。
+    """
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -501,7 +623,9 @@ def git_head() -> str:
             timeout=10,
         )
         if proc.returncode == 0:
-            return proc.stdout.strip()
+            sha = proc.stdout.strip()
+            if len(sha) == 40:
+                return sha
     except Exception:
         pass
     return "working-tree"
@@ -514,7 +638,7 @@ def load_config(path: str | Path) -> dict:
     with open(path, "r", encoding="utf-8") as fh:
         config = yaml.safe_load(fh)
     config.setdefault("code_version", git_head())
-    config.setdefault("spec_version", SPEC_VERSION)
+    config.setdefault("spec_version", resolve_spec_version())
     return config
 
 
@@ -613,9 +737,20 @@ def build_dataset(
     if set(splits) == set(sizes):
         manifest: dict[str, Any] = {
             "data_version": version,
-            "spec_version": str(config.get("spec_version") or SPEC_VERSION),
+            # N4（00 [S6] 约束 8）：载体写入的 spec_version SHALL 与生成时刻
+            # 99 change log 的最新已批准批次一致（不随 config 覆盖）。
+            "spec_version": resolve_spec_version(),
             "code_version": code_version,
             "master_seed": master_seed,
+            "has_h_neg_ch": True,
+            "mask_revalidation": {
+                split: split_sections[split]["mask_revalidation"]
+                for split in sizes
+            },
+            "revalidation_verdicts": {
+                split: split_sections[split]["mask_revalidation"]["revalidation_verdict"]
+                for split in sizes
+            },
             "seed_derivation": (
                 "sample_seed_i = SeedSequence(master_seed).spawn(8)[split_branch]"
                 ".spawn(n)[i].generate_state(1, uint32)"
@@ -655,7 +790,8 @@ def build_dataset(
                     "口径，30 [S9] C3 SNR 定义）"
                 ),
                 "sigma_smooth_H": {
-                    "rule": "0.5 x w_fine，逐样本",
+                    "rule": "0.125 x w_fine，逐样本（20 [S3] C4，2026-08-26 "
+                    "P0 修订：原 0.5x 见 99 OQ-20-03）",
                 },
                 "sigma_smooth_P": {
                     "rule": f"{SIGMA_SMOOTH_P_MULTIPLE} x sigma_smooth_H，逐样本",

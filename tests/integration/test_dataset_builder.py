@@ -87,12 +87,31 @@ def _c_fingerprint(f, idx: int) -> tuple:
 
 
 def test_manifest_triple_and_sections(built_dataset):
-    """manifest 含版本三元组、γ 块信息与标定初始值（60 [S14] C1/C3/C6）。"""
+    """manifest 含版本三元组、γ 块信息、标定初始值与 H_neg_ch/mask_revalidation
+    （60 [S14] C1/C3/C6、00 [S6] 约束 8 N4、70 [S7.1] C2、G3）。"""
+    from src.generators.dataset_builder import resolve_spec_version
+
     root, manifest = built_dataset
     assert manifest["code_version"] == "test"
     assert manifest["data_version"] == "devt"
-    assert manifest["spec_version"] == "v1.0"
+    # N4：spec_version 为 v1.0+<99 最近批准批次>（与生成时刻 99 一致）
+    assert manifest["spec_version"] == resolve_spec_version()
+    assert manifest["spec_version"].startswith("v1.0+")
     assert manifest["master_seed"] == MASTER
+    assert manifest["has_h_neg_ch"] is True
+
+    # G3 掩膜复核：γ 块分位复核值 + W8 覆盖率 + 块内外计数 + verdict
+    reval = manifest["mask_revalidation"]
+    assert set(reval) == set(SPLITS)
+    for split in SPLITS:
+        entry = reval[split]
+        assert entry["split"] == split
+        assert set(entry["gamma_block_quantile_ranks"]) == {"observed", "expected_by_mode"}
+        assert set(entry["gamma_block_counts"]) == {"inside", "outside"}
+        assert entry["revalidation_verdict"] in ("pass", "drift")
+    verdicts = manifest["revalidation_verdicts"]
+    assert set(verdicts) == set(SPLITS)
+    assert all(v in ("pass", "drift") for v in verdicts.values())
 
     block = manifest["gamma_block"]
     assert block["dimension"] == "abs(gamma)"
@@ -124,11 +143,13 @@ def test_manifest_sample_ids_match_h5(built_dataset):
 
 
 def test_hdf5_schema_images(built_dataset):
-    """图像字段 float32 + gzip level 4 + 按样本切分（60 [S15] C2）。"""
+    """图像字段 float32 + gzip level 4 + 按样本切分（60 [S15] C2）；含
+    H_neg_ch（c_high 清零版，70 [S7.1] C2）。"""
     root, _ = built_dataset
     with _h5(root, "train") as f:
         for name, shape in (
-            ("H", (256, 256)), ("L", (64, 64)), ("L_clean", (64, 64)),
+            ("H", (256, 256)), ("H_neg_ch", (256, 256)),
+            ("L", (64, 64)), ("L_clean", (64, 64)),
             ("L_up", (256, 256)), ("P2", (256, 256)),
         ):
             ds = f[name]
@@ -138,6 +159,9 @@ def test_hdf5_schema_images(built_dataset):
             assert ds.compression_opts == 4, name
             assert tuple(ds.chunks) == (1, *shape), name
             assert ds.attrs is not None
+        assert bool(f.attrs["has_h_neg_ch"])  # h5py attrs 返回 numpy bool
+        # H_neg_ch 与 H 逐样本同尺寸且为 c_high 清零（a₃=γ=b₁=0 渲染）
+        assert np.array_equal(f["H_neg_ch"].shape, f["H"].shape)
 
 
 def test_hdf5_schema_metadata(built_dataset):

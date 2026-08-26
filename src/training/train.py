@@ -188,10 +188,26 @@ def _make_loader(dataset, config: dict, shuffle_seed: int, ddp: dict | None, dro
 # ---------------------------------------------------------------------------
 # 训练步骤
 # ---------------------------------------------------------------------------
-def _validate(model, loader, loss_fn, device: str) -> float:
-    """验证集总损失均值（60 [S10] C2：早停与最优 checkpoint 依据）。"""
+def _validate(
+    model, loader, loss_fn, device: str
+) -> tuple[float, dict[str, float | bool]]:
+    """验证集总损失均值与三哨兵（80 [S4] C3，2026-08-26 P0 修订）。
+
+    返回 ``(val_loss, sentinels)``；哨兵在 Σ=1 空间计算（60 [S15] 双空间
+    契约：工作尺度 ÷S 还原）：
+    - ``q_ratio_median``：val 样本 Q_Ĥ/Q_H 中位数，∈ [0.1, 10]；
+    - ``rho_median``：val 样本 Pearson ρ(Ĥ, H) 中位数，≥ 0.1；
+    - ``lspace_mean``：val L_space 均值，须 < 1/N²（击穿平凡零预测器地板，
+      零预测器 L_space = mean(H) = 1/N²）；
+    - ``pass``：三哨兵全过（best checkpoint 联动依据）。
+    """
     model.eval()
     total, count = 0.0, 0
+    image_size = 256
+    floor = 1.0 / (image_size * image_size)
+    q_ratios: list[float] = []
+    rhos: list[float] = []
+    lspace_sum, lspace_count = 0.0, 0
     with torch.no_grad():
         for batch in loader:
             H_hat = forward_scheme(model, batch, device)
@@ -199,7 +215,43 @@ def _validate(model, loader, loss_fn, device: str) -> float:
             loss = loss_fn(H_hat, target)
             total += float(loss.sum().item())
             count += H_hat.shape[0]
-    return total / count if count else float("nan")
+
+            # 哨兵还原到 Σ=1 空间：Ĥ_work ÷ S（60 [S15] 转换点显式）
+            scale = float(model.work_scale)
+            H_hat_s1 = H_hat / scale
+            H_s1 = target / scale
+            flat_h = H_hat_s1.flatten(1)
+            flat_t = H_s1.flatten(1)
+            q_ratios.extend((flat_h.sum(1) / flat_t.sum(1)).tolist())
+            mh = flat_h.mean(1, keepdim=True)
+            mt = flat_t.mean(1, keepdim=True)
+            cov = ((flat_h - mh) * (flat_t - mt)).sum(1)
+            rho = torch.clamp(cov / (flat_h.std(1) * flat_t.std(1) + 1e-12), -1.0, 1.0)
+            rhos.extend(rho.tolist())
+            # l_space 为批量全局均值（非逐样本）→ 按批量加权累计
+            lspace_sum += float(loss_fn.l_space(H_hat_s1, H_s1).item()) * H_hat_s1.shape[0]
+            lspace_count += H_hat_s1.shape[0]
+
+    val_loss = total / count if count else float("nan")
+    if not q_ratios:
+        return val_loss, {"pass": False, "n_samples": 0}
+    q_med = float(np.median(q_ratios))
+    rho_med = float(np.median(rhos))
+    lspace = lspace_sum / lspace_count if lspace_count else float("nan")
+    q_pass = 0.1 <= q_med <= 10.0
+    rho_pass = rho_med >= 0.1
+    lspace_pass = bool(lspace < floor)
+    return val_loss, {
+        "q_ratio_median": q_med,
+        "q_ratio_pass": q_pass,
+        "rho_median": rho_med,
+        "rho_pass": rho_pass,
+        "lspace_mean": lspace,
+        "lspace_floor": floor,
+        "lspace_beat": lspace_pass,
+        "n_samples": int(len(q_ratios)),
+        "pass": bool(q_pass and rho_pass and lspace_pass),
+    }
 
 
 def _save_checkpoint(
@@ -212,10 +264,16 @@ def _save_checkpoint(
     c_prior_stats: tuple[np.ndarray, np.ndarray] | None,
     meta: dict,
 ) -> None:
-    """按 60 [S12] C2 保存 checkpoint（权重 + 配置 + 种子 + 数据版本 + 曲线）。"""
+    """按 60 [S12] C2 保存 checkpoint（权重 + 配置 + 种子 + 数据版本 + 曲线）。
+
+    ``work_scale`` 为顶层持久化键（60 [S15] 双空间契约：checkpoint MUST
+    持久化影响输出语义的尺度参数，不依赖嵌套 config 翻找；评估加载时
+    与当前 config 断言一致）。
+    """
     state: dict[str, Any] = {
         "model_class": type(model).__name__,
         "network_config": model.network_config,
+        "work_scale": float(model.work_scale),
         "model_state": model.state_dict(),
         "config": config,
         "config_hash": meta["config_hash"],
@@ -343,6 +401,7 @@ def train(
     curve: list[float] = []
     best_val_loss: float | None = None
     best_step = 0
+    any_sentinel_pass = False  # 80 [S4] C3 联动：出现过哨兵通过的验证候选
     step = 0
     stopped = False
     epoch = 0
@@ -381,17 +440,19 @@ def train(
 
         if step % log_interval == 0 or step == 1:
             with torch.no_grad():
-                out_min = float(H_hat.min().item())
-                out_max = float(H_hat.max().item())
-                out_sum = float(H_hat.sum().item())
+                # 日志值在工作尺度空间（Softplus(S·Base+R) 输出，60 [S15]
+                # 双空间契约：非最终评估空间的值以 _work 后缀显式标注）
+                out_min_work = float(H_hat.min().item())
+                out_max_work = float(H_hat.max().item())
+                out_sum_work = float(H_hat.sum().item())
             record = {
                 "step": step,
                 "train_loss": loss_val,
                 "l_space": float(l_space.item()),
                 "l_spec": float(l_spec.item()),
-                "out_min": out_min,
-                "out_max": out_max,
-                "out_sum": out_sum,
+                "out_min_work": out_min_work,
+                "out_max_work": out_max_work,
+                "out_sum_work": out_sum_work,
                 "lr": float(optimizer.param_groups[0]["lr"]),
                 "config_hash": config_hash,
                 "data_version": data_version,
@@ -401,12 +462,26 @@ def train(
 
         # ---- 验证与早停（60 [S10]） ---------------------------------------
         if early_stopping.should_validate(step):
-            val_loss = _validate(model, val_loader, loss_fn, device)
+            val_loss, sentinels = _validate(model, val_loader, loss_fn, device)
             if is_main:
-                if best_val_loss is None or val_loss < best_val_loss:
+                improved = best_val_loss is None or val_loss < best_val_loss
+                if improved and sentinels["pass"]:
                     best_val_loss = val_loss
                     best_step = step
+                    any_sentinel_pass = True
                     _save_checkpoint(best_path, model, config, step, val_loss, curve, c_prior_stats, header)
+                elif improved:
+                    # best_ckpt 哨兵联动（80 [S4] C3，2026-08-26 P0 修订）：
+                    # 哨兵不过的候选跳过并记录，不污染最优 checkpoint
+                    logger.log({
+                        "step": step,
+                        "val_loss": val_loss,
+                        "best_val_loss": best_val_loss,
+                        "sentinel_skip_best": True,
+                        "sentinel_q_ratio": sentinels["q_ratio_median"],
+                        "sentinel_rho": sentinels["rho_median"],
+                        "sentinel_lspace_beat": sentinels["lspace_beat"],
+                    })
                 _save_checkpoint(last_path, model, config, step, val_loss, curve, c_prior_stats, header)
                 logger.log({
                     "step": step,
@@ -414,6 +489,10 @@ def train(
                     "best_val_loss": best_val_loss,
                     "best_step": best_step,
                     "checkpoint_path": str(best_path),
+                    "sentinel_q_ratio": sentinels["q_ratio_median"],
+                    "sentinel_rho": sentinels["rho_median"],
+                    "sentinel_lspace_beat": sentinels["lspace_beat"],
+                    "sentinels_pass": sentinels["pass"],
                 })
             if early_stopping.on_validation(step, val_loss):
                 stopped = True
@@ -436,6 +515,16 @@ def train(
             "data_version": data_version,
             "spec_version": spec_version,
         })
+        # 80 [S4] C3 哨兵联动：全部验证候选未过哨兵 → 登记 99 提示
+        if not any_sentinel_pass:
+            logger.log({
+                "step": step,
+                "note": (
+                    "哨兵复核：全部验证候选均未通过（80 [S4] C3 联动）。"
+                    "需在 99 登记排查（Q_Ĥ/Q_H 中位数 / Pearson ρ 中位数 / "
+                    "val L_space 地板 1/N²），best_val.ckpt 可能为平凡/坍缩解。"
+                ),
+            })
 
     if ddp is not None:
         torch.distributed.barrier()

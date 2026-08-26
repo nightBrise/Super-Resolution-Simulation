@@ -2,7 +2,10 @@
 
 checkpoint 契约：``torch.save`` 字典，含模型权重、配置（含版本三元组）、
 随机种子、数据版本、训练曲线与方案 C 的标准化统计量（60 [S5] C3：验证/
-测试复用训练集统计量，评估与训练必须使用同一组）。最终评估默认读
+测试复用训练集统计量，评估与训练必须使用同一组）。``work_scale`` 为顶层
+持久化键（60 [S15] 双空间契约：checkpoint MUST 持久化影响输出语义的尺度
+参数；保存侧在 ``train._save_checkpoint`` 从模型属性写入，加载侧在
+``evaluate.load_model`` 与当前 config 断言一致）。最终评估默认读
 ``best_val.ckpt``（60 [S12] C3）。
 
 seeds.json（60 [S14] C8）：``master_seed``、``scheme_*_seed_*``、

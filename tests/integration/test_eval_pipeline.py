@@ -100,3 +100,41 @@ def test_id_pb_not_merged_in_summary(exp01_a):
     with open(exp01_a / "metrics.csv", newline="") as f:
         rows = list(csv.DictReader(f))
     assert len({r["split"] for r in rows}) == 1, "单划分产物不应混入多个 split"
+
+
+def test_perceptual_and_mask_fields_contract(exp01_a):
+    """新字段契约（70 [S3] C3 感知指标 + 70 [S7.1] C2 掩膜成分/Π_leak +
+    80 [S4] C3b R_E 守卫，2026-08-26 P0 报批包）。
+
+    新格式产物 MUST 含 ssim_vis/cne 感知指标列与 mask_composition/
+    re_guard 摘要节；当前 EXP-01 产物为修订前格式（M3 重生成前），无该列
+    时跳过——重生成后本用例自动生效（版本化契约）。
+    """
+    summary_path = exp01_a / "summary.json"
+    with open(exp01_a / "metrics.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+    header = set(rows[0]) if rows else set()
+    if "ssim_vis" not in header:
+        pytest.skip("旧格式产物（修订前）：新字段契约在 M3 重生成后自动生效")
+    # 感知指标列（70 [S3] C3 强制报告）+ 掩膜成分/Π_leak 列（70 [S7.1] C2）
+    for col in ("ssim_vis", "cne", "ch_in_mask", "b_in_mask", "pi_leak"):
+        assert col in header, f"metrics.csv 缺新列 {col}"
+    for r in rows:
+        for col in ("ssim_vis", "cne"):
+            float(r[col])  # 可解析（感知指标无数据集依赖，任何数据格式都应计算）
+    # summary：mask_composition（含三字段 median 与判读标志）+ re_guard（80 [S4] C3b）
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    mask_comp = summary.get("mask_composition")
+    assert mask_comp is not None, "summary 缺 mask_composition"
+    for col in ("ch_in_mask", "b_in_mask", "pi_leak"):
+        assert col in mask_comp, f"mask_composition 缺 {col}"
+        assert "median" in mask_comp[col]
+    assert "b_in_exceeds_ch_in_x1.5" in mask_comp
+    assert "pi_leak_gt_0.5" in mask_comp
+    guard = summary.get("re_guard")
+    assert guard is not None, "summary 缺 re_guard（80 [S4] C3b）"
+    assert "r_e_max" in guard and "per_scheme" in guard
+    for scheme, stat in guard["per_scheme"].items():
+        for key in ("median", "max", "passed", "label"):
+            assert key in stat, f"re_guard.{scheme} 缺 {key}"
+        assert stat["label"] in ("normal", "sharpening_artifact")

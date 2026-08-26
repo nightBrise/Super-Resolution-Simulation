@@ -66,7 +66,8 @@ def f_prior(
     grid: 先验图像边长，与 ``H`` 同尺寸，默认 256（40 [S5] C2）。
     sigma_smooth: 先验平滑核宽度像素数，须满足 ``σ_smooth,P > σ_smooth,H``
         （40 [S5] C3）；``None`` 时取初始值 ``2 × σ_smooth,H``，其中
-        ``σ_smooth,H = 0.5 × w_fine`` 像素（40 [S5] C5 初始候选中心）。
+        ``σ_smooth,H = 0.125 × w_fine`` 像素（40 [S5] C5 初始候选中心；
+        随 20 [S3] C4 的 2026-08-26 P0 修订从 0.5× 改为 0.125×）。
 
     返回
     ----
@@ -76,7 +77,7 @@ def f_prior(
     """
     c_p = prior_parameters(c, level)
 
-    sigma_smooth_h_ref = 0.5 * float(fine_structure_width(c_p) / DELTA_PX)
+    sigma_smooth_h_ref = 0.125 * float(fine_structure_width(c_p) / DELTA_PX)
     if sigma_smooth is None:
         sigma_smooth = 2.0 * sigma_smooth_h_ref
 

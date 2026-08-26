@@ -100,7 +100,9 @@ def render_level1_density(
     c: 内容参数映射，键见 ``PARAMETER_KEYS``（A 固定为 1）。
     grid: 渲染网格边长，默认 256（20 [S3] C7）。
     sigma_smooth: 高斯平滑核宽度的像素数；``None`` 时取单样本回退值
-        ``0.5 × w_fine`` 像素（与 20 [S3] C4 批量中位数规则同口径）。
+        ``0.125 × w_fine`` 像素（与 20 [S3] C4 逐样本口径同，2026-08-26
+        P0 修订：原 0.5× 使精细结构频率处能量保留仅约 5.2e-5，见 99
+        OQ-20-03）。
 
     返回
     ----
@@ -120,7 +122,7 @@ def render_level1_density(
     H = map_coordinates(rho0, np.asarray([index_z, index_d]), order=1, mode="nearest")
 
     if sigma_smooth is None:
-        sigma_smooth = 0.5 * fine_structure_width(c) / DELTA_PX
+        sigma_smooth = 0.125 * fine_structure_width(c) / DELTA_PX
     H = gaussian_filter(H, sigma=sigma_smooth, mode="nearest")
 
     total = H.sum()
@@ -216,7 +218,7 @@ def f_beam(
             "sigma_smooth_px": (
                 float(sigma_smooth)
                 if sigma_smooth is not None
-                else float(0.5 * fine_structure_width(params) / DELTA_PX)
+                else float(0.125 * fine_structure_width(params) / DELTA_PX)
             ),
         },
     }

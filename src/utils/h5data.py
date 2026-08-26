@@ -38,7 +38,10 @@ C_PRIOR_KEYS: tuple[str, ...] = (
 POS_LOG_KEYS: tuple[str, ...] = ("sigma_z", "b0")
 
 #: 每个样本返回的全部字段键（训练取子集，评估取全集）。
-_FIELD_KEYS = ("H", "L", "L_clean", "L_up", "P2", "sample_id", "seed_i")
+#: ``H_neg_ch``（c_high 清零版真值，70 [S7.1] C2）为可选字段：旧版本数据
+#: 未生成时缺省不返回（评估端对该样本跳过成分分解并记录 nan）。
+_FIELD_KEYS = ("H", "L", "L_clean", "L_up", "P2", "H_neg_ch", "sample_id", "seed_i")
+_IMAGE_UNSQUEEZE_KEYS = ("H", "L", "L_clean", "L_up", "P2", "H_neg_ch")
 _M_KEYS = (
     "sigma_z",
     "sigma_delta",
@@ -141,9 +144,11 @@ class H5Dataset(Dataset):
                 raw_id = g[key][index]  # HDF5 存 bytes → str（解码而非 repr）
                 sample[key] = raw_id.decode("utf-8") if isinstance(raw_id, bytes) else str(raw_id)
                 continue
+            if key == "H_neg_ch" and key not in g:
+                continue  # 旧版本数据无该字段（评估端按可选处理）
             value = _as_tensor(g[key][index])
             # 图像字段 (H, W) 补通道维 → (1, H, W)（模型/评估统一形状）
-            if key in ("H", "L", "L_clean", "L_up", "P2") and value.dim() == 2:
+            if key in _IMAGE_UNSQUEEZE_KEYS and value.dim() == 2:
                 value = value.unsqueeze(0)
             sample[key] = value
         c_prior_raw = np.stack(

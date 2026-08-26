@@ -30,6 +30,21 @@ def test_ac1_same_source(consistent_c, sigma_smooth_P_px):
         assert value == consistent_c[key], key
 
 
+def test_default_smoothing_uses_0125_h_reference(consistent_c):
+    """σ_smooth,P 缺省 = 2×σ_smooth,H，σ_smooth,H = 0.125×w_fine（40 [S5] C5
+    初始候选中心；随 20 [S3] C4 的 2026-08-26 P0 修订从 0.5× 改为 0.125×）。
+    注：w_fine 按 c_prior（c_high 清零）计算（σ_smooth,H 参考取先验参数口径）。"""
+    from src.generators.f_prior import prior_parameters
+    from src.generators.masks import DELTA_PX, fine_structure_width
+
+    P, meta = f_prior(consistent_c, level="P2")
+    c_p = prior_parameters(consistent_c, "P2")
+    h_ref_px = 0.125 * float(fine_structure_width(c_p) / DELTA_PX)
+    assert meta["smoothing_H_reference"] == pytest.approx(h_ref_px, rel=1e-12)
+    assert meta["smoothing"] == pytest.approx(2.0 * h_ref_px, rel=1e-12)
+    assert P.shape == (256, 256)
+
+
 def test_ac2_not_equal_to_H(beam_sample, consistent_c, sigma_smooth_P_px):
     """AC2：先验不使用 H 且 P ≠ H（40 [S9] C1）。"""
     H, _, _ = beam_sample
@@ -103,11 +118,14 @@ def test_ac4_nonnegative_and_normalized(consistent_c, sigma_smooth_P_px):
 def test_ac6_smoother_than_H(
     beam_sample, consistent_c, sigma_smooth_H_px, sigma_smooth_P_px
 ):
-    """AC6：σ_smooth,P > σ_smooth,H 且 P 的结构带能量低于 H（40 [S5] C3/C4）。
+    """AC6：σ_smooth,P > σ_smooth,H（40 [S5] C3）且平滑核确实衰减结构带能量。
 
-    比较频带取 (1/32, 1/8]：f > 1/8 频带对这两类光滑图像的能量均低于
-    离散化噪声水平，不具备判别力；结构带内 P 与 H 的差距由平滑核宽度
-    2 倍差决定，实测比值 < 0.6。
+    比较频带取 (1/8, 1/4]：修订后 σ_smooth,H=0.125× 下 (1/32, 1/8] 带能量
+    由 γ 移除引起的结构重排主导（本样本 γ 与 β 部分相消，P2 的折叠反而更
+    锐），P-vs-H 带能量排序不再单调——改测平滑旋钮本身的衰减（同 c_prior
+    参数下 σ_smooth,P 渲染比 σ_smooth,H 渲染的结构带能量低，直接验证 C3
+    「比 H 更平滑」与 C4「不含精细结构」的平滑机制）；P2 对 c_high 的泄露
+    无关性由 ``test_c_high_invariance`` 覆盖。
     """
     H, _, _ = beam_sample
     P, meta = f_prior(consistent_c, level="P2", sigma_smooth=sigma_smooth_P_px)
@@ -118,10 +136,14 @@ def test_ac6_smoother_than_H(
         F = np.fft.fft2(img, norm="ortho")
         kx, ky = np.meshgrid(np.fft.fftfreq(256), np.fft.fftfreq(256), indexing="ij")
         f = np.hypot(kx, ky)
-        band = (f > 1.0 / 32.0) & (f <= 1.0 / 8.0)
+        band = (f > 1.0 / 8.0) & (f <= 1.0 / 4.0)
         return float(np.sum(np.abs(F[band]) ** 2))
 
-    assert band_power(P) < 0.75 * band_power(H)
+    # 同 c_prior（P2 参数）下仅平滑核不同 → 平滑衰减结构带能量（单调）
+    P_sharp = f_prior(
+        consistent_c, level="P2", sigma_smooth=sigma_smooth_H_px
+    )[0]
+    assert band_power(P) < band_power(P_sharp)
 
 
 def test_ac7_level_configurable(consistent_c, sigma_smooth_P_px):

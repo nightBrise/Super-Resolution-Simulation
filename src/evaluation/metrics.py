@@ -2,7 +2,10 @@
 
 三个维度：
 - 图像级（70 [S3]）：MAE / MSE / PSNR（MAX=1）/ SSIM（skimage，
-  ``data_range=1.0``、``gaussian_weights=True``、7×7 窗口）；
+  ``data_range=1.0``、``gaussian_weights=True``、7×7 窗口）；感知一致性
+  评估（70 [S3] C3/C4，2026-08-26 新增）：视觉归一化（逐图 1%/99% 分位
+  归一化到 [0,1]）+ SSIM_vis + 对比度归一化误差 CNE——防「物理量同但
+  看起来不同」；
 - 物理级（70 [S4]）：σ_z / σ_δ / h_eff / ε_z / I_peak 相对误差 +
   电流/能谱剖面 L1 误差；样本级幻觉标志 ``F_i`` 与方案级两层判据
   （触发率 > 20% + 配对差 bootstrap 95% CI 下界 > 0）；
@@ -10,6 +13,10 @@
   ``exp(−2π²σ²f_c²)=0.5`` 反算，σ_inner = σ_outer/2）、ε_peak
   （8×8 NMS + 前 3 峰 + 掩膜）、R_E（FFT 高通 f > 1/8）与联合判读
   分类（真实恢复 / 疑似纹理幻觉 / 过度平滑 / 如实报告）。
+
+掩膜成分分解与先验泄漏（70 [S7.1] C2，2026-08-26 P0 修订）：在
+``M_{c_high}`` 内计算 c_high 差分能量占比（ch_in）、β 差分占比（b_in）
+与其余占比；先验泄漏指数 ``Π_leak`` 度量 P2 在主指标区域的结构性占优。
 
 统计判定（70 [S7]）：配对 Wilcoxon、bootstrap 95% CI（10,000 次配对差
 单元重采样）、均值/中位数、三分类（显著正 / 等效 / 显著负）、Holm 校正
@@ -24,7 +31,7 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
-from scipy.ndimage import gaussian_filter, maximum_filter
+from scipy.ndimage import gaussian_filter, maximum_filter, uniform_filter
 from scipy import stats
 from skimage.metrics import structural_similarity
 
@@ -108,6 +115,59 @@ def ssim(a: np.ndarray, b: np.ndarray, data_range: float = 1.0) -> float:
         return float(
             structural_similarity(a, b, data_range=data_range, gaussian_weights=True, win_size=7)
         )
+
+
+# ---------------------------------------------------------------------------
+# 感知一致性评估（70 [S3] C3/C4，2026-08-26 新增）
+# ---------------------------------------------------------------------------
+def visual_normalize(img: np.ndarray, p1: float = 1.0, p99: float = 99.0) -> np.ndarray:
+    """逐图百分位归一化到 [0, 1]（70 [S3] 视觉归一化协议）。
+
+    ``X_vis = clip((X − p_1)/(p_{99} − p_1), 0, 1)``，其中 ``p_1``/``p_{99}``
+    为该图像像素值的 1%/99% 分位数（抗离群）。模拟人眼/显示器自动对比度
+    归一化——「人眼看到的」是视觉归一化后的图，不是绝对像素值。常量图
+    （分位差为 0）返回全零（归一化无意义，SSIM 语义由调用方处理）。
+    """
+    img = np.asarray(img, dtype=np.float64)
+    lo, hi = np.percentile(img, [p1, p99])
+    denom = float(hi - lo)
+    if denom <= 0.0:
+        return np.zeros_like(img)
+    return np.clip((img - lo) / denom, 0.0, 1.0)
+
+
+def ssim_vis(H_hat: np.ndarray, H: np.ndarray) -> float:
+    """视觉归一化后的 SSIM（70 [S3] C3：SSIM_vis）。
+
+    在视觉归一化空间（``data_range=1.0``）计算
+    ``skimage.structural_similarity(win_size=7, gaussian_weights=True)``；
+    消除 Σ=1 空间 ``data_range=1.0`` 下常数项主导、恒 ≈ 1.0 的问题。
+    """
+    return ssim(visual_normalize(H_hat), visual_normalize(H), data_range=1.0)
+
+
+def contrast_normalized_error(
+    H_hat: np.ndarray, H: np.ndarray, window: int = 7
+) -> float:
+    """对比度归一化误差 CNE（70 [S3] C3）。
+
+    对 ``X_vis`` 与 ``H_vis`` 各自做局部（``window×window``）对比度归一化
+    （减局部均值、除局部标准差）后取逐像素 L1 均值——直接度量「局部结构
+    是否一致」（人眼对局部对比度最敏感）。局部统计用均匀滤波
+    （scipy.ndimage.uniform_filter）；分母加极小常数防除零。
+    """
+    x = visual_normalize(H_hat)
+    y = visual_normalize(H)
+    mu_x = uniform_filter(x, size=window)
+    mu_y = uniform_filter(y, size=window)
+    var_x = uniform_filter((x - mu_x) ** 2, size=window)
+    var_y = uniform_filter((y - mu_y) ** 2, size=window)
+    std_x = np.sqrt(np.maximum(var_x, 0.0))
+    std_y = np.sqrt(np.maximum(var_y, 0.0))
+    eps = 1e-12
+    x_norm = (x - mu_x) / (std_x + eps)
+    y_norm = (y - mu_y) / (std_y + eps)
+    return float(np.abs(x_norm - y_norm).mean())
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +427,66 @@ def e_high_mask(H_hat: np.ndarray, H: np.ndarray, mask: np.ndarray, f_c: float =
     return float(np.abs(diff)[mask].sum())
 
 
+def c_high_component_breakdown(
+    H: np.ndarray,
+    H_neg_ch: np.ndarray,
+    mask: np.ndarray,
+    f_c: float = F_C,
+    H_neg_b: np.ndarray | None = None,
+) -> dict[str, float]:
+    """掩膜能量成分分解（70 [S7.1] C2，2026-08-26 P0 修订，G2 分支乙）。
+
+    在 ``M_{c_high}`` 内分别计算：
+    - ``ch_in`` = ‖(H − H_neg_ch)_hp ⊙ M‖₁ / ‖H_hp ⊙ M‖₁（c_high 差分能量
+      占比，a₃/γ/b₁ 移除敏感度）；
+    - ``b_in`` = ‖(H − H_neg_b)_hp ⊙ M‖₁ / ‖H_hp ⊙ M‖₁（β 差分占比）；
+    - ``other`` = 1 − ch_in − b_in（其余占比）。
+
+    ``H_neg_ch`` 为 c_high 清零版、``H_neg_b`` 为 β 清零版（与 H 同
+    σ_smooth,H 渲染；H_neg_b 无数据源时可选，缺省记 nan——评估端对旧数据
+    可选跳过）。差分读数可超过 1（移除参数引起结构重排/相消干涉），读作
+    「掩膜能量对参数的敏感度」而非能量份额（口径与
+    ``scripts_tmp/g2_c_high_leak.py`` 归档版一致）。三方案任一
+    ``b_in > 1.5 × ch_in`` 时报告 MUST 附先验能量级泄漏分析。
+    """
+    hp = high_pass_fft(H, f_c)
+    denom = float(np.abs(hp)[mask].sum())
+    if denom <= 0.0:
+        return {"ch_in": float("nan"), "b_in": float("nan"), "other": float("nan")}
+    d_ch = float(np.abs(hp - high_pass_fft(H_neg_ch, f_c))[mask].sum())
+    ch_in = d_ch / denom
+    if H_neg_b is None:
+        return {"ch_in": ch_in, "b_in": float("nan"), "other": float("nan")}
+    d_b = float(np.abs(hp - high_pass_fft(H_neg_b, f_c))[mask].sum())
+    b_in = d_b / denom
+    return {"ch_in": ch_in, "b_in": b_in, "other": 1.0 - ch_in - b_in}
+
+
+def prior_leak_index(
+    P2: np.ndarray,
+    H_neg_ch: np.ndarray,
+    H: np.ndarray,
+    mask: np.ndarray,
+    f_c: float = F_C,
+) -> float:
+    """先验泄漏指数 Π_leak（70 [S7.1] C2，2026-08-26 P0 修订）。
+
+    Π_leak = ‖(P2 − H_neg_ch)_hp ⊙ M_{c_high}‖₁ / ‖(H − H_neg_ch)_hp
+    ⊙ M_{c_high}‖₁。P2 为默认中阶图像先验、H_neg_ch 为 c_high 清零版
+    真值；Π_leak > 0.5 视为先验在主指标区域结构性占优，final_report
+    MUST 显式标注（方法见 ``scripts_tmp/g2_c_high_leak.py`` 归档版）。
+    """
+    num = float(
+        np.abs(high_pass_fft(P2, f_c) - high_pass_fft(H_neg_ch, f_c))[mask].sum()
+    )
+    denom = float(
+        np.abs(high_pass_fft(H, f_c) - high_pass_fft(H_neg_ch, f_c))[mask].sum()
+    )
+    if denom <= 0.0:
+        return float("nan")
+    return float(num / denom)
+
+
 # ---------------------------------------------------------------------------
 # 单样本评估入口（70 [S2]–[S5] 全部指标）
 # ---------------------------------------------------------------------------
@@ -416,6 +536,8 @@ def evaluate_sample(
         "mae": mae(p, H_norm),
         "mse": mse(p, H_norm),
         "ssim": ssim(p, H_norm),
+        "ssim_vis": ssim_vis(p, H_norm),
+        "cne": contrast_normalized_error(p, H_norm),
         "e_eps_z": relative_error(pq["eps_z"], m["eps_z"]),
         "e_I_peak": relative_error(pq["I_peak"], m["I_peak"]),
         "e_sigma_z": relative_error(pq["sigma_z"], m["sigma_z"]),

@@ -95,7 +95,7 @@ def test_fdeg_seed_reproducible():
         "a1": 0.5, "alpha": -1.0, "a2": 0.05, "a3": -0.03, "beta": 1.2,
         "gamma": -0.3, "b1": 0.05, "C": 0.5,
     }
-    H, _, _ = f_beam(c, sigma_smooth=0.5 * fine_structure_width(c) / DELTA_PX)
+    H, _, _ = f_beam(c, sigma_smooth=0.125 * fine_structure_width(c) / DELTA_PX)
     L1 = f_deg(H, sigma_K=11.0, sigma_n=1.2e-4, seed=42)[0]
     L2 = f_deg(H, sigma_K=11.0, sigma_n=1.2e-4, seed=42)[0]
     assert np.array_equal(L1, L2)
@@ -120,7 +120,7 @@ def test_no_self_random_source(monkeypatch, consistent_c):
     from src.generators.masks import DELTA_PX, fine_structure_width
 
     c = dict(consistent_c)
-    sigma_smooth_h = 0.5 * float(fine_structure_width(c) / DELTA_PX)
+    sigma_smooth_h = 0.125 * float(fine_structure_width(c) / DELTA_PX)
     H, m, c_rec = f_beam(c, sigma_smooth=sigma_smooth_h)          # 20：无随机源
     L, L_clean, d, m_L = f_deg(H, sigma_K=11.0, sigma_n=1.2e-4, seed=5)  # 30：SeedSequence
     P, meta = f_prior(c, level="P2", sigma_smooth=2.6 * sigma_smooth_h)   # 40：无随机源

@@ -97,23 +97,26 @@ def test_best_val_loss_tracking():
 # 日志（60 [S12] C1）
 # ---------------------------------------------------------------------------
 def test_log_record_fields():
-    """日志行含规定字段（60 [S12] C1）：train loss / out min/max/sum /
-    checkpoint path / config hash / data version / spec version。"""
+    """日志行含规定字段（60 [S12] C1）：train loss / out min/max/sum（工作
+    尺度空间，_work 后缀显式标注，60 [S15] 双空间契约） / checkpoint path /
+    config hash / data version / spec version。"""
     record = {
         "step": 100,
         "train_loss": 1.23e-3,
-        "out_min": 0.0,
-        "out_max": 2.5e-3,
-        "out_sum": 0.998,
+        "out_min_work": 0.0,
+        "out_max_work": 2.5e-3,
+        "out_sum_work": 0.998,
         "checkpoint_path": "/tmp/x/best_val.ckpt",
         "config_hash": "deadbeef",
         "data_version": "v1",
         "spec_version": "v1.0",
     }
     line = format_log_record(record)
-    for token in ("train_loss", "out_min", "out_max", "out_sum",
+    for token in ("train_loss", "out_min_work", "out_max_work", "out_sum_work",
                   "checkpoint_path", "config_hash", "data_version", "spec_version"):
         assert token in line
+    # 双空间契约（60 [S15] 项 5）：非最终评估空间的日志字段 MUST 以 _work 后缀标注
+    assert "out_min" not in line.replace("out_min_work", "")
 
 
 def test_training_logger_writes_file(tmp_path):
@@ -153,6 +156,7 @@ def test_checkpoint_meta_roundtrip():
         assert ck["train_curve"] == curve
         assert ck["config_hash"] == "h1"
         assert ck["model_class"] == "TinyNet"
+        assert ck["work_scale"] == 65536.0  # 60 [S15] 双空间契约：顶层持久化
 
 
 def test_seeds_json_content():
@@ -181,6 +185,7 @@ def _make_tiny_model():
         def __init__(self):
             super().__init__()
             self.network_config = {"C0": 8}
+            self.work_scale = 65536.0  # 60 [S15]：checkpoint 持久化尺度参数
             self.conv = nn.Conv2d(2, 4, 3)
 
         def forward(self, x):
@@ -209,7 +214,8 @@ def test_train_function_returns_stats_and_artifacts(tmp_path):
                      "early_stopping": {"patience": 10, "min_step_fraction": 0.5,
                                         "val_interval": 2000},
                      "precision": "fp32", "data_loading": {"num_workers": 0}},
-        "network": {"C0": 8, "num_levels": 3, "num_residual_blocks": 1},
+        "network": {"C0": 8, "num_levels": 3, "num_residual_blocks": 1,
+                    "work_scale": 65536.0},
         "dataset": {"version": "dev1"},
         "gpu": {"device": "cpu"},
     }
@@ -225,3 +231,73 @@ def test_train_function_returns_stats_and_artifacts(tmp_path):
     assert (out / "logs" / "train.log").exists()
     log_text = (out / "logs" / "train.log").read_text(encoding="utf-8")
     assert "config_hash" in log_text and "data_version" in log_text
+
+
+# ---------------------------------------------------------------------------
+# 输出质量哨兵（80 [S4] C3，2026-08-26 P0 修订）
+# ---------------------------------------------------------------------------
+def _sentinel_model_and_batches(work_scale: float = 65536.0):
+    """哨兵测试的哑模型与批量（forward_scheme 由测试替换，不执行真实前向）。
+
+    批量 ``H`` 为 Σ=1 归一化（256×256，与训练分辨率一致）。
+    """
+    torch = pytest.importorskip("torch", exc_type=ImportError)
+
+    class DummyModel:
+        def __init__(self) -> None:
+            self.work_scale = float(work_scale)
+            self.network_config = {"C0": 8, "work_scale": float(work_scale)}
+
+        def eval(self) -> "DummyModel":
+            return self
+
+        def train(self) -> "DummyModel":
+            return self
+
+    rng = np.random.default_rng(20260826)
+    H = rng.random((2, 1, 256, 256)).astype(np.float32)
+    H = H / H.sum(axis=(1, 2, 3), keepdims=True)
+    batch = {
+        "H": torch.from_numpy(H),
+        "L_up": torch.from_numpy(H),
+        "P2": torch.from_numpy(H),
+        "c_prior_raw": torch.zeros(2, 8, dtype=torch.float32),
+    }
+    return DummyModel(), [batch]
+
+
+def test_validate_sentinels(monkeypatch):
+    """80 [S4] C3 三哨兵（Σ=1 空间）：完美预测全过；零预测器（坍缩解）全不过。
+
+    断言哨兵路径可区分坍缩解（Q 比 = 0、ρ = 0、L_space 未击穿 1/N² 地板），
+    与 acceptance M3 的哨兵存在性测试互补（此处断言数值语义）。
+    """
+    torch = pytest.importorskip("torch", exc_type=ImportError)
+    from src.training.loss import HybridLoss
+    from src.training.train import _validate
+
+    model, batches = _sentinel_model_and_batches()
+
+    def perfect(_m, batch, _dev):
+        return batch["H"] * model.work_scale
+
+    monkeypatch.setattr("src.training.train.forward_scheme", perfect)
+    _, sentinels = _validate(model, batches, HybridLoss(image_size=256), "cpu")
+    assert sentinels["q_ratio_median"] == pytest.approx(1.0, rel=1e-6)
+    assert sentinels["rho_median"] == pytest.approx(1.0, rel=1e-6)
+    assert sentinels["lspace_beat"] is True
+    assert sentinels["pass"] is True
+
+    def zero(_m, batch, _dev):
+        return torch.zeros_like(batch["H"])
+
+    monkeypatch.setattr("src.training.train.forward_scheme", zero)
+    _, sentinels = _validate(model, batches, HybridLoss(image_size=256), "cpu")
+    assert sentinels["q_ratio_median"] == pytest.approx(0.0, abs=1e-9)
+    assert sentinels["q_ratio_pass"] is False
+    assert sentinels["rho_median"] == pytest.approx(0.0, abs=1e-9)
+    assert sentinels["rho_pass"] is False
+    # 零预测器 L_space ≈ 1/N²（平凡地板处；严格 < 的击穿边界受浮点舍入影响，
+    # 语义由 q/ρ 哨兵失败与 pass=False 保证）
+    assert sentinels["lspace_mean"] == pytest.approx(1.0 / 65536, rel=1e-2)
+    assert sentinels["pass"] is False

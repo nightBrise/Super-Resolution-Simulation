@@ -34,17 +34,22 @@ from src.evaluation.metrics import (
     OVER_OVERSHOOT,
     OVER_SMOOTH,
     bootstrap_ci,
+    c_high_component_breakdown,
+    c_high_mask_from_hp,
     dog_sigma_outer,
     e_high_doG,
     evaluate_sample,
     hallucination_flag,
     high_freq_energy_ratio,
+    high_pass_fft,
     holm_correction,
     normalize_density,
     overshoot_smooth_class,
     prior_gain_stats,
+    prior_leak_index,
     veto_verdict,
 )
+from src.generators.f_beam import render_level1_density
 from src.models.schemes import SchemeC, build_scheme_model, build_scheme_model_from_checkpoint, forward_scheme
 from src.training.loss import F_C
 from src.utils.checkpoint import load_checkpoint
@@ -54,11 +59,14 @@ from src.utils.config_utils import (
     resolve_device,
     run_output_dir,
 )
-from src.utils.h5data import H5Dataset, collate_samples
+from src.utils.h5data import C_PRIOR_KEYS, H5Dataset, collate_samples
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 #: metrics.csv 列（80 [S8] 列名规范 + split 列 + 过冲分类内部列）。
+#: ``ssim_vis``/``cne`` 为感知一致性指标（70 [S3] C3，2026-08-26 新增）；
+#: ``ch_in_mask``/``b_in_mask``/``pi_leak`` 为掩膜成分分解与先验泄漏指数
+#: （70 [S7.1] C2，样本级诊断量，旧数据无 H_neg_ch 时记 nan）。
 METRIC_COLUMNS: list[str] = [
     "sample_id",
     "split",
@@ -70,6 +78,8 @@ METRIC_COLUMNS: list[str] = [
     "mae",
     "mse",
     "ssim",
+    "ssim_vis",
+    "cne",
     "e_eps_z",
     "e_I_peak",
     "e_sigma_z",
@@ -87,6 +97,9 @@ METRIC_COLUMNS: list[str] = [
     "e_I_peak_signed",
     "n_peaks",
     "peak_positions",
+    "ch_in_mask",
+    "b_in_mask",
+    "pi_leak",
 ]
 
 #: summary 中计算均值/标准差的数值指标列。
@@ -95,6 +108,8 @@ SUMMARY_METRICS = [
     "mae",
     "mse",
     "ssim",
+    "ssim_vis",
+    "cne",
     "e_eps_z",
     "e_I_peak",
     "e_sigma_z",
@@ -140,8 +155,30 @@ def load_model(config: dict, checkpoint_path: str | Path, device: str):
 
     优先用 checkpoint 记录的模型标识与网络配置（训练产物自洽）；
     c_prior 统计量来自训练集（60 [S5] C3，评估不重算，★ 无泄漏）。
+
+    双空间契约加载断言（60 [S15] 项 4）：checkpoint 持久化的 ``work_scale``
+    与当前运行 config 的 ``network.work_scale`` SHALL 一致；不一致或旧版
+    checkpoint 未持久化时 SHALL 报错终止并提示 R2 流程（80 [S12]）。
     """
     ckpt = load_checkpoint(checkpoint_path)
+    config_ws = config.get("network", {}).get("work_scale")
+    if config_ws is None:
+        raise ValueError(
+            "config 缺 network.work_scale（60 [S15] 双空间契约：加载前须显式"
+            "配置工作尺度 S）"
+        )
+    ckpt_ws = ckpt.get("work_scale")
+    if ckpt_ws is None:
+        raise ValueError(
+            "checkpoint 缺少 work_scale（60 [S15] 双空间契约：旧版 checkpoint "
+            "未持久化尺度参数，需按 80 [S12] R2 流程重训后重新评估）"
+        )
+    if float(ckpt_ws) != float(config_ws):
+        raise ValueError(
+            f"checkpoint work_scale={float(ckpt_ws)} 与 config "
+            f"network.work_scale={float(config_ws)} 不一致（60 [S15] 加载一致性"
+            f"断言；按 80 [S12] R2 流程重训后重新评估）"
+        )
     if ckpt.get("model_class"):
         model = build_scheme_model_from_checkpoint(ckpt)
     else:
@@ -211,6 +248,28 @@ def _merge_rows(existing: list[dict], new_rows: list[dict]) -> list[dict]:
     return merged
 
 
+def _render_neg_b(sample: dict) -> np.ndarray:
+    """β 清零版真值 H_neg_b（与 H 同 σ_smooth,H 渲染，70 [S7.1] C2 差分基准）。
+
+    数据集只缓存 H_neg_ch（a₃=γ=b₁=0）；β 清零版按归档脚本
+    （``scripts_tmp/g2_c_high_leak.py``）口径由内容参数重渲染得到——
+    ``render_level1_density(..., sigma_smooth=None)`` 即取 20 [S3] C4 的
+    σ_smooth,H = 0.125×w_fine 单样本回退值（2026-08-26 P0 修订口径）。
+    """
+    c: dict[str, float] = dict(
+        zip(C_PRIOR_KEYS, (float(v) for v in sample["c_prior_raw"].numpy()))
+    )
+    c["A"] = 1.0
+    c.update(
+        {
+            key: float(v)
+            for key, v in zip(("a3", "gamma", "b1"), sample["c_high"].numpy())
+        }
+    )
+    c["beta"] = 0.0
+    return render_level1_density(c)
+
+
 def build_rows(
     dataset: H5Dataset,
     preds: np.ndarray,
@@ -246,6 +305,23 @@ def build_rows(
         for key in METRIC_COLUMNS:
             if key in met:
                 row[key] = met[key]
+
+        # ---- 掩膜成分分解 + 先验泄漏指数（70 [S7.1] C2，2026-08-26 P0 修订）
+        # 样本级诊断量（只依赖真值 H 与先验 P2，与方案无关）；H_neg_ch 由
+        # 数据集提供，旧版本数据无该字段时记 nan 并跳过（C 类缺省行为）。
+        row["ch_in_mask"] = float("nan")
+        row["b_in_mask"] = float("nan")
+        row["pi_leak"] = float("nan")
+        if "H_neg_ch" in sample:
+            H_neg_ch = normalize_density(sample["H_neg_ch"].numpy()[0])
+            P2_norm = normalize_density(sample["P2"].numpy()[0])
+            cmask = c_high_mask_from_hp(high_pass_fft(H_norm))
+            breakdown = c_high_component_breakdown(
+                H_norm, H_neg_ch, cmask, H_neg_b=_render_neg_b(sample)
+            )
+            row["ch_in_mask"] = breakdown["ch_in"]
+            row["b_in_mask"] = breakdown["b_in"]
+            row["pi_leak"] = prior_leak_index(P2_norm, H_neg_ch, H_norm, cmask)
         rows.append(row)
     baseline = {
         "e_high_doG_mean": float(np.mean(baseline_e_high)),
@@ -381,6 +457,72 @@ def build_summary(
                 "smooth": classes.count(OVER_SMOOTH),
             }
 
+    # -- 掩膜成分分解 + 先验泄漏指数（70 [S7.1] C2；样本级诊断量）---------
+    mask_composition: dict[str, Any] = {}
+    for col in ("ch_in_mask", "b_in_mask", "pi_leak"):
+        vals = []
+        for r in rows:
+            try:
+                v = float(r.get(col))
+            except (TypeError, ValueError):
+                continue
+            if np.isfinite(v):
+                vals.append(v)
+        if vals:
+            mask_composition[col] = {
+                "median": float(np.median(vals)),
+                "mean": float(np.mean(vals)),
+                "n": len(vals),
+            }
+        else:
+            mask_composition[col] = {"median": None, "mean": None, "n": 0}
+    ch_med = mask_composition["ch_in_mask"].get("median")
+    b_med = mask_composition["b_in_mask"].get("median")
+    pi_med = mask_composition["pi_leak"].get("median")
+    mask_composition["b_in_exceeds_ch_in_x1.5"] = bool(
+        ch_med is not None and b_med is not None and b_med > 1.5 * ch_med
+    )
+    mask_composition["pi_leak_gt_0.5"] = bool(pi_med is not None and pi_med > 0.5)
+    mask_composition["notes"] = [
+        "ch_in/b_in 为掩膜内 c_high/β 差分能量敏感度读数（70 [S7.1] C2，"
+        "口径同 scripts_tmp/g2_c_high_leak.py 归档版）",
+        "任一方案 b_in > 1.5×ch_in 时 MUST 附先验能量级泄漏分析；"
+        "Π_leak > 0.5 视为先验在主指标区域结构性占优，final_report MUST 显式标注",
+        "旧版本数据集无 H_neg_ch 字段时三字段记 nan（n=0）并跳过",
+    ]
+
+    # -- R_E 守卫（80 [S4] C3b，2026-08-26 P0 修订第 13 项）-----------------
+    r_e_max = float(config.get("evaluation", {}).get("r_e_max", 10.0))
+    re_guard: dict[str, Any] = {"r_e_max": r_e_max, "per_scheme": {}}
+    for scheme in schemes:
+        vals = []
+        for r in rows:
+            if r["scheme"] != scheme:
+                continue
+            try:
+                v = float(r.get("R_E"))
+            except (TypeError, ValueError):
+                continue
+            if np.isfinite(v):
+                vals.append(v)
+        if vals:
+            median = float(np.median(vals))
+            maxv = float(np.max(vals))
+            passed = median <= r_e_max
+            re_guard["per_scheme"][scheme] = {
+                "median": median,
+                "max": maxv,
+                "passed": passed,
+                "label": "normal" if passed else "sharpening_artifact",
+            }
+    re_guard["any_sharpening_artifact"] = any(
+        not v["passed"] for v in re_guard["per_scheme"].values()
+    )
+    re_guard["note"] = (
+        "R_E 超限不否决实验（80 [S4] C3b）：超限方案标注'锐化伪影档'，"
+        "登记 99 并发起二级咨询评估是否影响主指标解读"
+    )
+
     summary = {
         "version": {
             "code_version": str(config.get("code_version", "")),
@@ -399,6 +541,8 @@ def build_summary(
         "prior_gain": prior_gain,
         "three_class": three_class,
         "one_veto": one_veto,
+        "mask_composition": mask_composition,
+        "re_guard": re_guard,
     }
     return summary
 

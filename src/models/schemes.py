@@ -63,6 +63,9 @@ class SchemeModel(nn.Module):
             "num_residual_blocks": int(num_residual_blocks),
             "z_dim": int(z_dim),
             "mlp_hidden": int(mlp_hidden),
+            #: 工作尺度随网络配置持久化（60 [S15] 双空间契约：checkpoint
+            #: MUST 持久化影响输出语义的尺度参数，评估加载时与 config 断言一致）。
+            "work_scale": float(work_scale),
         }
         #: 工作尺度 S = N² = 65536（50 [S12] C5，2026-08-26 坍缩修复）：Softplus
         #: 在 Σ=1 空间像素 ~1.5e-5 上落入指数区（梯度 sigmoid 消失），输出坍缩为
@@ -173,26 +176,47 @@ SCHEME_CLASSES: dict[str, type[SchemeModel]] = {
 
 
 def build_scheme_model(config: dict) -> SchemeModel:
-    """按 config 构造方案模型（50 [S7] 主干配置 + 代理变体 C0=24）。"""
+    """按 config 构造方案模型（50 [S7] 主干配置 + 代理变体 C0=24）。
+
+    ``network.work_scale`` 为必填（60 [S15] 双空间契约：影响输出语义的
+    尺度参数 SHALL 显式配置；config 缺省时抛 ValueError，2026-08-26 P0
+    修订：原默认值 65536.0 改为必填）。
+    """
     network = config.get("network", {})
     scheme = str(config["scheme"]).upper()
     if scheme not in SCHEME_CLASSES:
         raise ValueError(f"未知方案 {scheme}（应为 A/B/C）")
     cls = SCHEME_CLASSES[scheme]
+    if "work_scale" not in network:
+        raise ValueError(
+            "config 缺 network.work_scale（60 [S15] 双空间契约：工作尺度 S 为必填，"
+            "须与训练/评估 config 显式一致；建议 65536 = N²）"
+        )
     return cls(
         C0=int(network.get("C0", 48)),
         num_levels=int(network.get("num_levels", 5)),
         num_residual_blocks=int(network.get("num_residual_blocks", 2)),
         z_dim=int(network.get("z_dim", 64)),
         mlp_hidden=int(network.get("mlp_hidden", 128)),
-        work_scale=float(network.get("work_scale", 65536.0)),
+        work_scale=float(network["work_scale"]),
     )
 
 
 def build_scheme_model_from_checkpoint(ckpt: dict) -> SchemeModel:
-    """按 checkpoint 记录的模型标识与网络配置构造模型（评估/推理用）。"""
+    """按 checkpoint 记录的模型标识与网络配置构造模型（评估/推理用）。
+
+    ``work_scale`` 必填：优先取 checkpoint 顶层持久化键（60 [S15] 契约），
+    回退 ``network_config.work_scale``；两者皆缺（旧版 checkpoint）时抛
+    ValueError 并按 80 [S12] R2 流程提示重训。
+    """
     model_class = ckpt.get("model_class") or "SchemeA"
     network = ckpt.get("network_config", {})
+    work_scale = ckpt.get("work_scale", network.get("work_scale"))
+    if work_scale is None:
+        raise ValueError(
+            "checkpoint 缺少 work_scale（60 [S15] 双空间契约：旧版 checkpoint "
+            "未持久化尺度参数，需按 80 [S12] R2 流程重训后重新评估）"
+        )
     cls = SCHEME_CLASSES[model_class.lstrip("Scheme").upper()]
     return cls(
         C0=int(network.get("C0", 48)),
@@ -200,7 +224,7 @@ def build_scheme_model_from_checkpoint(ckpt: dict) -> SchemeModel:
         num_residual_blocks=int(network.get("num_residual_blocks", 2)),
         z_dim=int(network.get("z_dim", 64)),
         mlp_hidden=int(network.get("mlp_hidden", 128)),
-        work_scale=float(network.get("work_scale", 65536.0)),
+        work_scale=float(work_scale),
     )
 
 

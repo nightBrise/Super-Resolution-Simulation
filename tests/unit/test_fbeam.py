@@ -53,6 +53,19 @@ def test_ac1_reproducible(consistent_c, sigma_smooth_H_px):
         assert m1[key] == m2[key]
 
 
+def test_default_sigma_smooth_is_0125_wfine(consistent_c):
+    """默认 σ_smooth,H = 0.125×w_fine（20 [S3] C4，2026-08-26 P0 修订：
+    原 0.5× 在精细结构频率处能量保留仅约 5.2e-5，见 99 OQ-20-03）。"""
+    from src.generators.masks import DELTA_PX, fine_structure_width
+
+    H, m, _ = f_beam(consistent_c)
+    expected_px = 0.125 * float(fine_structure_width(consistent_c) / DELTA_PX)
+    assert m["render"]["sigma_smooth_px"] == pytest.approx(expected_px, rel=1e-12)
+    # 显式传入同值 → 逐位一致（None 回退与显式口径相同）
+    H2, _, _ = f_beam(consistent_c, sigma_smooth=expected_px)
+    assert np.array_equal(H, H2)
+
+
 def test_ac2_nonnegative(beam_sample):
     """AC2：H_ij ≥ 0 恒成立。"""
     H, _, _ = beam_sample
