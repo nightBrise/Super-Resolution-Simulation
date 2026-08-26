@@ -281,6 +281,7 @@ def build_rows(
     rows: list[dict[str, Any]] = []
     baseline_e_high: list[float] = []
     baseline_r_e: list[float] = []
+    baseline_emask: list[float] = []
     for i in range(len(dataset)):
         sample = dataset[i]
         H = sample["H"].numpy()[0]
@@ -290,6 +291,8 @@ def build_rows(
         L_up_norm = normalize_density(L_up)
         baseline_e_high.append(e_high_doG(L_up_norm, H_norm, sigma_outer))
         baseline_r_e.append(high_freq_energy_ratio(L_up_norm, H_norm))
+        cmask = c_high_mask_from_hp(high_pass_fft(H_norm))
+        baseline_emask.append(e_high_mask(L_up_norm, H_norm, cmask))
         met = evaluate_sample(
             H_hat, H, sample["m"], sigma_outer, e_high_baseline=baseline_e_high[-1]
         )
@@ -306,6 +309,11 @@ def build_rows(
             if key in met:
                 row[key] = met[key]
 
+        # ---- G1(b) 零学习基线（L_up 直出，70 [S7] 后备分支第二部分）：逐样本
+        # L_up 在预注册主指标 ε_high^mask 上的误差，供配对差 bootstrap CI
+        # （A vs L_up 正增益 + CI 下界>0）；可选列，80 [S8] 列名规范不破坏。
+        row["e_high_mask_lup"] = baseline_emask[-1]
+
         # ---- 掩膜成分分解 + 先验泄漏指数（70 [S7.1] C2，2026-08-26 P0 修订）
         # 样本级诊断量（只依赖真值 H 与先验 P2，与方案无关）；H_neg_ch 由
         # 数据集提供，旧版本数据无该字段时记 nan 并跳过（C 类缺省行为）。
@@ -315,7 +323,6 @@ def build_rows(
         if "H_neg_ch" in sample:
             H_neg_ch = normalize_density(sample["H_neg_ch"].numpy()[0])
             P2_norm = normalize_density(sample["P2"].numpy()[0])
-            cmask = c_high_mask_from_hp(high_pass_fft(H_norm))
             breakdown = c_high_component_breakdown(
                 H_norm, H_neg_ch, cmask, H_neg_b=_render_neg_b(sample)
             )
@@ -326,6 +333,7 @@ def build_rows(
     baseline = {
         "e_high_doG_mean": float(np.mean(baseline_e_high)),
         "R_E_mean": float(np.mean(baseline_r_e)),
+        "e_high_mask_mean": float(np.mean(baseline_emask)),  # G1(b) 主指标基线
     }
     return rows, baseline
 
