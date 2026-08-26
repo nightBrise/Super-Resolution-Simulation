@@ -58,10 +58,24 @@
 - C10: 报告 SHALL 预置阴性/等效结论模板：「在本数据生成器与退化强度下，中阶物理先验的增益为 X（置信区间……），失效集中于……区域；该结论对出口决策同样有效」；WHEN 增益判定为等效或显著负，THEN SHALL 按判定结果如实填写该模板，SHALL NOT 仅撰写阳性结论。
 - C11: 局限性 SHALL 涵盖第一版未包含物理损失、未使用估计先验；WHEN 未执行 Phase 4，THEN 局限性 SHALL 涵盖 OOD 评估未执行（OOD 数据已生成并保留，见 `60` [S8] C3）；局限性 SHALL 涵盖增益—退化曲线第一版仅两点方向判定、未做单调性判定（见 `80` [S6] Phase 3 完整版）。
 - C12（批次十八用户拍板）：最终报告中的定量数值（三分类结论、先验增益、置信区间、指标均值/标准差）SHALL 从 `summary.json` / `metrics.csv` 提取（可脚本化或逐项引用），SHALL NOT 手抄；数字一致性由 `05_testing_spec.md` test_m6_delivery 的 N8 预注册对账守护。
+- C13（2026-08-26 增补）: 最终报告每章的定量数值 SHALL 从「六章数据来源映射表」（本 [S2] 小节）指定来源提取并标注来源文件与字段路径；N8 预注册对账（`[S5]`）以该表为核对基准，配合 C12 禁手抄纪律。
 
 ---
 
 
+
+#### 六章数据来源映射表（2026-08-26 增补）
+
+无人值守生成 `final_report.md` 时，每章定量数值 SHALL 从下表指定来源提取（配合 C12，禁手抄）；字段路径以 `80` [S8] 的 summary.json/metrics.csv 规范为准。
+
+| 章 | 内容 | 数据来源（文件 + 字段路径） |
+|---|---|---|
+| 1 摘要 | 三分类结论、先验增益与 CI、物理指标误差 | `results/EXP-02_*_summary/summary.json`：`three_class.verdict` / `prior_gain.M_A_minus_M_B`、`M_A_minus_M_C` 的 `mean`、`ci95` / `metrics.<scheme>.<指标>.mean` |
+| 2 实验设置 | 样本数、参数范围、退化条件、参数量 | 各 run `config.yaml`（data_version / σ_K、σ_n / 通道 C₀ / 参数量）+ `data/<version>/manifest.json`（划分样本数）|
+| 3 主实验结果 | 图像/物理/精细结构指标 | `metrics.csv` 逐样本 → `summary.json.metrics.<scheme>.<指标>.mean\|std`（按 split=test_id/test_pb 聚合）|
+| 4 先验有效性分析 | M_A−M_B、M_A−M_C、M_B−M_C 三分类与 CI；EXP-03/04/07/08 鲁棒性 | `summary.json.prior_gain.*`（mean/median/wilcoxon_p/ci95/holm_p/verdict）；`results/EXP-0[3,4,7,8]*/summary.json` 同字段 |
+| 5 幻觉与失效边界 | 误差 vs c_high 散点、幻觉样本、掩膜成分分解 | `metrics.csv` 逐样本行：`sample_id / gamma / e_eps_z / R_E_class / F_i / e_high_mask`（Fig. 4 数据源）|
+| 6 结论与局限性 | 命题(a) EXP-08 噪声敏感度、命题(b) 三分类、局限清单 | `results/EXP-08*/summary.json`（噪声实现敏感度）；`90` [S6] 判据符号表 + 各 run `config.yaml` 预注册值 |
 
 #### 5 张核心图图注规范（最终报告附录 A 必含）
 
