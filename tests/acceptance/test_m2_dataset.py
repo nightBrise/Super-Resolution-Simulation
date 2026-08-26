@@ -14,6 +14,7 @@ G0(b) 探针为纯 CPU 生成（05 [S2] L3 例外条款，slow 标记）。
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import h5py
@@ -88,7 +89,9 @@ def test_manifest_triple():
         for key in ("code_version", "data_version", "spec_version"):
             assert isinstance(manifest.get(key), str) and manifest[key], (scale, key)
         assert manifest["data_version"] == scale
-        assert manifest["spec_version"] == "v1.0"
+        # N4 版本对账（99 行 163 登记）：spec_version 格式 v1.0 或 v1.0+YYYY-MM-DD
+        # （dev1 为历史格式 v1.0，v1 起为 v1.0+批次日期，90 [S5] N8 对账清单）
+        assert re.match(r"^v1\.0(\+\d{4}-\d{2}-\d{2})?$", manifest["spec_version"]), (scale, manifest["spec_version"])
         assert manifest["master_seed"] == 20260825
 
 
