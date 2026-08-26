@@ -83,12 +83,12 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = aggregate_runs(run_dirs, args.split, Path(args.out))
     gains = {
-        k: v.get("M_A_minus_M_B", {}).get("verdict", "n/a")
+        k: v.get("e_high_mask", {}).get("verdict", "n/a")
         for k, v in summary.get("prior_gain", {}).items()
     }
     print(f"[aggregate] split={args.split} -> {args.out}")
     print(f"  schemes={sorted({r.get('scheme') for r in _read_metrics(Path(args.out) / 'metrics.csv')})}")
-    print(f"  prior_gain verdicts: {gains}")
+    print(f"  主指标(e_high_mask) prior_gain verdicts: {gains}")
     return 0
 
 
