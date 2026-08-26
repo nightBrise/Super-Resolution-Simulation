@@ -159,7 +159,7 @@ INITIAL_TAIL_SNR = 2.0
 #: 管线默认值——40 [S5] C5/AC14 出口流程已按扩展候选集取 15×（见
 #: tests/acceptance/test_m1_generators.py）；数据集重建（EXP-01d 标定登记）
 #: 时按登记值更新本常量并递增数据版本。
-SIGMA_SMOOTH_P_MULTIPLE = 2.6
+SIGMA_SMOOTH_P_MULTIPLE = 15.0  # EXP-01d 采用值（2026-08-26）：AC14 L1 比值 0.5288 最接近 0.55 锚点，预授权扩展后选定
 
 #: EXP-06 极端参数放大倍数（80 [S7]：相对训练集采样范围上界放大 50%）。
 OOD_SCALE = 1.5
