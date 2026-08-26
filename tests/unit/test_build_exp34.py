@@ -122,4 +122,50 @@ def test_exp_seed_branches_not_colliding_with_splits():
     used = set(SPLIT_BRANCH.values())
     for branch in EXP_SEED_BRANCH.values():
         assert branch not in used
-    assert EXP_SEED_BRANCH["exp03"] != EXP_SEED_BRANCH["exp04"]
+    assert len(EXP_SEED_BRANCH) == len(set(EXP_SEED_BRANCH.values()))
+
+
+def test_exp07_prior_replaced_l_preserved(fake_data_dir):
+    """EXP-07：先验槽替换为 P1（≠ 源 P2），L/L_clean/L_up 逐位沿用源值（干净归因）。"""
+    be = pytest.importorskip("src.generators.build_exp34")
+    manifest = be.build_redegraded_exp(
+        "exp07", sigma_K=11.0, sigma_n=1.22e-4,
+        data_version="v1", master_seed=MASTER_SEED, workers=1,
+        prior_level="P1", reps=1, redegrade=False,
+    )
+    import h5py
+    with h5py.File(fake_data_dir / "data" / "v1" / "test_id.h5", "r") as src, \
+         h5py.File(manifest["out_path"], "r") as new:
+        assert not np.array_equal(new["P2"][0], src["P2"][0])   # 先验已替换
+        assert np.array_equal(new["L"][0], src["L"][0])         # L 沿用
+        assert np.array_equal(new["L_clean"][0], src["L_clean"][0])
+        assert np.array_equal(new["L_up"][0], src["L_up"][0])
+        assert new["m_L"]["sigma_K"][0] == src["m_L"]["sigma_K"][0]  # 退化元数据沿用
+
+
+def test_exp08_reps_and_disjoint_seeds(fake_data_dir):
+    """EXP-08：K=8 噪声实现——样本数 8×、_r{k} 后缀、H 逐基重复、seed 与源不相交。"""
+    be = pytest.importorskip("src.generators.build_exp34")
+    manifest = be.build_redegraded_exp(
+        "exp08", sigma_K=11.0, sigma_n=1.22e-4,
+        data_version="v1", master_seed=MASTER_SEED, workers=1,
+        prior_level="P2", reps=8, redegrade=True,
+    )
+    assert manifest["count"] == 5 * 8
+    import h5py
+    with h5py.File(manifest["out_path"], "r") as new:
+        ids = [new["sample_id"][i].decode() for i in range(40)]
+        assert all(ids[i].endswith(f"_r{i % 8}") for i in range(40))
+        # 同一基样本的 8 个实现 H 逐位一致
+        for r in range(8):
+            assert np.array_equal(new["H"][0], new["H"][r])
+        # 8 个实现的噪声（L 减 L_clean）互不相同
+        for r1 in range(8):
+            for r2 in range(r1 + 1, 8):
+                assert not np.array_equal(new["L"][r1] - new["L_clean"][r1],
+                                          new["L"][r2] - new["L_clean"][r2])
+        # seed 与源划分不相交
+        with h5py.File(fake_data_dir / "data" / "v1" / "test_id.h5", "r") as src:
+            assert not (set(new["seed_i"][:].tolist()) & set(src["seed_i"][:].tolist()))
+        # 8 个实现的 seed 互不相同（独立噪声实现）
+        assert len(set(new["seed_i"][:8].tolist())) == 8
