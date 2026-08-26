@@ -39,7 +39,6 @@ SPLITS = ("train", "val", "test_id", "test_pb", "test_ood")
 def _config(version: str) -> dict:
     return {
         "master_seed": MASTER,
-        "code_version": "test",
         "spec_version": "v1.0",
         "calibration": {
             "sigma_K": SIGMA_K,
@@ -92,7 +91,11 @@ def test_manifest_triple_and_sections(built_dataset):
     from src.generators.dataset_builder import resolve_spec_version
 
     root, manifest = built_dataset
-    assert manifest["code_version"] == "test"
+    # N4（00 [S6] 约束 8）：code_version 为生成时 git HEAD 完整 40 位 hash，
+    # 忽略 config 旧值/占位值（commit 1fa3949/7344cf4；99 变更登记 2026-08-26）
+    from src.generators.dataset_builder import git_head
+    assert len(manifest["code_version"]) == 40, f"code_version 应为完整 40 位 hash，got {manifest['code_version']!r}"
+    assert manifest["code_version"] == git_head()
     assert manifest["data_version"] == "devt"
     # N4：spec_version 为 v1.0+<99 最近批准批次>（与生成时刻 99 一致）
     assert manifest["spec_version"] == resolve_spec_version()
