@@ -18,6 +18,7 @@
 code_version: "<git rev-parse HEAD 完整 40 位 hash>"  # 代码 commit hash（00 [S6] 约束 8 N4：持久化载体一律完整 hash）
 data_version: "<data/<版本>/>"      # 数据集版本号
 spec_version: "<v1.0+<99 最近批准批次日期>>" # spec 集版本（00 [S6] 约束 8 N4：v1.0+<最新 99 批准批次>，如 v1.0+2026-08-26）
+study_root: ""                     # 研究线根 ID（方案 B）：非空时输出落 `studies/<study_root>/{data,results}/`，为空/缺省兜底项目根（向后兼容）
 
 # ============================================================
 # 必填：实验标识

@@ -719,7 +719,12 @@ def build_dataset(
             raise ValueError(f"未知划分：{split}")
 
     deg_level = str(config.get("degradation", {}).get("level") or "D2")
-    out_dir = project_root / "data" / version
+    # 研究线根（方案 B）：config `study_root` 非空时落盘于
+    # `<project_root>/studies/<study_root>/data/<version>/`，为空/缺省时兜底
+    # `<project_root>/data/<version>/`（向后兼容）。
+    study_root = str(config.get("study_root", "")).strip()
+    data_root = (project_root / "studies" / study_root / "data") if study_root else (project_root / "data")
+    out_dir = data_root / version
 
     split_sections: dict[str, dict] = {}
     for split in splits:
