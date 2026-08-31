@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from src.evaluation.evaluate import infer_predictions, load_model
-from src.utils.config_utils import load_config, resolve_device, run_output_dir
+from src.utils.config_utils import data_dir_for, load_config, resolve_device, run_output_dir
 from src.utils.h5data import H5Dataset
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -60,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"config 不存在：{config_path}", file=sys.stderr)
         return 1
     config = load_config(config_path)
-    split_file = PROJECT_ROOT / "data" / str(config["dataset"]["version"]) / f"{args.split}.h5"
+    split_file = data_dir_for(config, PROJECT_ROOT) / str(config["dataset"]["version"]) / f"{args.split}.h5"
     if not split_file.exists():
         print(f"数据集不存在：{split_file}", file=sys.stderr)
         return 1

@@ -216,7 +216,10 @@ def test_train_function_returns_stats_and_artifacts(tmp_path):
                      "precision": "fp32", "data_loading": {"num_workers": 0}},
         "network": {"C0": 8, "num_levels": 3, "num_residual_blocks": 1,
                     "work_scale": 65536.0},
-        "dataset": {"version": "dev1"},
+        # 迁移后：数据在研究线 studies/line1_substitute_sr/data/<version>。
+        # 用 v1（主实验数据，仍在研究线活跃位），study_root 指向该研究线。
+        "study_root": "line1_substitute_sr",
+        "dataset": {"version": "v1"},
         "gpu": {"device": "cpu"},
     }
     out = tmp_path / "run"

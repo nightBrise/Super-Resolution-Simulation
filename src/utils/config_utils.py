@@ -39,6 +39,10 @@ def run_output_dir(config: dict, project_root: Path | None = None) -> Path:
     ``<project_root>/results/``（缺省取调用方项目根）。
     """
     root = project_root or Path(__file__).resolve().parents[2]
+    # 研究线根（方案 B）：config `study_root` 非空时走 `studies/<study_root>/results/`，
+    # 为空/缺省时兜底 `root/results/`（向后兼容，行为与迁移前一致）。
+    study_root = str(config.get("study_root", "")).strip()
+    base = (root / "studies" / study_root / "results") if study_root else (root / "results")
     exp = str(config["experiment_id"])
     scheme = str(config["scheme"])
     seed = int(config.get("seed_index", 0))
@@ -47,7 +51,20 @@ def run_output_dir(config: dict, project_root: Path | None = None) -> Path:
     config_tag = str(config.get("config_tag", "")).strip()
     if config_tag:
         name = f"{name}_{config_tag}"
-    return root / "results" / name
+    return base / name
+
+
+def data_dir_for(config: dict, project_root: Path | None = None) -> Path:
+    """数据根目录（方案 B）：``study_root`` 非空时落于
+    ``<root>/studies/<study_root>/data/``，为空/缺省时兜底 ``<root>/data/``。
+
+    与 :func:`run_output_dir` 对称；调用方再拼上 ``data_version`` 与 split 文件名。
+    """
+    root = project_root or Path(__file__).resolve().parents[2]
+    study_root = str(config.get("study_root", "")).strip()
+    if study_root:
+        return root / "studies" / study_root / "data"
+    return root / "data"
 
 
 def resolve_data_version(config: dict) -> str:

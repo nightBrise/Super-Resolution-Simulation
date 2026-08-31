@@ -28,8 +28,14 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.m3]
 
 
 def _find_exp01_runs() -> list[Path]:
-    """定位 EXP-01 方案 run 目录（优先 run2_R2，回退最新 run）。"""
-    pattern = sorted(glob.glob(str(PROJECT_ROOT / "results" / "EXP-01_?_seed0_run*_D2")))
+    """定位 EXP-01 方案 run 目录（优先 run2_R2，回退最新 run）。
+
+    迁移后 EXP-01 标定产物归入研究线 archive 冷存储。
+    """
+    pattern = sorted(glob.glob(str(
+        PROJECT_ROOT / "archive" / "line1_substitute_sr" / "misc_runs"
+        / "EXP-01_?_seed0_run*_D2"
+    )))
     # 优先 run2_R2（坍缩修复后产物），否则取最新
     r2 = [p for p in pattern if "run2_R2" in p]
     return [Path(p) for p in (r2 or pattern)]
@@ -132,7 +138,10 @@ def test_re_ratio_gate_computable():
     测试只断言计算路径存在与数值记录，不断言门通过（当前为 OQ-30-03
     待裁定状态，允许失败并须披露）。"""
     d2 = _find_exp01_runs()[0]  # D2 档 A
-    d1_candidates = sorted(glob.glob(str(PROJECT_ROOT / "results/EXP-01b_A_seed0_run1_D1")))
+    d1_candidates = sorted(glob.glob(str(
+        PROJECT_ROOT / "archive" / "line1_substitute_sr" / "misc_runs"
+        / "EXP-01b_A_seed0_run1_D1"
+    )))
     if not d1_candidates:
         pytest.skip("EXP-01b D1 产物未生成")
     def re_median(path):

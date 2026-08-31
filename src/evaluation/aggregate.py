@@ -9,7 +9,7 @@ summary.json（含 prior_gain / three_class / one_veto），作为 G2/G3 判定�
 用法：:
 
     python -m src.evaluation.aggregate --runs <A_dir>,<B_dir>,<C_dir> \
-        --split test_id --out results/EXP-02_summary/seed0
+        --split test_id --out studies/line1_substitute_sr/results/summary/EXP-02_summary/seed0
 
 说明：bootstrap 随机源由 config.master_seed 派生（与 evaluate 同分支），
 三个 run 的 master_seed 相同 → 聚合结果可复现；seed<N> 聚合目录的
@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs", required=True, help="run 目录逗号分隔（A,B,C 三个方案）")
     parser.add_argument("--split", required=True,
                         choices=["test_id", "test_pb", "test_ood", "exp03", "exp04", "exp07", "exp08"])
-    parser.add_argument("--out", required=True, help="聚合输出目录（如 results/EXP-02_summary/seed0）")
+    parser.add_argument("--out", required=True, help="聚合输出目录（如 studies/line1_substitute_sr/results/summary/EXP-02_summary/seed0）")
     args = parser.parse_args(argv)
 
     run_dirs = [Path(p.strip()) for p in args.runs.split(",") if p.strip()]

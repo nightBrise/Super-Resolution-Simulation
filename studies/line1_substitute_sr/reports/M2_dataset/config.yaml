@@ -1,0 +1,194 @@
+# M2 数据集生成配置实例（从 config.yaml.template 结构填充，60 [S15] C11）
+#
+# 本配置是数据集生成实例（非训练实验运行实例）：供
+#   python -m src.generators.build_dataset --config results/M2_dataset/config.yaml
+#   python -m src.generators.probe --config results/M2_dataset/config.yaml
+# 使用。字段结构沿用 config.yaml.template；scheme/seed_index/run_tag 等训练
+# 专用字段按 N/A 填写以保持模板结构完整。
+#
+# 标定采用初始值（EXP-01 标定前；标定后按 60 [S14] 版本递增重生成复评）：
+# - sigma_K = 11.0 px：D2 初始值，2×median(w_fine)（M1 验收 fixture 口径
+#   10.37；为 30 [S6] C8 可分辨性判据（SNR_hf<0.1）留裕度取 11.0，B 类登记）；
+# - sigma_n = 1.22e-4：全局常数，median(mean(L_clean))/2（M1「尾部信噪比
+#   2 档」口径，30 [S9] C3 SNR 定义）；
+# - sigma_smooth：规则固定（σ_smooth,H = 0.5×w_fine 逐样本；σ_smooth,P =
+#   2.6×σ_smooth,H 逐样本），逐样本值随样本记录，配置中 0.0 表示取规则值。
+
+# ============================================================
+# 必填：版本三元组（缺失视为验收失败）
+# ============================================================
+code_version: "1aa74c3d2181b7624f154a43d4bdfff9845976f7"  # 生成时 HEAD（M1 提交；M2 代码未提交，见 B 类登记）
+data_version: "v1"                    # data/<版本>/
+spec_version: "v1.0"
+
+# ============================================================
+# 必填：实验标识
+# ============================================================
+experiment_id: "M2_dataset"           # 数据集生成实例（非训练 EXP）
+scheme: "data"                        # 数据集生成无方案；按模板结构填写
+seed_index: 0
+run_tag: "run1"
+config_tag: "D2-initial"
+
+# ============================================================
+# 必填：种子集合（60 [S14] C8）
+# ============================================================
+master_seed: 20260825                 # 主种子（与 conftest TEST_MASTER_SEED 一致）
+data_seeds:
+  train: 0                            # 样本级 seed_i 由 SeedSequence(master_seed) 分支派生，
+  val: 0                              # 本字段仅保留模板结构（不直接使用）
+  test_id: 0
+  test_pb: 0
+scheme_seeds:
+  scheme_A_seed_0: 0
+  scheme_A_seed_1: 0
+  scheme_B_seed_0: 0
+  scheme_B_seed_1: 0
+  scheme_C_seed_0: 0
+  scheme_C_seed_1: 0
+
+# ============================================================
+# 必填：标定采用值（EXP-01 标定前为初始值，30 [S12] / 40 [S5]）
+# ============================================================
+calibration:
+  sigma_K: 11.0                       # D2 初始模糊核宽度（H 像素，见文件头）
+  sigma_n: 1.22e-4                    # D2 初始全局噪声常数（见文件头）
+  sigma_smooth:
+    sigma_smooth_H: 0.0               # 规则：0.5×w_fine 逐样本
+    sigma_smooth_P: 0.0               # 规则：2.6×σ_smooth,H 逐样本
+
+# ============================================================
+# 必填：退化参数（30）
+# ============================================================
+degradation:
+  level: "D2"                         # 退化等级标记（60 [S14] 逐样本记录）
+  r: 4                                # 下采样倍数（30 [S12] C1）
+  method: "block_average"             # 下采样方法
+  noise_model: "L = max(0, L_clean + n)"  # 30 [S4] C4
+  snr_hf_threshold: 0.1               # 30 [S6] SNR_hf 判据
+
+# ============================================================
+# 必填：评估参数（70；本实例不评估，保留模板结构）
+# ============================================================
+evaluation:
+  tau: 0.05
+  trigger_rate: 0.20
+  primary_metric: "ε_high^mask"
+  secondary_metrics: ["ε_z_relative"]
+  exploratory_metrics:
+    - "I_peak_relative"
+    - "sigma_z_relative"
+    - "sigma_delta_relative"
+    - "h_eff_relative"
+  dog:
+    sigma_outer: 0.0
+    sigma_inner_factor: 0.5
+  rho_threshold: 0.1                  # 高频存活比阈值 ρ ≥ 0.1（G0(b)）
+  ood_degradation_threshold: 0.20
+  ci_width_min: 0.05
+  mde: 0.05
+  max_expansion_factor: 2.0
+
+# ============================================================
+# 必填：物理一致性判据（70 [S4]；本实例不评估，保留模板结构）
+# ============================================================
+hallucination:
+  delta_threshold: 0.05
+  trigger_rate_max: 0.20
+  one_veto_enabled: true
+
+# ============================================================
+# 必填：网络结构（50；本实例不训练，保留模板结构）
+# ============================================================
+network:
+  backbone: "unet"
+  C0: 48
+  num_residual_blocks: 2
+  num_levels: 5
+  scheme_C_film_injection: "bottleneck_and_decoder"
+  input_channels: 2
+
+# ============================================================
+# 必填：训练超参数（60 [S9]；本实例不训练，保留模板结构）
+# ============================================================
+training:
+  optimizer: "AdamW"
+  learning_rate: 3.0e-4
+  weight_decay: 1.0e-4
+  beta1: 0.9
+  beta2: 0.999
+  batch_size: 16
+  max_steps: 100000
+  early_stopping:
+    patience: 10
+    min_step_fraction: 0.5
+  lambda_spec: 1.0
+  data_loading:
+    num_workers: 16
+    pin_memory: true
+  precision: "fp32"
+
+# ============================================================
+# 必填：数据集划分（60 [S8]）
+# ============================================================
+dataset:
+  version: "v1"                       # data/<版本>/
+  split: "train+val+test_id+test_pb+test_ood"
+  train_size: 20000
+  val_size: 2000
+  test_id_size: 1000                  # 同分布留出
+  test_pb_size: 1000                  # 参数分块留出（与 test_id 1:1，60 [S8] C4）
+  test_ood_size: 500                  # EXP-06 极端参数子集（80 [S7]：规模 500）
+  test_pb_block:                      # 参数分块留出（60 [S8] C4）
+    dimension: "abs(gamma)"
+    range: [0.3, 0.4]                 # 固定总体分位数 |γ|~U[0.1,0.6] 分位秩 [0.4,0.6]
+  ood_test_path: "data/v1/test_ood.h5"
+  workers: 32                         # 并行生成进程数（CPU 112 线程，80 [S3] 建议 16–32）
+
+# ============================================================
+# 必填：GPU 配置（80 [S3]；本实例纯 CPU 生成，保留模板结构）
+# ============================================================
+gpu:
+  device: "cuda:0,cuda:1"
+  utilization_target:
+    standard: 0.80
+    proxy: 0.70
+    debug: 0.60
+  config_class: "standard"
+  memory_limit_mb: 22000
+  parallelism: "2_cards_3_batches"
+
+# ============================================================
+# 必填：复现性字段（00 [S6] 约束8）
+# ============================================================
+reproducibility:
+  python_version: "3.11"
+  torch_version: "2.4.0"
+  numpy_version: "1.26.4"
+  env_lock_file: "environment.yml"
+
+# ============================================================
+# 必填：checkpoint 路径（本实例不训练，保留模板结构）
+# ============================================================
+checkpoint:
+  best_val_path: "results/<EXP>/checkpoints/best_val.ckpt"
+  last_path: "results/<EXP>/checkpoints/last.ckpt"
+
+# ============================================================
+# 可选：可视化配置
+# ============================================================
+visualization:
+  num_samples: 50
+  log_scale: true
+  format: "png"
+
+# ============================================================
+# 可选：实验备注
+# ============================================================
+notes: |
+  M2 数据集生成实例（60 [S8] 划分 + [S14] 工件契约 + 80 [S9] G0 门禁）。
+  标定采用初始值：σ_K=11.0（2×median(w_fine) 口径 10.37，为 SNR_hf<0.1
+  判据留裕度）、σ_n=1.22e-4（median(mean(L_clean))/2，M1「尾部信噪比 2 档」）、
+  σ_smooth,P=2.6×σ_smooth,H（M1 采用值）。初始值系统与 30 [S6] C8 的
+  互不相容性、G0(b) 探针字面定义不可操作性见 B 类登记（05 [S7]），
+  EXP-01 标定后按 60 [S14] 版本递增重生成复评。

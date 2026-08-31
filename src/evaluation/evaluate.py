@@ -38,6 +38,7 @@ from src.evaluation.metrics import (
     c_high_mask_from_hp,
     dog_sigma_outer,
     e_high_doG,
+    e_high_mask,
     evaluate_sample,
     hallucination_flag,
     high_freq_energy_ratio,
@@ -54,6 +55,7 @@ from src.models.schemes import SchemeC, build_scheme_model, build_scheme_model_f
 from src.training.loss import F_C
 from src.utils.checkpoint import load_checkpoint
 from src.utils.config_utils import (
+    data_dir_for,
     load_config,
     resolve_data_version,
     resolve_device,
@@ -570,7 +572,7 @@ def run_evaluate(
     """
     out_dir = Path(out_dir)
     scheme = str(config["scheme"]).upper()
-    dataset_dir = PROJECT_ROOT / "data" / str(config["dataset"]["version"])
+    dataset_dir = data_dir_for(config, PROJECT_ROOT) / str(config["dataset"]["version"])
     # 60 [S14]：EXP-03/04 测试工件文件名为 test_exp03.h5 / test_exp04.h5
     # （--split exp03/exp04 映射到 test_exp03/test_exp04，T3 对齐）
     filename = {"exp03": "test_exp03", "exp04": "test_exp04",

@@ -56,7 +56,8 @@ def _write_config(path: Path, overrides: dict | None = None) -> Path:
 def _write_summary(path: Path) -> Path:
     summary = {
         "version": {"code_version": GIT_HEAD, "data_version": "v1", "spec_version": SPEC_VER},
-        "metrics": {},
+        # 聚合 summary（≥2 方案）才检查跨方案判定字段（2026-08-28 audit 修复配套）
+        "metrics": {"A": {}, "B": {}},
         "prior_gain": {
             "M_A_minus_M_B": {"verdict": "equivalent", "ci95": [-0.001, 0.002]},
             "M_A_minus_M_C": {"verdict": "significant_positive", "ci95": [0.001, 0.003]},
@@ -114,6 +115,19 @@ def test_summary_invalid_verdict_fails(tmp_path):
     findings = ra.audit_summary(summary)
     fails = [f for f in findings if f["severity"] == "FAIL"]
     assert any("one_veto" in f["message"] for f in fails)
+
+
+def test_summary_single_scheme_skips_cross_scheme_checks(tmp_path):
+    """per-run 单方案 summary 无跨方案对比，跳过 three_class/one_veto 检查（2026-08-28 audit 修复）。"""
+    summary = _write_summary(tmp_path / "summary.json")
+    import json as _json
+    data = _json.loads(summary.read_text())
+    data["metrics"] = {"A": {}}  # 单方案
+    data["three_class"] = {}  # 缺失跨方案字段
+    data["one_veto"] = {}
+    summary.write_text(_json.dumps(data), encoding="utf-8")
+    findings = ra.audit_summary(summary)
+    assert not [f for f in findings if f["severity"] == "FAIL"]
 
 
 def test_scan_99_keeps_criteria_modules(tmp_path):

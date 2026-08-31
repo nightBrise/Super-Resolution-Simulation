@@ -1,0 +1,58 @@
+{
+  "gate": "G0",
+  "verdict": "pass",
+  "evaluated_at": "2026-08-25T18:05:19+00:00",
+  "data_version": "v1",
+  "code_version": "1aa74c3d2181b7624f154a43d4bdfff9845976f7",
+  "spec_version": "v1.0",
+  "master_seed": 20260825,
+  "criteria": {
+    "a_w8_coverage": {
+      "threshold": 0.6,
+      "value": 0.7403488521226113,
+      "passed": true,
+      "source": "data/<version>/manifest.json mask_stats.train",
+      "n_w1_w7_screened": 62376,
+      "mask_version": "20-v1.0-W1W8"
+    },
+    "b_probe_survival": {
+      "threshold": 0.5,
+      "value": 0.0,
+      "s_x": {
+        "a3": 0.0,
+        "b1": 0.0,
+        "gamma": 0.0
+      },
+      "s_x_literal": {
+        "a3": 1.0,
+        "b1": 1.0,
+        "gamma": 1.0
+      },
+      "passed": true,
+      "n_per_param": 200,
+      "operationalization": "differential rho: (||(L_up(x))_hp||_1 - ||(L_up(x0))_hp||_1) / ||H(x)_hp||_1, x0 = c_high zeroed (B-class, see 99)",
+      "probe_set_not_in_training": true
+    },
+    "c_snr_hf": {
+      "threshold": 0.1,
+      "value": 0.07210065601418642,
+      "passed": true,
+      "n_samples": 20000,
+      "split": "train",
+      "source": "data/<version>/train.h5 (L, L_clean)"
+    }
+  },
+  "probe": {
+    "archive": "probe_sets.h5",
+    "report": "probe_report.json",
+    "params": [
+      "a3",
+      "b1",
+      "gamma"
+    ]
+  },
+  "notes": [
+    "G0(b) 探针采用差分高频存活比操作化：规格字面 ρ 由 64 网格双线性插值伪影与高斯核截断泄漏主导（ρ≈3.5 且对 c_high 不敏感、对 σ_K 非单调，恒 ≥1），门禁在任何退化强度下都不可通过，属 B 类登记；差分形式减去 c_high 无关的伪影底噪，恢复规格意图。",
+    "G0(c) 与初始值：σ_K=11.0（M1 验收 fixture 口径 2×median(w_fine)=10.37 上取整）、σ_n=1.22e-4（M1 '尾部信噪比 2 档'：median(mean(L_clean))/2）。规格 30 [S7]/[S12] 的字面尾部区域定义与 30 [S6] C8 判据在 σ_K=2×median 下互不相容（尾部 σ_n≈1.2e-5 → SNR_hf≈1.7），B 类登记，EXP-01 标定后按 60 [S14] 版本递增重生成复评。"
+  ]
+}

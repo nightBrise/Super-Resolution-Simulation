@@ -10,7 +10,7 @@
 - figure_03_physics_error_bar（物理量误差柱状图，输入 metrics.csv，误差棒为 bootstrap 95% CI）；
 - figure_04_error_vs_gamma_scatter（误差 vs γ 散点图，输入 metrics.csv）。
 
-输出格式 PNG + PDF（60 [S15] 15.3），文件命名 ``figure_0<N>_<type>.<png|pdf>``（90 [S3]）。
+输出格式 PNG，300 dpi（M4+ 用户指定，2026-08-28），文件命名 ``figure_0<N>_<type>.png``（90 [S3]）。
 
 CLI：
 ``python -m src.evaluation.plots --mode intermediate --config <path> --predictions <npz> --out <dir>``
@@ -120,8 +120,7 @@ def _save_figure(fig, out_path: str | Path) -> Path:
     """PNG + PDF 成对保存（60 [S15] 15.3）。"""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(str(out_path), dpi=150)
-    fig.savefig(str(out_path.with_suffix(".pdf")))
+    fig.savefig(str(out_path), dpi=300)
     plt.close(fig)
     return out_path
 

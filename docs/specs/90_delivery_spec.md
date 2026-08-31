@@ -89,11 +89,11 @@
 
 | 阶段 | 报告路径 | 设计理由引用 |
 |---|---|---|
-| M1 | `results/EXP-01/stage_report.md` | 模拟函数设计：见该报告 § 7.1 |
-| M2 | `results/EXP-02/stage_report.md` | 数据集划分：见该报告 § 7.7 |
-| M3 | `results/EXP-01_Main/stage_report.md` | 网络结构：见该报告 § 7.3 |
-| M4 | `results/EXP-02_Main/stage_report.md` | 训练协议 + 先验：见该报告 § 7.4 + § 7.5 |
-| M5 | `results/EXP-03_Main/stage_report.md` 等 | 评估指标 + 门禁：见该报告 § 7.6 + § 7.8 |
+| M1 | `studies/line1_substitute_sr/reports/M1_generators/stage_report.md` | 模拟函数设计：见该报告 § 7 |
+| M2 | `studies/line1_substitute_sr/reports/M2_dataset/stage_report.md` | 数据集划分：见该报告 § 7 |
+| M3 | `studies/line1_substitute_sr/results/summary/EXP-01_summary/stage_report.md` | 网络结构 + 训练协议：见该报告 § 7 |
+| M4 | `studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md` | 先验 + G2 判定：见该报告 § 7 |
+| M5 | `studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md` 等 | 消融 + 门禁：见该报告 § 7 |
 ```
 
 读者如需了解某设计选择的理由，**点击链接**到对应阶段报告第 7 章查阅。
@@ -101,15 +101,15 @@
 
 | 图号 | 文件 | 内容 | 图注 |
 |---|---|---|---|
-| Fig. 1 | `assets/figure_01_2d_phasespace.png` | 2D 相空间对比（log 色标）| 典型样本的 2D 相空间对比（log 色标）。L_up 是双线性插值后归一化的低分辨率观测；H 是高分辨率真值；Ĥ_A、Ĥ_B、Ĥ_C 分别是方案 A、B、C 的预测。 |
-| Fig. 2 | `assets/figure_02_1d_profile.png` | 1D 物理剖面 | 电流剖面 I(z) 与能谱剖面 S(δ) 对比。同一图展示真值与三方案的剖面曲线，验证物理形状恢复准确性。 |
-| Fig. 3 | `assets/figure_03_physics_error_bar.png` | 物理指标误差柱状图 | 物理指标相对误差柱状图。ε_z（发射度）与 I_peak（峰值流强）的相对误差，A/B/C 三方案对比。柱状图含误差棒（bootstrap 95% CI）。 |
-| Fig. 4 | `assets/figure_04_error_vs_gamma_scatter.png` | 误差 vs c_high 散点图 | X 轴为 γ（精细参数），Y 轴为 ε_z 相对误差；颜色映射三方案。展示先验在何种参数区间开始失效。 |
-| Fig. 5 | `assets/figure_05_residual_map.png` | 残差图 | 残差图 Ĥ - H。红色表示"凭空捏造"（Ĥ 高 H 低），蓝色表示"丢失"（Ĥ 低 H 高）。 |
+| Fig. 1 | `studies/line1_substitute_sr/results/assets/figure_01_2d_phasespace.png` | 2D 相空间对比（log 色标）| 典型样本的 2D 相空间对比（log 色标）。L_up 是双线性插值后归一化的低分辨率观测；H 是高分辨率真值；Ĥ_A、Ĥ_B、Ĥ_C 分别是方案 A、B、C 的预测。 |
+| Fig. 2 | `studies/line1_substitute_sr/results/assets/figure_02_1d_profile.png` | 1D 物理剖面 | 电流剖面 I(z) 与能谱剖面 S(δ) 对比。同一图展示真值与三方案的剖面曲线，验证物理形状恢复准确性。 |
+| Fig. 3 | `studies/line1_substitute_sr/results/assets/figure_03_physics_error_bar.png` | 物理指标误差柱状图 | 物理指标相对误差柱状图。ε_z（发射度）与 I_peak（峰值流强）的相对误差，A/B/C 三方案对比。柱状图含误差棒（bootstrap 95% CI）。 |
+| Fig. 4 | `studies/line1_substitute_sr/results/assets/figure_04_error_vs_gamma_scatter.png` | 误差 vs c_high 散点图 | X 轴为 γ（精细参数），Y 轴为 ε_z 相对误差；颜色映射三方案。展示先验在何种参数区间开始失效。 |
+| Fig. 5 | `studies/line1_substitute_sr/results/assets/figure_05_residual_map.png` | 残差图 | 残差图 Ĥ - H。红色表示"凭空捏造"（Ĥ 高 H 低），蓝色表示"丢失"（Ĥ 低 H 高）。 |
 
 每张图在 final_report.md 中 SHALL 用以下 Markdown 嵌入：
 ```markdown
-![Figure N](assets/figure_0N_<type>.png)
+![Figure N](studies/line1_substitute_sr/results/assets/figure_0N_<type>.png)
 *图 N：<图注>*
 ```
 
@@ -123,8 +123,8 @@
 | PDF | 论文级出版（矢量、可在 LaTeX 中引用） | ✓ 必含（M6 最终报告） |
 
 存放位置：
-- PNG：`assets/figure_0N_<type>.png`
-- PDF：`assets/figure_0N_<type>.pdf`
+- PNG：`studies/line1_substitute_sr/results/assets/figure_0N_<type>.png`
+- PDF：`studies/line1_substitute_sr/results/assets/figure_0N_<type>.pdf`
 
 两者内容 SHALL 一致；agent 在生成图时 SHALL 同时保存两种格式（PNG 用于位图展示、PDF 用于矢量出版）。
 

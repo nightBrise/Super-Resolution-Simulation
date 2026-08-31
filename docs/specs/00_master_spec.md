@@ -547,7 +547,7 @@ Agent 优先在本会话内自主解决：
 
 1. **子代理类型**：SHALL 使用 **coder 子代理**（具备 Bash / Write / Edit 权限；plan 子代理只读、无执行能力，仅用于纯分析咨询）；
 2. **脚本与结果存放位置（限定）**：
-   - 验证脚本 SHALL 写入 `scripts_tmp/consultation/` 下（临时，不入库，按 `60` [S15] 15.6 生命周期处置）；
+   - 验证脚本 SHALL 写入 `archive/line1_substitute_sr/scripts_tmp/consultation/` 下（临时，不入库，按 `60` [S15] 15.6 生命周期处置）；
    - 验证结果 SHALL 写入 `results/consultation/` 下（归档，可入库）；
    - 统一命名：`<咨询编号>_<验证名>.py`（脚本）与 `<咨询编号>_<验证名>.json`（结果），咨询编号用会话序数（如 `consult-07_g2_mask_verify`）；
 3. **禁止写入**：子代理 SHALL NOT 修改 `src/`、`tests/`、`docs/specs/`、`config.yaml.template`、`data/`、`results/`（除 14.6.2 第 2 条指定的咨询归档位置外）；
