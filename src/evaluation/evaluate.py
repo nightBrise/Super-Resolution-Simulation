@@ -38,6 +38,7 @@ from src.evaluation.metrics import (
     c_high_mask_from_hp,
     dog_sigma_outer,
     e_high_doG,
+    e_high_mask,
     evaluate_sample,
     hallucination_flag,
     high_freq_energy_ratio,

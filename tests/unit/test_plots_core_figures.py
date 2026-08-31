@@ -43,20 +43,21 @@ def metrics_csv(tmp_path):
     return path
 
 
-def test_physics_error_bar_outputs_png_and_pdf(metrics_csv, tmp_path):
+def test_physics_error_bar_outputs_png_only(metrics_csv, tmp_path):
+    # 用户 2026-08-28 要求 PNG only（300dpi），不再生成 PDF；断言 PDF 不产出
     out = tmp_path / "figure_03_physics_error_bar.png"
     created = plot_physics_error_bar(metrics_csv, out)
     assert created == out
     assert out.exists() and out.stat().st_size > 0
-    assert out.with_suffix(".pdf").exists() and out.with_suffix(".pdf").stat().st_size > 0
+    assert not out.with_suffix(".pdf").exists()
 
 
-def test_error_vs_gamma_scatter_outputs_png_and_pdf(metrics_csv, tmp_path):
+def test_error_vs_gamma_scatter_outputs_png_only(metrics_csv, tmp_path):
     out = tmp_path / "figure_04_error_vs_gamma_scatter.png"
     created = plot_error_vs_gamma_scatter(metrics_csv, out)
     assert created == out
     assert out.exists() and out.stat().st_size > 0
-    assert out.with_suffix(".pdf").exists() and out.with_suffix(".pdf").stat().st_size > 0
+    assert not out.with_suffix(".pdf").exists()
 
 
 def test_physics_error_bar_reproducible_with_fixed_seed(metrics_csv, tmp_path):

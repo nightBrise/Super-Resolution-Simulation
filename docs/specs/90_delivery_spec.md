@@ -89,11 +89,11 @@
 
 | 阶段 | 报告路径 | 设计理由引用 |
 |---|---|---|
-| M1 | `results/EXP-01/stage_report.md` | 模拟函数设计：见该报告 § 7.1 |
-| M2 | `results/EXP-02/stage_report.md` | 数据集划分：见该报告 § 7.7 |
-| M3 | `results/EXP-01_Main/stage_report.md` | 网络结构：见该报告 § 7.3 |
-| M4 | `results/EXP-02_Main/stage_report.md` | 训练协议 + 先验：见该报告 § 7.4 + § 7.5 |
-| M5 | `results/EXP-03_Main/stage_report.md` 等 | 评估指标 + 门禁：见该报告 § 7.6 + § 7.8 |
+| M1 | `results/M1_generators/stage_report.md` | 模拟函数设计：见该报告 § 7 |
+| M2 | `results/M2_dataset/stage_report.md` | 数据集划分：见该报告 § 7 |
+| M3 | `results/EXP-01_summary/stage_report.md` | 网络结构 + 训练协议：见该报告 § 7 |
+| M4 | `results/EXP-02_summary/stage_report.md` | 先验 + G2 判定：见该报告 § 7 |
+| M5 | `results/EXP-03_summary/stage_report.md` 等 | 消融 + 门禁：见该报告 § 7 |
 ```
 
 读者如需了解某设计选择的理由，**点击链接**到对应阶段报告第 7 章查阅。

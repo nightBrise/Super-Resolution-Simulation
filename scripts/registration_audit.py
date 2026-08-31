@@ -134,26 +134,30 @@ def audit_summary(summary_path: Path) -> list[dict]:
     if not version.get("data_version"):
         findings.append({"severity": "WARN", "message": "version.data_version 缺失"})
 
-    for gain_key in ("M_A_minus_M_B", "M_A_minus_M_C"):
-        entry = s.get("prior_gain", {}).get(gain_key)
-        if entry is None:
-            findings.append({"severity": "WARN", "message": f"prior_gain.{gain_key} 缺失"})
-            continue
-        if entry.get("verdict") not in THREE_CLASS_VALUES:
-            findings.append(
-                {"severity": "FAIL", "message": f"prior_gain.{gain_key}.verdict 非法：{entry.get('verdict')!r}"}
-            )
-        if not isinstance(entry.get("ci95"), list) or len(entry.get("ci95", [])) != 2:
-            findings.append({"severity": "WARN", "message": f"prior_gain.{gain_key}.ci95 缺失/非二元组"})
+    # 跨方案判定字段（prior_gain/three_class/one_veto）仅聚合 summary（≥2 方案）才有；
+    # per-run 单方案 summary 无跨方案对比，跳过这些检查（2026-08-28 A 类修复）。
+    n_schemes = len(s.get("metrics", {}))
+    if n_schemes >= 2:
+        for gain_key in ("M_A_minus_M_B", "M_A_minus_M_C"):
+            entry = s.get("prior_gain", {}).get(gain_key)
+            if entry is None:
+                findings.append({"severity": "WARN", "message": f"prior_gain.{gain_key} 缺失"})
+                continue
+            if entry.get("verdict") not in THREE_CLASS_VALUES:
+                findings.append(
+                    {"severity": "FAIL", "message": f"prior_gain.{gain_key}.verdict 非法：{entry.get('verdict')!r}"}
+                )
+            if not isinstance(entry.get("ci95"), list) or len(entry.get("ci95", [])) != 2:
+                findings.append({"severity": "WARN", "message": f"prior_gain.{gain_key}.ci95 缺失/非二元组"})
 
-    if s.get("three_class", {}).get("verdict") not in THREE_CLASS_VALUES:
-        findings.append(
-            {"severity": "FAIL", "message": f"three_class.verdict 非法：{s.get('three_class', {}).get('verdict')!r}"}
-        )
-    if s.get("one_veto", {}).get("verdict") not in ONE_VETO_VALUES:
-        findings.append(
-            {"severity": "FAIL", "message": f"one_veto.verdict 非法：{s.get('one_veto', {}).get('verdict')!r}"}
-        )
+        if s.get("three_class", {}).get("verdict") not in THREE_CLASS_VALUES:
+            findings.append(
+                {"severity": "FAIL", "message": f"three_class.verdict 非法：{s.get('three_class', {}).get('verdict')!r}"}
+            )
+        if s.get("one_veto", {}).get("verdict") not in ONE_VETO_VALUES:
+            findings.append(
+                {"severity": "FAIL", "message": f"one_veto.verdict 非法：{s.get('one_veto', {}).get('verdict')!r}"}
+            )
     return findings
 
 
