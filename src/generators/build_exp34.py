@@ -193,6 +193,7 @@ def build_redegraded_exp(
     prior_level: str = "P2",
     reps: int = 1,
     redegrade: bool = True,
+    study_root: str = "",
 ) -> dict:
     """生成 test_exp0N.h5（H5Dataset 兼容 schema）；返回 manifest 节。"""
     import multiprocessing  # noqa: PLC0415
@@ -202,7 +203,9 @@ def build_redegraded_exp(
     if prior_level not in ("P1", "P2"):
         raise ValueError(f"prior_level 必须为 P1/P2，实际 {prior_level!r}")
 
-    data_dir = PROJECT_ROOT / "data" / data_version
+    # 方案 B：study_root 非空走 <root>/studies/<study_root>/data/<version>，空兜底 <root>/data。
+    data_root = (PROJECT_ROOT / "studies" / study_root / "data") if study_root else (PROJECT_ROOT / "data")
+    data_dir = data_root / data_version
     fields_all: dict[str, list[Any]] = {}
     for split in SOURCE_SPLITS:
         src = data_dir / f"{split}.h5"

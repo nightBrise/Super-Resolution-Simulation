@@ -40,6 +40,7 @@ from src.training.loss import HybridLoss
 from src.utils.checkpoint import save_checkpoint, write_seeds_json
 from src.utils.config_utils import (
     config_digest,
+    data_dir_for,
     load_config,
     resolve_data_version,
     resolve_device,
@@ -337,7 +338,7 @@ def train(
     )
 
     # ---- 数据集（60 [S4][S14]）与方案 C 标准化统计量（60 [S5]）------------
-    dataset_dir = PROJECT_ROOT / "data" / str(config["dataset"]["version"])
+    dataset_dir = data_dir_for(config, PROJECT_ROOT) / str(config["dataset"]["version"])
     train_ds = H5Dataset(dataset_dir / "train.h5", "train")
     if train_indices is not None:
         train_ds = Subset(train_ds, list(train_indices))

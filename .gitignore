@@ -60,6 +60,19 @@ checkpoints/
 final_report.md
 assets/
 
+# ----- Study-line organization (post-migration) -----
+# studies/: research-line subtree. Only per-line reports/drafts docs are
+# versioned; heavy artefacts (data under it) are ignored.
+studies/
+archive/
+!studies/
+# 保留研究线下的文档（报告/草稿），忽略其数据与大产物
+!studies/line1_substitute_sr/
+!studies/line1_substitute_sr/reports/
+!studies/line1_substitute_sr/drafts/
+!studies/line1_substitute_sr/drafts/**
+!studies/line1_substitute_sr/results/assets/**
+
 # ----- Heavy artefacts that should never be committed -----
 *.ckpt
 *.pt

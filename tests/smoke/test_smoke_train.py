@@ -53,7 +53,7 @@ def test_smoke_train_all_schemes(smoke_device, smoke_indices, tmp_path):
         # 4. 输出非负且 256×256（05 [S4] 断言 4）
         model, _ = load_model(cfg, out / "checkpoints" / "best_val.ckpt", "cpu")
         model.eval()
-        ds = H5Dataset("data/v1/train.h5", "train")
+        ds = H5Dataset("studies/line1_substitute_sr/data/v1/train.h5", "train")
         batch = collate_samples([ds[int(i)] for i in train_idx[:4]])
         with torch.no_grad():
             H_hat = forward_scheme(model, batch, "cpu")

@@ -44,6 +44,7 @@ from src.generators.dataset_builder import (
     git_head,
     load_config,
 )
+from src.utils.config_utils import data_dir_for
 from src.generators.f_beam import f_beam
 from src.generators.f_deg import f_deg, snr_hf
 from src.generators.image_ops import normalize_intensity, upsample_4x_bilinear
@@ -219,7 +220,7 @@ def evaluate_g0(
     master_seed = int(config["master_seed"])
     sigma_K = float(config["calibration"]["sigma_K"])
     version = str(config["dataset"]["version"])
-    data_dir = project_root / "data" / version
+    data_dir = data_dir_for(config, project_root) / version
 
     manifest_path = data_dir / "manifest.json"
     if not manifest_path.exists():

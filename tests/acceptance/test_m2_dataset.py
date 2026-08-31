@@ -27,9 +27,10 @@ from src.generators.probe import PROBE_N, PROBE_PARAMS, generate_probe_set
 pytestmark = [pytest.mark.acceptance, pytest.mark.m2]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DEV1 = PROJECT_ROOT / "data" / "dev1"
-DATA_V1 = PROJECT_ROOT / "data" / "v1"
-M2_RESULTS = PROJECT_ROOT / "results" / "M2_dataset"
+# 迁移后：v1 数据入研究线活跃位，dev1 与 M2 探针产物入 archive 冷存储。
+DATA_DEV1 = PROJECT_ROOT / "archive" / "line1_substitute_sr" / "data_dev" / "dev1"
+DATA_V1 = PROJECT_ROOT / "studies" / "line1_substitute_sr" / "data" / "v1"
+M2_RESULTS = PROJECT_ROOT / "studies" / "line1_substitute_sr" / "reports" / "M2_dataset"
 
 #: 各档划分规模（60 [S8] C1/C4 + 80 [S7]：test_ood 固定 500）。
 EXPECTED_COUNTS = {
@@ -41,6 +42,13 @@ EXPECTED_COUNTS = {
 def _manifest(data_dir: Path) -> dict:
     with open(data_dir / "manifest.json", encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _data_root(scale: str) -> Path:
+    """按数据版本返回其当前根目录（迁移后：dev 档入 archive，v1 入研究线活跃位）。"""
+    if scale in ("dev1", "dev2", "dev1_d1", "dev2_d1"):
+        return PROJECT_ROOT / "archive" / "line1_substitute_sr" / "data_dev" / scale
+    return PROJECT_ROOT / "studies" / "line1_substitute_sr" / "data" / scale
 
 
 def _gamma_mags(data_dir: Path, split: str) -> np.ndarray:
@@ -71,13 +79,13 @@ def test_counts_dev1_and_v1():
     """调试与标准规模计数正确（dev1: 2000/500/250/250；v1: 20000/2000/1000/1000）。"""
     _require_artifacts()
     for scale in ("dev1", "v1"):
-        manifest = _manifest(PROJECT_ROOT / "data" / scale)
+        manifest = _manifest(_data_root(scale))
         for split, expected in EXPECTED_COUNTS[scale].items():
             assert manifest["splits"][split]["count"] == expected, (scale, split)
             assert len(manifest["splits"][split]["sample_ids"]) == expected
         # HDF5 行数一致
         for split in ("train", "val", "test_id", "test_pb", "test_ood"):
-            with h5py.File(str(PROJECT_ROOT / "data" / scale / f"{split}.h5"), "r") as f:
+            with h5py.File(str(_data_root(scale) / f"{split}.h5"), "r") as f:
                 assert f["H"].shape[0] == EXPECTED_COUNTS[scale][split]
 
 
@@ -85,7 +93,7 @@ def test_manifest_triple():
     """manifest 登记 code_version/data_version/spec_version 三元组（60 [S14] C1）。"""
     _require_artifacts()
     for scale in ("dev1", "v1"):
-        manifest = _manifest(PROJECT_ROOT / "data" / scale)
+        manifest = _manifest(_data_root(scale))
         for key in ("code_version", "data_version", "spec_version"):
             assert isinstance(manifest.get(key), str) and manifest[key], (scale, key)
         assert manifest["data_version"] == scale

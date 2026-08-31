@@ -54,6 +54,19 @@ def run_output_dir(config: dict, project_root: Path | None = None) -> Path:
     return base / name
 
 
+def data_dir_for(config: dict, project_root: Path | None = None) -> Path:
+    """数据根目录（方案 B）：``study_root`` 非空时落于
+    ``<root>/studies/<study_root>/data/``，为空/缺省时兜底 ``<root>/data/``。
+
+    与 :func:`run_output_dir` 对称；调用方再拼上 ``data_version`` 与 split 文件名。
+    """
+    root = project_root or Path(__file__).resolve().parents[2]
+    study_root = str(config.get("study_root", "")).strip()
+    if study_root:
+        return root / "studies" / study_root / "data"
+    return root / "data"
+
+
 def resolve_data_version(config: dict) -> str:
     """数据版本号：优先 ``data_version`` 字段，回退 ``dataset.version``。"""
     v = config.get("data_version") or config.get("dataset", {}).get("version")

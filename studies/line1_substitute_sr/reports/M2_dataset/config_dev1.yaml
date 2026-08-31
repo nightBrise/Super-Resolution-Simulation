@@ -1,0 +1,129 @@
+code_version: 1aa74c3d2181b7624f154a43d4bdfff9845976f7
+data_version: dev1
+spec_version: v1.0
+experiment_id: M2_dataset_dev1
+scheme: data
+seed_index: 0
+run_tag: run1
+config_tag: D2-initial
+master_seed: 20260825
+data_seeds:
+  train: 0
+  val: 0
+  test_id: 0
+  test_pb: 0
+scheme_seeds:
+  scheme_A_seed_0: 0
+  scheme_A_seed_1: 0
+  scheme_B_seed_0: 0
+  scheme_B_seed_1: 0
+  scheme_C_seed_0: 0
+  scheme_C_seed_1: 0
+calibration:
+  sigma_K: 11.0
+  sigma_n: 0.000122
+  sigma_smooth:
+    sigma_smooth_H: 0.0
+    sigma_smooth_P: 0.0
+degradation:
+  level: D2
+  r: 4
+  method: block_average
+  noise_model: L = max(0, L_clean + n)
+  snr_hf_threshold: 0.1
+evaluation:
+  tau: 0.05
+  trigger_rate: 0.2
+  primary_metric: ε_high^mask
+  secondary_metrics:
+  - ε_z_relative
+  exploratory_metrics:
+  - I_peak_relative
+  - sigma_z_relative
+  - sigma_delta_relative
+  - h_eff_relative
+  dog:
+    sigma_outer: 0.0
+    sigma_inner_factor: 0.5
+  rho_threshold: 0.1
+  ood_degradation_threshold: 0.2
+  ci_width_min: 0.05
+  mde: 0.05
+  max_expansion_factor: 2.0
+hallucination:
+  delta_threshold: 0.05
+  trigger_rate_max: 0.2
+  one_veto_enabled: true
+network:
+  backbone: unet
+  C0: 48
+  num_residual_blocks: 2
+  num_levels: 5
+  scheme_C_film_injection: bottleneck_and_decoder
+  input_channels: 2
+training:
+  optimizer: AdamW
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  beta1: 0.9
+  beta2: 0.999
+  batch_size: 16
+  max_steps: 100000
+  early_stopping:
+    patience: 10
+    min_step_fraction: 0.5
+  lambda_spec: 1.0
+  data_loading:
+    num_workers: 16
+    pin_memory: true
+  precision: fp32
+dataset:
+  version: dev1
+  split: train+val+test_id+test_pb+test_ood
+  train_size: 2000
+  val_size: 500
+  test_id_size: 250
+  test_pb_size: 250
+  test_ood_size: 500
+  test_pb_block:
+    dimension: abs(gamma)
+    range:
+    - 0.3
+    - 0.4
+  ood_test_path: data/dev1/test_ood.h5
+  workers: 32
+gpu:
+  device: cuda:0,cuda:1
+  utilization_target:
+    standard: 0.8
+    proxy: 0.7
+    debug: 0.6
+  config_class: standard
+  memory_limit_mb: 22000
+  parallelism: 2_cards_3_batches
+reproducibility:
+  python_version: '3.11'
+  torch_version: 2.4.0
+  numpy_version: 1.26.4
+  env_lock_file: environment.yml
+checkpoint:
+  best_val_path: results/<EXP>/checkpoints/best_val.ckpt
+  last_path: results/<EXP>/checkpoints/last.ckpt
+visualization:
+  num_samples: 50
+  log_scale: true
+  format: png
+notes: 'M2 数据集生成实例（60 [S8] 划分 + [S14] 工件契约 + 80 [S9] G0 门禁）。
+
+  标定采用初始值：σ_K=11.0（2×median(w_fine) 口径 10.37，为 SNR_hf<0.1
+
+  判据留裕度）、σ_n=1.22e-4（median(mean(L_clean))/2，M1「尾部信噪比 2 档」）、
+
+  σ_smooth,P=2.6×σ_smooth,H（M1 采用值）。初始值系统与 30 [S6] C8 的
+
+  互不相容性、G0(b) 探针字面定义不可操作性见 B 类登记（05 [S7]），
+
+  EXP-01 标定后按 60 [S14] 版本递增重生成复评。
+
+
+  （dev1 调试档：train 2000 / val 500 / test_id 250 / test_pb 250 / test_ood 500）'

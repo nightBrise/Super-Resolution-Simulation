@@ -86,7 +86,7 @@ tests/
 配套文件：
 - `pyproject.toml`（新增 `[tool.pytest.ini_options]`）：注册 markers `unit / integration / smoke / acceptance / slow / gpu / m1…m6`；默认 `addopts = -m "unit or integration" --strict-markers --timeout=120`。
 - `environment.yml`：pip 段追加 `pytest>=8`、`pytest-xdist`、`pytest-timeout`；`scripts/check_env.py` 的 `EXPECTED` 增加 pytest 版本。
-- `.gitignore`：追加 `results/test_reports/`。
+- `.gitignore`：追加 `studies/line1_substitute_sr/reports/test_reports/`。
 
 ### 3.2 ★ 防泄露关键用例（最高价值）
 
@@ -169,14 +169,14 @@ tests/
 
 1. **固定种子**：conftest.py 定义 TEST_MASTER_SEED = 20260825；所有随机测试（生成、bootstrap、权重初始化）从该种子经 SeedSequence.spawn 派生，禁止测试内裸 np.random 调用。
 2. **确定性纪律**：测试不得依赖时间、网络、字典迭代顺序；统计断言用确定性构造数据（首选）或固定种子 + 宽边界，容差推导写入测试 docstring。
-3. **结果记录位置**：每次套件运行输出到 `results/test_reports/<UTC时间戳>_<commit8>/`（junit.xml + 运行摘要 + 逐用例耗时），目录入 .gitignore；progress.md 与阶段报告引用最近一次路径。
+3. **结果记录位置**：每次套件运行输出到 `studies/line1_substitute_sr/reports/test_reports/<UTC时间戳>_<commit8>/`（junit.xml + 运行摘要 + 逐用例耗时），目录入 .gitignore；progress.md 与阶段报告引用最近一次路径。
 4. **测试代码同受版本纪律**：tests/ 入版本控制；测试变更的 commit footer 引用对应 spec 章节；冻结期测试断言的放松/删除须在 99 登记。
 5. **环境**：测试只依赖 environment.yml 已锁依赖 + pytest 系；check_env.py 增加 pytest 版本核对。
 
 ### Claims
 
 - C1: 测试 SHALL 使用固定 TEST_MASTER_SEED=20260825 派生，禁止裸随机调用。
-- C2: 测试结果 SHALL 记录于 `results/test_reports/`（junit.xml + 摘要），目录入 .gitignore。
+- C2: 测试结果 SHALL 记录于 `studies/line1_substitute_sr/reports/test_reports/`（junit.xml + 摘要），目录入 .gitignore。
 - C3: tests/ SHALL 入版本控制；测试断言变更 SHALL 在 99 登记。
 
 ---
@@ -222,7 +222,7 @@ tests/
 ## [S8] 落地步骤（给实现 agent 的执行清单）
 
 1. `99` 登记 Proposed：测试策略（本文件）+ environment.yml 增加 pytest 依赖 + `00` [S13.2] 增列第 7 项必检"对应层测试套件通过"。
-2. 建 tests/ 骨架与 conftest.py、pyproject.toml markers、.gitignore 条目（results/test_reports/）。
+2. 建 tests/ 骨架与 conftest.py、pyproject.toml markers、.gitignore 条目（studies/line1_substitute_sr/reports/test_reports/）。
 3. 按里程碑顺序实现：M1 前完成 unit/（test_sampling/fbeam/fdeg/fprior/loss/upsample）+ test_pipeline_hlp；M2 前完成 test_dataset_builder + test_seeds；M3 前完成 test_models/test_train_loop/test_fairness + 全部 smoke/；M4 前完成 test_statistics/test_metrics/test_eval_pipeline；各 acceptance/ 文件在对应里程碑前一个迭代内完成。
 4. 每个测试文件头部注明覆盖的 spec 章节与 Claim 编号（与 spec_claim_index.md 对齐）。
 5. 首次全套运行后，把实测耗时写入 [S2] 时间预算表替换估计值，并在阶段报告第 7 章记录取舍（`00` [S13.3] C3）。

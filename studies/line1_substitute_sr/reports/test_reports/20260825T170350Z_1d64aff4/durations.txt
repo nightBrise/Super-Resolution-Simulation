@@ -1,0 +1,7 @@
+============================= slowest 5 durations ==============================
+19.37s setup    tests/acceptance/test_m1_generators.py::test_ac14_quality_gate_l1_ratio
+0.60s call     tests/acceptance/test_m1_generators.py::test_ac14_quality_gate_ssim
+0.57s setup    tests/acceptance/test_m1_generators.py::test_d1_d3_d5_d7_d10_batch
+0.31s call     tests/acceptance/test_m1_generators.py::test_ac1_ac2_ac3_ac11_batch
+0.24s call     tests/acceptance/test_m1_generators.py::test_ac14_quality_gate_l1_ratio
+114 passed, 1 xfailed in 24.28s

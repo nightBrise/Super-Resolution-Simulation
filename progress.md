@@ -10,7 +10,7 @@
 | **当前任务** | 出口决策定案（用户确认「不进入下一阶段」或提出后续提案）|
 | **进度** | M1–M5 完成；**M6 完成**：final_report.md（536 行，六章 + 判据符号表 + 出口决策矩阵 + 四类外部效度证据 + 附录 A/B）+ 五图（三方案对比版 PNG 300dpi）+ N8 对账无 FAIL（99 行 186 登记）；出口决策矩阵——条件 1 不满足（等效/种子敏感，非显著负）→ 分支树 (a) 阴性/等效合法终点；条件 2 B 满足/C 触发；条件 3 证据缺失；**出口决定「不进入下一阶段」待用户确认** |
 | **下一步** | 用户确认出口决策 → 99 定案 → progress.md 终态 → 项目完成 |
-| **最近一次报告** | [`final_report.md`](final_report.md)（M6 最终报告，2026-08-30）；[`results/EXP-03_summary/stage_report.md`](results/EXP-03_summary/stage_report.md)（M5）；[`results/EXP-02_summary/stage_report.md`](results/EXP-02_summary/stage_report.md)（M4）|
+| **最近一次报告** | [`final_report.md`](docs/reports/line1_substitute_sr_final_report.md)（M6 最终报告，2026-08-30）；[`studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md)（M5）；[`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md)（M4）|
 
 ## 阶段完成历史
 
@@ -18,13 +18,13 @@
 
 | 日期 | 阶段 | 结论 | 报告链接 |
 |---|---|---|---|
-| 2026-08-30 | M6 | 完成（final_report 六章 + 五图 + 附录 A/B + N1–N8 自检通过；出口决策矩阵：条件 1 不满足（等效/种子敏感）→ 分支 (a) 阴性/等效合法终点，出口决定「不进入下一阶段」呈报用户确认；99 行 186 登记 Implemented（出口决策待用户确认））| [`final_report.md`](final_report.md) |
-| 2026-08-30 | M5 | 完成（40 次推理评估 + 4 种子聚合 + G3 判定：A−B 不反转 G3 通过；A−C/B−C 方向反转 E 类如实报告；EXP-07 c_mid 信息有效；EXP-08 C 离散度最低；99 行 185 登记 Implemented）| [`results/EXP-03_summary/stage_report.md`](results/EXP-03_summary/stage_report.md) |
-| 2026-08-29 | M4 | 通过（12 run 训练 + 评估 + 4 种子聚合 + G2 重判 R1–R4：A−B 等效（种子级，R2+R3 降级）/ A−C、B−C 种子敏感不可判定（R4 兜底）；次指标 C 4 种子一致减半；G1(b) 通过；99 行 184 登记 Implemented）| [`results/EXP-02_summary/stage_report.md`](results/EXP-02_summary/stage_report.md) |
-| 2026-08-28 | M4（过渡）| G2 跨种子不一致 → 失败路径已批准扩种子（seed2/3 训练启动中）；训练 6/6 + 评估 12/12 + G1(b) 通过 + 五图 + 聚合 + 99 登记完成；过渡版 stage_report 已落盘，待 seed2/3 完成按 R1-R4 重判 | [`results/EXP-02_summary/stage_report.md`](results/EXP-02_summary/stage_report.md) |
-| 2026-08-26 | M3 | 部分通过（EXP-01a 三方案健康完成：坍缩修复 + 哨兵全过；EXP-01b σ_K 标定被 R_E 门阻塞 OQ-30-03 → 共性根因 σ_smooth,H 待 P0 报批）| [`results/EXP-01_summary/stage_report.md`](results/EXP-01_summary/stage_report.md) |
-| 2026-08-26 | M2 | 通过（dev1/v1 数据集 + manifest + G0 三判据 pass；L0+L1 111 通过、acceptance M2 全部通过；B 类登记：探针差分操作化 OQ-80-01、σ_n 判据互斥 OQ-30-02、hp 预算比主判据失效 OQ-40-03、EXP-06 读法 OQ-80-02）| [`results/M2_dataset/stage_report.md`](results/M2_dataset/stage_report.md) |
-| 2026-08-26 | M1 | 通过（20/30/40 全部 AC；L0+L1 90 通过、acceptance 24 通过 + 1 xfail 为 B 类待裁定）| [`results/M1_generators/stage_report.md`](results/M1_generators/stage_report.md) |
+| 2026-08-30 | M6 | 完成（final_report 六章 + 五图 + 附录 A/B + N1–N8 自检通过；出口决策矩阵：条件 1 不满足（等效/种子敏感）→ 分支 (a) 阴性/等效合法终点，出口决定「不进入下一阶段」呈报用户确认；99 行 186 登记 Implemented（出口决策待用户确认））| [`final_report.md`](docs/reports/line1_substitute_sr_final_report.md) |
+| 2026-08-30 | M5 | 完成（40 次推理评估 + 4 种子聚合 + G3 判定：A−B 不反转 G3 通过；A−C/B−C 方向反转 E 类如实报告；EXP-07 c_mid 信息有效；EXP-08 C 离散度最低；99 行 185 登记 Implemented）| [`studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md) |
+| 2026-08-29 | M4 | 通过（12 run 训练 + 评估 + 4 种子聚合 + G2 重判 R1–R4：A−B 等效（种子级，R2+R3 降级）/ A−C、B−C 种子敏感不可判定（R4 兜底）；次指标 C 4 种子一致减半；G1(b) 通过；99 行 184 登记 Implemented）| [`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md) |
+| 2026-08-28 | M4（过渡）| G2 跨种子不一致 → 失败路径已批准扩种子（seed2/3 训练启动中）；训练 6/6 + 评估 12/12 + G1(b) 通过 + 五图 + 聚合 + 99 登记完成；过渡版 stage_report 已落盘，待 seed2/3 完成按 R1-R4 重判 | [`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md) |
+| 2026-08-26 | M3 | 部分通过（EXP-01a 三方案健康完成：坍缩修复 + 哨兵全过；EXP-01b σ_K 标定被 R_E 门阻塞 OQ-30-03 → 共性根因 σ_smooth,H 待 P0 报批）| [`studies/line1_substitute_sr/results/summary/EXP-01_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-01_summary/stage_report.md) |
+| 2026-08-26 | M2 | 通过（dev1/v1 数据集 + manifest + G0 三判据 pass；L0+L1 111 通过、acceptance M2 全部通过；B 类登记：探针差分操作化 OQ-80-01、σ_n 判据互斥 OQ-30-02、hp 预算比主判据失效 OQ-40-03、EXP-06 读法 OQ-80-02）| [`studies/line1_substitute_sr/reports/M2_dataset/stage_report.md`](studies/line1_substitute_sr/reports/M2_dataset/stage_report.md) |
+| 2026-08-26 | M1 | 通过（20/30/40 全部 AC；L0+L1 90 通过、acceptance 24 通过 + 1 xfail 为 B 类待裁定）| [`studies/line1_substitute_sr/reports/M1_generators/stage_report.md`](studies/line1_substitute_sr/reports/M1_generators/stage_report.md) |
 
 ## 待办（spec 层）
 

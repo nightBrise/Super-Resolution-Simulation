@@ -41,24 +41,35 @@
 ├── README.md / README.en.md        # 项目门面（中英双语）——注意：README 状态表已过期，以 progress.md 为准
 ├── CONTRIBUTING.md                 # 开发约定（GitHub Flow + Conventional Commits + R2 修复流程）
 ├── AGENTS.md                       # 本文件
-├── config.yaml.template            # 实验配置模板（每个实验 results/<EXP>/config.yaml 的必填字段契约）
+├── config.yaml.template            # 实验配置模板（每个实验 config.yaml 的必填字段契约；顶层 study_root 指定研究线）
 ├── progress.md                     # Agent 维护的项目进度（每阶段更新一次，00 [S13.4]）
 ├── spec_claim_index.md             # scripts/check_spec_consistency.py 自动生成的全 spec Claim 索引
 ├── environment.yml                 # conda 环境锁定（sr-sim）
 ├── pyproject.toml                  # 项目元数据 + pytest 配置（markers、addopts）
-├── .gitignore                      # data/、results/、*.pdf、*.h5、checkpoint 等一律不入库
-├── scripts/                        # 项目级工具：check_env.py / check_spec_consistency.py
-├── scripts_tmp/                    # 临时分析脚本（不入库的归档参考，如 g2_c_high_leak.py）
-├── src/                            # 生产代码（见 §4）
+├── .gitignore                      # data/、results/、*.pdf、*.h5、checkpoint、assets/ 等一律不入库
+├── scripts/                        # 项目级工具：check_env.py / check_spec_consistency.py / remap_paths.py
+├── src/                            # 生产代码（见 §4；跨研究线共享，路径经 study_root 解耦）
 ├── tests/                          # 四层测试（见 §7）
-├── data/<版本>/                    # 数据集（train/val/test_id/test_pb/test_ood.h5 + manifest.json）
-├── results/<EXP>_<arm>_<seed>_<run_tag>/  # 实验产物（config.yaml/checkpoints/logs/metrics.csv/summary.json/seeds.json/stage_report.md）
+├── studies/                        # ★ 研究线：每条研究线自含 data/results/reports/drafts
+│   ├── line1_substitute_sr/        # 当前研究线（替代验证超分，已迁移）
+│   │   ├── data/<版本>/            # 数据集（train/val/test_id/test_pb/test_ood.h5 + manifest.json）
+│   │   ├── results/
+│   │   │   ├── summary/            # 判定证据（summary*.json / pooled / test_id_combined.csv / 预注册骨架）
+│   │   │   ├── run/                # 各 run 证据（config/summary/metrics/logs；ckpt 不在内）
+│   │   │   └── assets/             # 本线图（figure_*.png，PNG only 300dpi）
+│   │   ├── reports/                # 阶段报告（M1/M2 stage_report、test_reports）
+│   │   └── drafts/                 # 草稿区（spec/notes/scratch/figs，未定稿）
+│   └── line2_<方向>/               # 未来研究线（空模板）
+└── archive/                        # ★ 冷存储（只移动不删除）：可再生大文件 + 已完结研究线
+    └── line1_substitute_sr/
+        ├── checkpoints/  predictions/  data_dev/  misc_runs/  scripts_tmp/
 └── docs/
     ├── specs/                      # Spec 集（00–99，十位留空编号；v1.0 冻结，99 为活跃变更日志）
+    ├── reports/                    # 终版/跨线报告（line1_substitute_sr_final_report.md、M4_stage_report.html）
     └── wang2026_*.pdf              # 参考文献（本地保留，.gitignore 排除，不入库）
 ```
 
-`results/` 下还有若干非实验目录：`M1_generators/`、`M2_dataset/`、`EXP-01_summary/`（阶段报告与门禁证据）、`consultation/`（咨询记录）、`test_reports/`（测试报告，入 .gitignore）。
+**研究线组织说明**：代码/脚本/spec 为跨研究线共享层（`src/`、`scripts/`、`tests/`、`docs/specs/`，保留根级）；数据与实验产物按研究线归置（`studies/<line>/`），每条线自含 `data/results/reports/drafts`。研究线根由 config 顶层 `study_root` 字段指定（非空走 `studies/<line>/`，空/缺省兜底项目根——向后兼容）。可再生的中间大文件（ckpt、预测 npz、开发版数据、一次性脚本）移入 `archive/<line>/` 冷存储（只移动不删除）。研究线之间互不干扰，换方向开新线即可。
 
 ---
 
@@ -146,7 +157,7 @@ python -m pytest -m slow                      # 长耗时（如网格收敛）
 
 **1 skipped**：`tests/integration/test_eval_pipeline.py:118`（旧格式产物缺失时跳过新字段契约检查，M3 重生成后自动生效）。
 
-**测试纪律**（05 [S6]）：固定 `TEST_MASTER_SEED = 20260825`（`tests/conftest.py`），所有随机测试经 SeedSequence 派生，禁止裸随机调用；测试结果记录到 `results/test_reports/`；测试只断言协议/契约/不变量，**禁止断言研究结果**（如 `assert gain > 0`）。
+**测试纪律**（05 [S6]）：固定 `TEST_MASTER_SEED = 20260825`（`tests/conftest.py`），所有随机测试经 SeedSequence 派生，禁止裸随机调用；测试结果记录到 `studies/line1_substitute_sr/reports/test_reports/`；测试只断言协议/契约/不变量，**禁止断言研究结果**（如 `assert gain > 0`）。
 
 ---
 

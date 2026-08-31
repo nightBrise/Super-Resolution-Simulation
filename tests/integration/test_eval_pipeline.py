@@ -29,9 +29,15 @@ REQUIRED_METRIC_COLUMNS = [
 
 
 def _find_a_run() -> Path:
-    candidates = sorted(glob.glob(str(PROJECT_ROOT / "results" / "EXP-01_A_seed0_run*_D2")))
+    # 迁移后：EXP-01 标定评估产物归入研究线 archive 冷存储。
+    # 优先取有 metrics.csv 的 run（run2_R2 档），否则取任一匹配。
+    candidates = sorted(glob.glob(
+        str(PROJECT_ROOT / "archive" / "line1_substitute_sr" / "misc_runs"
+            / "EXP-01_A_seed0_run*_D2")
+    ))
     r2 = [c for c in candidates if "run2_R2" in c]
-    return Path((r2 or candidates)[0])
+    with_csv = [c for c in candidates if (Path(c) / "metrics.csv").exists()]
+    return Path((with_csv or r2 or candidates)[0])
 
 
 @pytest.fixture(scope="module")
