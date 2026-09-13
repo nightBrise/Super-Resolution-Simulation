@@ -226,7 +226,7 @@ C 的跨种子漂移最大（A 的 1.4 倍、B 的 3 倍），且 C 的标准差
 
 **图 1 · 2D 相空间对比**（log 色标，样本 test_id-000）：
 
-![Figure 1](studies/line1_substitute_sr/results/assets/figure_01_2d_phasespace.png)
+![Figure 1](../../studies/line1_substitute_sr/results/assets/figure_01_2d_phasespace.png)
 
 **详细解读**：从左到右依次为——①低分辨率观测 L_up（64→256 双线性上采样后归一化）；②高分辨率真值 H；③④⑤分别为方案 A、B、C 的预测 Ĥ_A、Ĥ_B、Ĥ_C。
 
@@ -236,7 +236,7 @@ C 的跨种子漂移最大（A 的 1.4 倍、B 的 3 倍），且 C 的标准差
 
 **图 2 · 1D 电流/能谱剖面**（样本 test_id-000）：
 
-![Figure 2](studies/line1_substitute_sr/results/assets/figure_02_1d_profile.png)
+![Figure 2](../../studies/line1_substitute_sr/results/assets/figure_02_1d_profile.png)
 
 **详细解读**：左为电流剖面 I(z)（沿 z 轴积分），右为能谱剖面 S(δ)（沿 δ 轴积分），真值 H 与三方案预测叠加显示。
 
@@ -245,7 +245,7 @@ C 的跨种子漂移最大（A 的 1.4 倍、B 的 3 倍），且 C 的标准差
 
 **图 3 · 物理量相对误差柱状图**（bootstrap 95% CI，4 种子合并 n=4000/方案）：
 
-![Figure 3](studies/line1_substitute_sr/results/assets/figure_03_physics_error_bar.png)
+![Figure 3](../../studies/line1_substitute_sr/results/assets/figure_03_physics_error_bar.png)
 
 **详细解读**：横轴为物理量（左：ε_z 发射度；右：I_peak 峰值流强），纵轴为相对误差（越小越好），三方案并排带误差棒。
 
@@ -255,7 +255,7 @@ C 的跨种子漂移最大（A 的 1.4 倍、B 的 3 倍），且 C 的标准差
 
 **图 4 · 误差 vs 压缩态参数 γ 散点图**（4 种子合并）：
 
-![Figure 4](studies/line1_substitute_sr/results/assets/figure_04_error_vs_gamma_scatter.png)
+![Figure 4](../../studies/line1_substitute_sr/results/assets/figure_04_error_vs_gamma_scatter.png)
 
 **详细解读**：横轴为压缩态参数 γ（精细结构参数，|γ| 越大代表压缩越强、折叠越剧烈），纵轴为 ε_z 相对误差（log 尺度，越小越好），颜色映射三方案。
 
@@ -264,7 +264,7 @@ C 的跨种子漂移最大（A 的 1.4 倍、B 的 3 倍），且 C 的标准差
 
 **图 5 · 预测−真值残差图**（发散色标，样本 test_id-000）：
 
-![Figure 5](studies/line1_substitute_sr/results/assets/figure_05_residual_map.png)
+![Figure 5](../../studies/line1_substitute_sr/results/assets/figure_05_residual_map.png)
 
 **详细解读**：红色 = 预测偏高（网络"凭空捏造"），蓝色 = 预测偏低（网络"丢失"），白色 = 匹配。三幅子图分别为方案 A、B、C 的残差。
 

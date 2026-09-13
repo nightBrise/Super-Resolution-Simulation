@@ -18,7 +18,7 @@
 - 退化协议：256 → 64 下采样（r=4，块求和）+ 高斯模糊（σ_K）+ 高斯噪声（σ_n），非负截断 `L = max(0, L_clean + n)`。
 - 坐标系：`z, δ ∈ [-1, 1]`，图像第 0 轴为 z、第 1 轴为 δ，像素中心采样（`src/generators/f_beam.py`）。
 
-**当前进度（详见 `progress.md`，Agent 自动维护）**：Spec 集已冻结（v1.0+2026-08-26）；M1（基础模拟函数）、M2（数据集生成 + G0 门禁）完成；**M3 执行中**（EXP-01 标定重跑：01a 三方案重训完成 → 01b σ_K 复评 → 01c/01d → G1(a) 判定）；M4–M6 未开始。硬件为 2× Quadro RTX 6000（24GB，Turing CC 7.5，**不支持 bf16**）。
+**当前进度（详见 `progress.md`，Agent 自动维护）**：line1 Spec 集（根级 `docs/specs/`，v1.0+2026-08-26）已随 **line1_substitute_sr 收官**（2026-09-12 出口决策定案「不进入下一阶段」，99 R187 登记）——M0–M6 全部完成。核心结论：主指标上先验增益未获跨种子稳健确认（A−B 等效（种子级）、A−C/B−C 种子敏感不可判定），次指标 ε_z 与预测离散度上方案 C 四种子一致占优（约为 A/B 的一半）。**line2 进展**：Phase 1 spec 集（`docs/specs/line2/` 00/10/20/30/40，**v1.0**，2026-09-14 冻结）已立——粒子级相空间超分（4D 六投影图像接口放大，本质 = 模拟加速），实验执行中（详见 `docs/research/line2_particle_sr.md` 与 progress.md）。硬件为 2× Quadro RTX 6000（24GB，Turing CC 7.5，**不支持 bf16**）。
 
 ---
 
@@ -151,11 +151,9 @@ python -m pytest -m "m1 or m2"                # 按里程碑绑定筛选
 python -m pytest -m slow                      # 长耗时（如网格收敛）
 ```
 
-**测试现状（2026-08-26 实测）**：共收集 219 个用例（unit 119 / integration 57 / smoke 2 / acceptance 41 / slow 2 / gpu 2），默认套件 43 个 deselected。`python -m pytest`（L0+L1）实测 **174 passed, 1 failed, 1 skipped**（124.6s）。
+**测试现状（2026-09-12 实测，line1 收官对账）**：默认套件收集 252 个用例（unit/integration 为主；smoke 2 / acceptance 41 / slow 2 / gpu 2 等按 marker 默认 deselected 43 个）。`python -m pytest`（L0+L1）实测 **209 passed, 0 failed, 0 skipped**（164s）——默认套件全绿。
 
-**已知失败（必须了解）**：`tests/integration/test_dataset_builder.py::test_manifest_triple_and_sections` 第 95 行断言 `manifest["code_version"] == "test"` ——该断言与 N4 修订（00 [S6] 约束 8 N4：`build_dataset` 一律以生成时 git HEAD 完整 40 位 hash 作为 code_version，忽略 config 中的旧值，commit 1fa3949/7344cf4）矛盾，属**过时测试未同步**，非实现缺陷。修复需按 05 [S6] C3 在 99 登记测试断言变更后改断言（如改为 `== git_head()` 且长度为 40）。修复前默认套件非全绿，推进里程碑前应先处置。
-
-**1 skipped**：`tests/integration/test_eval_pipeline.py:118`（旧格式产物缺失时跳过新字段契约检查，M3 重生成后自动生效）。
+**历史已知失败已修复**：`tests/integration/test_dataset_builder.py::test_manifest_triple_and_sections` 的过时断言（`code_version == "test"` 与 N4 修订矛盾）已按 99 行 154 登记的 05 [S6] C3 流程修复；`tests/acceptance/test_m2_dataset.py::test_manifest_triple` 的 spec_version 断言同批修复（99 行 166）。2026-09-12 全量实测两用例均通过，旧「1 failed / 1 skipped」状态不再存在。
 
 **测试纪律**（05 [S6]）：固定 `TEST_MASTER_SEED = 20260825`（`tests/conftest.py`），所有随机测试经 SeedSequence 派生，禁止裸随机调用；测试结果记录到 `studies/line1_substitute_sr/reports/test_reports/`；测试只断言协议/契约/不变量，**禁止断言研究结果**（如 `assert gain > 0`）。
 
@@ -173,11 +171,12 @@ python -m pytest -m slow                      # 长耗时（如网格收敛）
 ## 9. Spec 治理与 Agent 工作模式（00 [S9]/[S10]/[S13]/[S14]）
 
 - **Spec 是研究契约**：`docs/specs/00_master_spec.md` 是唯一全局入口（总纲、符号、里程碑、变更规则）；子 spec 编号 `00/10/20/.../99`（十位留空，可插入子模块），`99_change_log.md` 是活跃变更日志 + 未决问题清单。
+- **line2 spec 集**：`docs/specs/line2/`（00 总纲 + 10/20/30/40 + 99 变更日志；**v1.0，2026-09-14 冻结**）——line2 Phase 1 契约（图像接口放大：L1 数据管线 / L2 判据与 N_eff / L3b 训练 / L4+L5 实验矩阵）；变更走 line2 自己的 99，先记录后修改。line1 根级 00–99 冻结集不受影响。
 - **变更规则**：修改任何 spec 前必须先登记 `99` 为 `Proposed` → 批准 `Approved` → 修改 → `Implemented`；一次只改一个模块；**冻结 spec 在实现阶段不得修改**（触不可变核心 `00 [S10] 10.1` 属重大需求变更，走新 spec 流程）。
 - **不可变核心**（冻结后不得动）：研究问题与三方案框架、公平性约束、数据契约、评估判据与预注册阈值（τ=5%、触发率 20%、λ=1.0、主/次指标）。可修改细节（通道宽度、训练超参、标定取值等）走 99 普通变更流程并保持三方案一致。
 - **Agent 执行模式**（00 [S13]）：每阶段前完成 [S13.2] 必检（产物落盘、config 三元组、spec 通读、跨文档一致性、标定值、阶段报告、测试通过）；每阶段后按 [S13.3] 模板生成 `results/<EXP>/stage_report.md`（必含第 7 章"设计理由 Why"）并更新 `progress.md`；疑问按 [S14] 三级咨询（自主解决 → 更强模型/子 agent → 用户介入）。
 - **预授权变更类**（[S14.2]，agent 可自批准并登记 99 注明"预授权类"）：标定采用值登记、引用/笔误修正、模板默认值填充、不改判据本体的阈值落地。仍强制升级用户的：触不可变核心、研究方向、R2 二次修复、M6 出口决策。
-- **里程碑门禁**：M0（冻结，完成）→ M1（生成器 + AC，完成）→ M2（数据集 + G0，完成）→ M3（方案 A baseline + G1(a)，执行中）→ M4（主实验 + G2）→ M5（消融 + G3）→ M6（final_report + 出口决策）。前一里程碑未过不得进入下一里程碑。
+- **里程碑门禁**：M0（冻结）→ M1（生成器 + AC）→ M2（数据集 + G0）→ M3（方案 A baseline + G1(a)）→ M4（主实验 + G2）→ M5（消融 + G3）→ M6（final_report + 出口决策）——line1 七个里程碑全部完成并收官（2026-09-12 出口决策定案）；前一里程碑未过不得进入下一里程碑。
 
 ---
 
