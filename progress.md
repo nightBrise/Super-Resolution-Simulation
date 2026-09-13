@@ -9,7 +9,7 @@
 | **当前阶段** | 研究线收官（2026-09-12 出口决策定案：「不进入下一阶段」，用户确认） |
 | **当前任务** | line2 **Phase 1 五份 spec 已冻结（docs/specs/line2/ 00/10/20/30/40，v0.2.1 → v1.0，2026-09-14 用户批准；两轮审核 26+8 findings 全清零）**；进入执行：goal 模式派发循环 L1（数据管线）→ L2（判据）→ L3b（训练）→ L4/L5（实验矩阵），每 [Sn] 实现→commit→reviewer 验收，停止条件见 goal 目标 |
 | **进度** | M0–M6 全部完成；出口决策「不进入下一阶段」定案——分支树 (a) 阴性/等效合法终点（条件 1 等效/种子敏感、非显著负），分支 (b) 不触发（读法裁决随 99 R187 登记）；99 [S4] 未决问题表 7 条全部闭环；核心结论——主指标上先验增益未获跨种子稳健确认（A−B 等效（种子级）/ A−C、B−C 种子敏感不可判定），次指标 ε_z 与预测离散度上方案 C 四种子一致占优（约为 A/B 的一半），G3：A−B 通过、A−C/B−C 极端退化档反转（E 类如实报告） |
-| **下一步** | 与用户收敛 line2 关键设计（数据来源/分布不变判据操作化/输出语义）→ `docs/research/` 活大纲 → 立项；line1 产物与 spec 原样保留 |
+| **下一步** | goal 模式执行 Phase 1：L1 数据管线（前置：environment.yml 增 ocelot+sdds、.gitignore 白名单）→ L2 判据 → L3b 训练 → L4/L5 实验矩阵；运行环境 acc/sr-sim，不自创环境 |
 | **最近一次报告** | [`final_report.md`](docs/reports/line1_substitute_sr_final_report.md)（M6 最终报告，2026-08-30；2026-09-12 收官时修正 5 处图片相对链接）；[`studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md)（M5）；[`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md)（M4）|
 
 ## 阶段完成历史
@@ -36,7 +36,8 @@
 - [x] M4：主实验 + 先验增益判定（EXP-02 + G2）—— 12 run 训练 + 评估 + 4 种子聚合 + G2 重判 R1–R4 完成（A−B 等效（种子级）/ A−C、B−C 种子敏感不可判定）；99 行 184 登记
 - [x] M5：消融与归因（EXP-03/04/07/08 推理级 + G3 判定）—— A−B 不反转 G3 通过；A−C/B−C 方向反转 E 类如实报告；EXP-07 c_mid 有效；EXP-08 C 离散度最低；99 行 185 登记
 - [x] M6：最终报告 + 出口决策（final_report 完成 + N8 通过；出口决策 2026-09-12 用户定案「不进入下一阶段」，line1_substitute_sr 收官）
-- [ ] line2：4D 六投影一致超分立项（大纲 v0.3 `docs/research/line2_particle_sr.md`；F1/F2 已定案，真实 SDDS 锚点实测入档；F3–F7 讨论收敛后 → L1/L2 逐叶 write-spec——用户指示暂缓）
+- [x] line2 立项：4D 六投影一致超分（大纲 v0.8；五份 spec v1.0 冻结 2026-09-14，`docs/specs/line2/`）
+- [ ] line2 Phase 1 执行（goal 模式进行中）：L1 数据管线 → L2 判据 → L3b 训练 → L4/L5 实验矩阵
 
 ## Agent 工作守则（与 `00 [S13]` 同步）
 

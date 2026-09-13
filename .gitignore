@@ -73,6 +73,12 @@ archive/
 !studies/line1_substitute_sr/drafts/**
 !studies/line1_substitute_sr/results/assets/**
 
+# ----- line2 anchor（用户批准入库：spec line2/10 [S1]）-----
+!studies/line2_particle_sr/
+!studies/line2_particle_sr/data/
+!studies/line2_particle_sr/data/anchor/
+!studies/line2_particle_sr/data/anchor/injector.sdds
+
 # ----- Heavy artefacts that should never be committed -----
 *.ckpt
 *.pt

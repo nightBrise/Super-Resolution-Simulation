@@ -19,6 +19,12 @@ dependencies:
     - pytest>=8
     - pytest-xdist
     - pytest-timeout
+    # ----- line2_particle_sr（L1 前置，2026-09-14）-----
+    # 束流传输引擎：真实 Ocelot 不在 PyPI（PyPI "ocelot" 是同名天文包！），走 ocelot-collab GitHub
+    - git+https://github.com/ocelot-collab/ocelot.git@v26.06.1
+    # pylhc SDDS 工具（import 级依赖；其二进制列读取未实现——锚点解析由 src/line2 自实现，见 line2 99/decisions）
+    - sdds==0.4.3
+    - pandas        # ocelot v26 beam 模块依赖（兼容 numpy 1.26.4；pyfftw/numba 为可选加速，P1 线性传输不用）
 
 # 注：本环境即用户指定 llm conda 环境；缺失包用 `conda install` 或 `pip install` 补充；
 #     改动后请同步更新此文件并跑 `python scripts/check_env.py` 验证
