@@ -71,7 +71,8 @@ def _write_beam_group(
         edges = station_edges(table)  # 该站全量表定标（[S4] C1）
         target = six_projections(table, edges)
         ds = st.create_dataset(
-            "target_full", data=target, compression="gzip", compression_opts=4
+            "target_full", data=target, compression="gzip", compression_opts=4,
+            track_times=False,  # 逐字节确定性（[S5] C4 全文件 sha256 断言）
         )
         subs = subsample_index_set(table.shape[0], beam_idx, station_idx)
         for tier in SUBSAMPLE_TIERS:
@@ -82,7 +83,10 @@ def _write_beam_group(
                     data=img,
                     compression="gzip",
                     compression_opts=4,
+                    track_times=False,
                 )
+                dset.attrs["bin_edges"] = edges
+                dset.attrs["axes"] = np.array(AXES, dtype=h5py.string_dtype())
                 dset.attrs["bin_edges"] = edges
                 dset.attrs["axes"] = np.array(AXES, dtype=h5py.string_dtype())
         ds.attrs["bin_edges"] = edges
