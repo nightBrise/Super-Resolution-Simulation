@@ -130,14 +130,17 @@ def test_build_dataset_structure(tmp_path: pathlib.Path) -> None:
 
 
 def test_build_dataset_deterministic_and_traceable(tmp_path: pathlib.Path) -> None:
-    """[S5] C4/C5：两次独立构建逐位一致（端到端确定性）；四元组唯一定位。"""
+    """[S5] C4/C5：两次独立构建**全文件逐位一致**（sha256）；四元组唯一定位。"""
+    import hashlib
+
     anchor = _synthetic_table(100_001, seed=7)
     out_a = build_dataset(tmp_path / "a", anchor, n_beams=3, data_version="t_a")
     out_b = build_dataset(tmp_path / "b", anchor, n_beams=3, data_version="t_b")
     splits = beam_splits(3, master_seed=20260913)
     beam_id = int(splits["train"][0])
     path = f"beam_{beam_id:04d}/station0/tier_003000_sub_05"
-    with h5py.File(out_a / "train.h5", "r") as ha, h5py.File(out_b / "train.h5", "r") as hb:
-        np.testing.assert_array_equal(ha[path][...], hb[path][...])
+    for split in ("train", "val", "test"):
+        sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
+        assert sha(out_a / f"{split}.h5") == sha(out_b / f"{split}.h5")  # [S5] C4 全文件
     with h5py.File(out_a / "train.h5", "r") as ha:
         assert ha[path].shape == (6, N_BINS, N_BINS)

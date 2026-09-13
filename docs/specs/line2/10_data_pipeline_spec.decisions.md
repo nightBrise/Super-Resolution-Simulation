@@ -82,12 +82,20 @@
 **Spec section:** [S3] C1、C4
 **Status:** live
 
+## D11: [S3] C4 偏差记录——|Δcorr| ≥ 0.3 对束 0 失效（2026-09-14 实现期发现）
+**Phase:** implementation
+**Chosen:** 按冻结规则记为 deviation，不修改 spec；测试改为抖动束（1..5）断言 ≥ 0.3 + 束 0 偏差量级显式留痕（0.05 ≤ |Δcorr| < 0.3）
+**Rationale:** 冻结推导用 corr′ = ρ·cos(2φ) 近似，不含椭圆取向项（(σx²−σx′²)/2σxσx′ · sin2φ 项）；实测束 0（无抖动基准束，站 0 corr = 0.855）过 FODO（150°）后 |Δcorr| = 0.137 < 0.3。抖动束（1..5）实测全部 ≥ 0.3（束 7 达 1.55）——C4 的意图（站间统计差异存在，使跨站检验有内容）在交付束群上成立。
+**Not absorbed because:** 修改 C4 阈值/推导 = 修改冻结 Claim（停止条件），而偏差仅限特例束 0 且不损害 C4 意图——属 write-spec 规则的"单个 Claim 不可行 = 偏差"，由验收闸口裁决。
+**Spec section:** [S3] C4
+**Status:** live（待验收闸口裁决）
+
 ## Progress
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | — | — | pending |
-| [S2] | — | — | pending |
-| [S3] | — | — | pending |
-| [S4] | — | — | pending |
-| [S5] | — | — | pending |
+| [S1] | 9b6f451 | **L1 批次复审通过**（reviewer 2026-09-14：4/4 Claim 核验 + 证据复跑 17/17 与全量 226 passed 属实） | review passed |
+| [S2] | fc40c23 | **L1 批次复审通过**（4/4 Claim：无放回/⊂全量/确定性/互异） | review passed |
+| [S3] | fc40c23 | **L1 批次复审通过带偏差**（C4 束 0 例外——**D11 已裁决：接受偏差**，束 0 记已知例外，抖动束意图成立；另 D3 补实现记录：实算二分标定，薄透镜公式仅给初值/括号——良性细化非偏差） | review passed with deviation (D11 accepted) |
+| [S4] | 5c8e1f3 | **L1 批次复审通过**（4/4 Claim + 1 minor：图内轴向约定 docstring 已按复审要求在 L2 动工前修正） | review passed |
+| [S5] | 5c8e1f3 | **L1 批次复审通过**（5/5 Claim + 1 minor：[S5] C4 测试已补强为全文件 sha256） | review passed |

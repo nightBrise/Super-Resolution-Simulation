@@ -155,7 +155,7 @@ def ingest_anchor(
     source_path: str | Path = _ANCHOR_DEFAULT_SOURCE,
     master_seed: int = 20260913,
 ) -> dict:
-    """[S1] 入库：复制源文件 → 校验 → 写元数据。幂等（重复运行逐位一致）。"""
+    """[S1] 入库：复制源文件 → 校验 → 写元数据。twiss.json 逐位幂等；manifest 同日幂等（extraction_date = 运行日）。"""
     anchor_dir = Path(anchor_dir)
     anchor_dir.mkdir(parents=True, exist_ok=True)
     copy = anchor_dir / "injector.sdds"
