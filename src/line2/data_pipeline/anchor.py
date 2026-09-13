@@ -18,6 +18,7 @@ from .sdds_reader import read_sdds_binary
 __all__ = [
     "ANCHOR_MD5",
     "ANCHOR_SIZE",
+    "read_anchor_particles",
     "compute_twiss",
     "verify_anchor_copy",
     "ingest_anchor",
@@ -102,6 +103,14 @@ def compute_twiss(particles: np.ndarray) -> dict:
         "skew": skew,
         "kurtosis": kurt,
     }
+
+
+def read_anchor_particles(sdds_path: str | Path) -> np.ndarray:
+    """SDDS → (N, 6) 粒子表 (x, x′, y, y′, t, p)，float64。"""
+    page = read_sdds_binary(sdds_path)
+    return np.stack(
+        [page.columns[n] for n in ("x", "xp", "y", "yp", "t", "p")], axis=1
+    )
 
 
 def write_anchor_metadata(
