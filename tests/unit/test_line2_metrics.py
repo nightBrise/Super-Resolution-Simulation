@@ -110,6 +110,10 @@ def test_m4_sigma_recovery_and_errors() -> None:
     assert all(v == 0.0 for v in errors["diag_rel"])
     assert all(v == 0.0 for v in errors["abs_delta_rho"])
     assert errors["eps4d_rel"] == 0.0
+    # F1 修复：对角已知真值断言（抓对角互换/均值错位——ρ 断言对此不变）
+    truth = [0.04, 0.09, 0.04, 0.09]
+    for got, want in zip(np.diag(sigma_hat), truth):
+        assert abs(got - want) / want < 0.05, f"对角分量偏离真值：{got} vs {want}"
 
 
 def test_m4_independent_subsample_errors_bounded() -> None:

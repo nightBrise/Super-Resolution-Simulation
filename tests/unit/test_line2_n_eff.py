@@ -30,8 +30,10 @@ def curve(small_dataset: pathlib.Path):
     return curve
 
 
-def test_curve_structure(small_dataset: pathlib.Path, curve) -> None:
+def test_curve_structure(small_dataset: pathlib.Path, curve, tmp_path: pathlib.Path) -> None:
     """[S2] C1/C2：五档齐全、中位数>0、互差地板>0、原始值落盘、参照噪声地板>0。"""
+    import json as _json
+
     assert [p.n_low for p in curve.points] == [1_000, 3_000, 10_000, 30_000, 100_000]
     for p in curve.points:
         assert p.median > 0 and p.iqr_lo > 0 and p.iqr_hi > 0
@@ -39,6 +41,12 @@ def test_curve_structure(small_dataset: pathlib.Path, curve) -> None:
         assert p.iqr_lo <= p.median <= p.iqr_hi
     assert all(v > 0 for v in curve.mutual_floor.values())
     assert curve.reference_noise_floor > 0
+    # F3：原始逐样本值落盘
+    dump = tmp_path / "curve.json"
+    error_n_curve(small_dataset, beam_ids=list(range(4)), dump=dump)
+    payload = _json.loads(dump.read_text(encoding="utf-8"))
+    assert set(payload["raw_samples"]) == {"1000", "3000", "10000", "30000", "100000"}
+    assert len(payload["raw_samples"]["10000"]) == 4 * 2 * 20
 
 
 def test_n_eff_identity(small_dataset: pathlib.Path, curve) -> None:

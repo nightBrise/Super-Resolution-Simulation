@@ -6,8 +6,7 @@
   调用方无归一入口；M6 为比值型，不需归一。
 - 参照 r = 同束同站 2e5 全量直方图。
 - 图组：int/float (6, 128, 128)，通道顺序 = `00` [S1] 六投影枚举；
-  **图内轴向**：axis 0 = 投影对后一坐标 bin，axis 1 = 前一坐标 bin
-  （projections.py v0.2.1 docstring；M4 重构 Σ 时按此转置回 (x,x′,y,y′) 序）。
+  **图内轴向（实测约定，2026-09-14 复审钉死）**：axis 0 = 投影对**前一坐标** bin，axis 1 = 后一坐标 bin（projections.py 同步；M4/M5/B-moment 均按此实现，无转置）。
 """
 
 from __future__ import annotations
@@ -93,12 +92,6 @@ def poisson_deviance(x: np.ndarray, r: np.ndarray) -> float:
         cross = np.where(c > 0, c * np.log(c / np.maximum(mu, _EPS)), 0.0)
     term = cross - c + mu
     return float(2.0 * term.sum())
-
-
-def _project_marginals(img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """归一化边缘分布（axis0 = 前一坐标，axis1 = 后一坐标——实现约定，见模块 docstring）。"""
-    total = img.sum()
-    return img.sum(axis=1) / total, img.sum(axis=0) / total
 
 
 def reconstruct_sigma(group: np.ndarray, edges: np.ndarray) -> np.ndarray:

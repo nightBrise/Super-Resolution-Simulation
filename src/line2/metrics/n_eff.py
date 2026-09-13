@@ -73,6 +73,7 @@ def error_n_curve(
     stations: tuple[int, ...] = (0, 1),
     tiers: tuple[int, ...] = _CURVE_TIERS,
     k: int = 20,
+    dump: str | Path | None = None,
 ) -> CurveResult:
     """[S2] 裸误差–N 曲线（默认门禁口径 = val+test 束；train 束诊断曲线另行传 beam_ids）。"""
     manifest, data_dir = _dataset_layout(data_dir)
@@ -110,7 +111,25 @@ def error_n_curve(
         q_lo, q_hi = np.percentile(vals, [25, 75])
         points.append(CurvePoint(tier, med, float(q_lo), float(q_hi), len(vals)))
     noise_floor = float(np.median(pair_m1[100_000]) / np.sqrt(2.0)) if pair_m1[100_000] else float("nan")
-    return CurveResult(points, {t: float(np.median(v)) for t, v in pair_m1.items()}, noise_floor, samples)
+    curve_result = CurveResult(
+        points, {t: float(np.median(v)) for t, v in pair_m1.items()}, noise_floor, samples
+    )
+    if dump is not None:
+        payload = {
+            "tiers": list(tiers),
+            "k": k,
+            "beam_ids": [int(b) for b in beam_ids],
+            "points": [
+                {"n_low": p.n_low, "median": p.median, "iqr_lo": p.iqr_lo,
+                 "iqr_hi": p.iqr_hi, "n_samples": p.n_samples}
+                for p in curve_result.points
+            ],
+            "mutual_floor": {str(t): v for t, v in curve_result.mutual_floor.items()},
+            "reference_noise_floor": curve_result.reference_noise_floor,
+            "raw_samples": {str(t): v for t, v in curve_result.raw_samples.items()},
+        }
+        Path(dump).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return curve_result
 
 
 def reference_noise_floor(curve: CurveResult) -> float:
