@@ -51,6 +51,11 @@ def rel_rmse(x: np.ndarray, r: np.ndarray) -> float:
     return float(np.sqrt(np.mean((xt - r.astype(np.float64)) ** 2)) / np.mean(r))
 
 
+def group_rel_rmse(group: np.ndarray, r: np.ndarray) -> float:
+    """M1 图组级：六投影各算相对 RMSE 后取平均（spec [S1] M1"六投影各算后取平均"）。"""
+    return float(np.mean([rel_rmse(group[gi], r[gi]) for gi in range(group.shape[0])]))
+
+
 def bucketed_rel_rmse(x: np.ndarray, r: np.ndarray) -> dict:
     """M2：按参照计数分桶的相对 RMSE。
 
