@@ -129,6 +129,15 @@ def run_one_train(
     configs_dir: Path, results_dir: Path, data_dir: Path, run_id: str, gpu: int, force: bool
 ) -> dict:
     """跑一个训练 run，逐阶段落 `run_meta.json`；返回其内容。"""
+    configs_dir = Path(configs_dir)
+    if not configs_dir.is_absolute():
+        configs_dir = REPO / configs_dir
+    results_dir = Path(results_dir)
+    if not results_dir.is_absolute():
+        results_dir = REPO / results_dir
+    data_dir = Path(data_dir)
+    if not data_dir.is_absolute():
+        data_dir = REPO / data_dir
     cfg_path = configs_dir / f"{run_id}.json"
     if not cfg_path.is_file():
         raise FileNotFoundError(f"config 不存在：{cfg_path}")
