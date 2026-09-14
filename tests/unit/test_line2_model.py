@@ -99,6 +99,16 @@ def _group(table: np.ndarray, edges_np: np.ndarray, batch: int = 1) -> torch.Ten
     return torch.from_numpy(counts).unsqueeze(0).repeat(batch, 1, 1, 1)
 
 
+def _subsample(table: np.ndarray, n: int, offset: int = 0) -> np.ndarray:
+    """站级全量表 → n 粒子无放回子样本（`10` [S2] C2：子样本 ⊂ 全量表）。
+
+    等距步进取样、`offset` 区分不同实现，故子样本必然落在站级 edges 之内——
+    这是 `six_projections` 零截断守卫（`10` [S4] C1）所要求的前置条件。
+    """
+    step = max(1, table.shape[0] // n)
+    return table[offset::step][:n]
+
+
 def _centers(edges: torch.Tensor) -> np.ndarray:
     """(4,129) 边界 → (4,128) bin 中心（float64，供解析构造图组）。"""
     e = edges.numpy().astype(np.float64)
@@ -389,11 +399,13 @@ def test_conditioning_and_output_invariant_to_target() -> None:
     joint = _small_net().eval()
     ensemble = _small_ensemble().eval()
     device = torch.device("cpu")
-    hi_table = _particle_table(41, n=20_000)
-    edges_np, edges = _station_edges(hi_table)
-    counts = _group(_particle_table(42), edges_np, batch=2)
-    target_a = _group(hi_table, edges_np, batch=2)
-    target_b = _group(_particle_table(43, n=20_000), edges_np, batch=2)
+    station = _particle_table(41, n=60_000)
+    edges_np, edges = _station_edges(station)
+    # 输入与两个目标都取自同一站级全量表的互斥子样本（A ⊂ B，`10` [S2] C2）——
+    # 满足 six_projections 零截断守卫的前置，同时保持"同一输入、两个不同目标"的语义
+    counts = _group(_subsample(station, 8_000, offset=0), edges_np, batch=2)
+    target_a = _group(_subsample(station, 20_000, offset=1), edges_np, batch=2)
+    target_b = _group(_subsample(station, 20_000, offset=2), edges_np, batch=2)
     assert not torch.equal(target_a, target_b), "两个目标图组必须真的不同"
     assert bool((target_a >= 0).all()) and bool((target_b >= 0).all())
 
@@ -411,8 +423,8 @@ def test_conditioning_and_output_invariant_to_target() -> None:
     assert torch.equal(condition_vector(counts, edges), kappa_before)
     assert torch.equal(counts, counts_before), "前向路径就地改写了输入计数图组"
 
-    # 正向对照：换输入（同 edges）⇒ κ 变、两变体输出均变
-    counts_other = _group(_particle_table(44), edges_np, batch=2)
+    # 正向对照：换输入（同 edges、同站级全量表内的另一子样本）⇒ κ 变、两变体输出均变
+    counts_other = _group(_subsample(station, 8_000, offset=3), edges_np, batch=2)
     assert not torch.equal(
         condition_vector(counts, edges), condition_vector(counts_other, edges)
     ), "κ 未随输入图组变化——防泄露断言失去意义"
