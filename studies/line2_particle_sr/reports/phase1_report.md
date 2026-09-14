@@ -2,8 +2,8 @@
 
 > Spec：`docs/specs/line2/40_experiment_spec.md`（Frozen v1.0）[S4] 产出物；判据与 N_eff 见 `20`，模型与训练见 `30`，总纲与全局约束见 `00`。
 > 生成方式：`python -m src.line2.experiments.map_report --results-dir <dir>`（只读；同输入逐位一致，[S4] C1）。
-> 输入产物：`e0_curve.json`、`e1_gates.json`、15 份 `*/test_eval*.json`、10 份 `*/run_meta.json`。
-> 代码版本：a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015｜数据版本：line2_ds_v1｜spec 版本：line2-spec-v1.0（`00` GC7）
+> 输入产物：`e0_curve.json`、`e1_gates.json`、15 份 `*/test_eval*.json`、12 份 `*/run_meta.json`。
+> 门禁产物 code_version：148604dc9f658684f0fa5e828d35de199301ab60（产生 `e1_gates.json` 的判定代码版本；`00` GC7 要求的每个 run 的三元组见 §1.2）｜数据版本：line2_ds_v1｜spec 版本：line2-spec-v1.0
 > 配套产出物：地图 `studies/line2_particle_sr/reports/figure_avail_domain.png`、N_eff 表 `studies/line2_particle_sr/results/n_eff_table.csv`。
 
 ## 1. 数据
@@ -48,6 +48,8 @@
 | e1_joint_s2 | line2_ds_v1 | 3cb412bb68265102ec80c76d864a75902dc545f1 | line2-spec-v1.0 | joint | 102 | 10000 | 50000 |
 | e1_joint_s3 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 103 | 10000 | 50000 |
 | e1_joint_s4 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 104 | 10000 | 50000 |
+| e2_joint_n3000_s0 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 100 | 3000 | 50000 |
+| e2_joint_n3000_s3 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 103 | 3000 | 50000 |
 
 ## 2. 设置
 
@@ -84,7 +86,7 @@
 ### 2.3 尺子先行审计（`40` [S1] C5）
 
 - E0 completed_at：2026-09-14T04:11:22.933516+00:00
-- 已核验 run 数：10（全部 started_at 晚于 E0 completed_at）
+- 已核验 run 数：12（全部 started_at 晚于 E0 completed_at）
 
 | run_id | started_at |
 |---|---|
@@ -98,6 +100,8 @@
 | e1_joint_s2 | 2026-09-14T09:20:30.810315+00:00 |
 | e1_joint_s3 | 2026-09-14T10:47:18.931852+00:00 |
 | e1_joint_s4 | 2026-09-14T12:17:37.368205+00:00 |
+| e2_joint_n3000_s0 | 2026-09-14T16:10:45.357370+00:00 |
+| e2_joint_n3000_s3 | 2026-09-14T16:10:45.365345+00:00 |
 
 ### 2.4 run 清单（test 段评估，`00` GC3：只评一次）
 
@@ -143,7 +147,7 @@
 | e1_joint_s3 | joint | 103 | 10000 | 1 | test | 100000 | overflow | 0.208691 | 150 |
 | e1_joint_s4 | joint | 104 | 10000 | 1 | test | 100000 | overflow | 0.236336 | 150 |
 
-### 3.2 主曲线三点（方法可用域地图面板 A 的数值）
+### 3.2 主曲线聚合（N_low = 1e4；方法可用域地图面板 A 的数值）
 
 放大比 = N_eff / N_low；N_eff 取 `20` [S3] 报告域 [1e3, 1e5]，上/下溢行以域端点计入并在表中计数（图内以空心叉号标注）。
 
@@ -165,7 +169,9 @@
 
 ## 4. 失败模式与不可验证项
 
-- 10/10 个 run 目录缺 `config.json`（`40` [S1] C2 契约文件）：e1_indep_s0, e1_indep_s1, e1_indep_s2, e1_indep_s3, e1_indep_s4, e1_joint_s0, e1_joint_s1, e1_joint_s2, e1_joint_s3, e1_joint_s4
+- 12/12 个 run 目录缺 `config.yaml`（`40` [S1] C2 契约文件）：e1_indep_s0, e1_indep_s1, e1_indep_s2, e1_indep_s3, e1_indep_s4, e1_joint_s0, e1_joint_s1, e1_joint_s2, e1_joint_s3, e1_joint_s4, e2_joint_n3000_s0, e2_joint_n3000_s3——配置实由 `docs/specs/line2/e1_configs/*.json` 冻结副本与 `run_meta.json` 的 `config`/`cmd` 字段承载；该缺口登记于 `40` 的 decisions，本报告只披露、不补写产物。
+- 2/12 个 run 目录缺 `last.ckpt`（`40` [S1] C2 契约文件）：e2_joint_n3000_s0, e2_joint_n3000_s3
+- 2/12 个 run 目录缺 `summary.json`（`40` [S1] C2 契约文件）：e2_joint_n3000_s0, e2_joint_n3000_s3
 - H7：n_eff_flag_present（判定降级为 不可判定）。
 - 15 行 N_eff 触及报告域端点（上溢 15 / 下溢 0）——放大比在端点处为截断值，只声明达到域顶/域底，不可外推（`20` [S3] C2）。
 
@@ -278,7 +284,8 @@
 | beam_ids | 2, 13, 21, 24, 25, 41, 42, 46, 54, 55, 56, 67, 70, 88, 96, 105, 113, 114, 134, 157, 184, 186, 190, 193, 197, 208, 213, 219, 220, 223, 224, 235, 241, 242, 244, 245, 247, 253, 264, 283, 285, 287, 292, 296, 299, 303, 324, 328, 343, 360, 370, 379, 387, 396, 404, 406, 411, 416, 424, 425, 427, 428, 429, 430, 446, 454, 459, 460, 467, 492, 493, 500, 502, 503, 506, 510, 511, 522, 530, 533, 534, 540, 559, 564, 567, 569, 578, 582, 590, 597, 601, 611, 615, 616, 629, 630, 632, 636, 645, 649, 650, 651, 666, 670, 680, 682, 691, 696, 701, 705, 725, 728, 731, 733, 743, 752, 759, 787, 807, 815, 828, 835, 840, 843, 844, 848, 850, 859, 863, 870, 874, 875, 877, 879, 881, 884, 890, 929, 940, 942, 946, 947, 950, 956, 957, 973, 980, 982, 987, 993 |
 | seeds | 100, 101, 102, 103, 104 |
 | n_seeds | 5 |
-| tolerance | /home/zhangny/Super-Resolution-Simulation/studies/line2_particle_sr/results/tolerance.json |
+| tolerance | studies/line2_particle_sr/results/tolerance.json |
+| 容差档映射 | 1e5（每束 N_eff 中位数最近档，`20` [S4]；档位分布 1e5×150） |
 | variant | joint |
 
 逐观测量达标明细（13 项，`20` [S4]）：
@@ -624,7 +631,7 @@
 
 - 选择：`map_report` 单独成模块，只消费 `gates.py`/`evaluate.py`/`e0.py` 的落盘产物。
 - 备选：把图表与报告塞进 `evaluate_gates_from_disk`——被否，门禁的职责是判定（`40` [S3] C1 要求同输入逐位一致的可复算判定），产出物是判定的呈现层；混在一起会让"改报告格式"变成"改门禁"，也让 [S3] C2 的"只消费落盘 summary"边界模糊。
-- 取舍依据：[S4] Global Constraints 要求产出物脚本只读；分层后门禁可独立复算，报告可反复重生成而不触碰判定。
+- 取舍依据：`40` Global Constraints 要求产出物脚本只读；分层后门禁可独立复算，报告可反复重生成而不触碰判定。
 
 ### 7.2 为什么报告不写生成时间戳与当次 git HEAD
 
@@ -653,8 +660,8 @@
 ### 7.6 为什么顺序审计（`40` [S1] C5）在证据缺失时判"不可验证"而不判通过
 
 - 选择：证据齐全且存在 run 的 started_at ≤ E0 completed_at → 抛错；证据缺失 → verifiable=False，第 4 章显式登记。
-- 备选：证据缺失时默认通过——被否，那等于把"没记录"读成"守规矩"，与 D8"顺序约束不编码就会在执行中被跳过"的立意相反。
-- 取舍依据：与门禁的"不可判定"一等地位一致（D4）：缺证据是一种结论，不是通过。违例则必须中断——尺子后行的批次其 N_eff 无定义基底，继续生成报告等于把无效矩阵包装成交付物。
+- 备选：证据缺失时默认通过——被否，那等于把"没记录"读成"守规矩"，与 `40` D8"顺序约束不编码就会在执行中被跳过"的立意相反。
+- 取舍依据：与门禁的"不可判定"一等地位一致（`40` D4）：缺证据是一种结论，不是通过。违例则必须中断——尺子后行的批次其 N_eff 无定义基底，继续生成报告等于把无效矩阵包装成交付物。
 
 ### 7.7 为什么图内标签用英文而报告正文用中文
 
