@@ -17,6 +17,8 @@ from torch import nn
 
 from src.models.unet import UNetBackbone
 
+N_BINS = 128
+
 __all__ = ["SingleProjNet", "IndependentEnsemble", "proj_condition", "PROJ_PAIRS"]
 
 PROJ_PAIRS: tuple[tuple[str, str], ...] = (
@@ -99,15 +101,18 @@ class IndependentEnsemble(nn.Module):
             edges = edges.unsqueeze(0).expand(b, -1, -1)
         if not torch.is_tensor(log_n_low):
             log_n_low = torch.full((b,), float(log_n_low), dtype=shape_maps.dtype)
+        axis_of = {"x": 0, "xp": 1, "y": 2, "yp": 3}
         per_proj: list[torch.Tensor] = []
         for gi, (ai, aj) in enumerate(PROJ_PAIRS):
+            ii, jj = axis_of[ai], axis_of[aj]
             per_beam: list[torch.Tensor] = []
             for bi in range(b):
-                centers_i = 0.5 * (edges[bi, ai][:-1] + edges[bi, ai][1:])
-                centers_j = 0.5 * (edges[bi, aj][:-1] + edges[bi, aj][1:])
+                centers_i = 0.5 * (edges[bi, ii][:-1] + edges[bi, ii][1:])
+                centers_j = 0.5 * (edges[bi, jj][:-1] + edges[bi, jj][1:])
                 kappa = proj_condition(
                     shape_maps[bi, gi], centers_i, centers_j, float(log_n_low[bi])
-                ).to(shape_maps.dtype).unsqueeze(0)
-                per_beam.append(self.nets[gi](shape_maps[bi, gi].unsqueeze(0).unsqueeze(0), kappa)[0])
-            per_proj.append(torch.stack(per_beam, dim=0))
-        return torch.cat([p.unsqueeze(1) for p in per_proj], dim=1)  # (B, 6, H, W)
+                ).to(shape_maps.dtype)
+                out_b = self.nets[gi](shape_maps[bi, gi].reshape(1, 1, N_BINS, N_BINS), kappa.reshape(1, -1))
+                per_beam.append(out_b[0, 0])  # (128, 128)
+            per_proj.append(torch.stack(per_beam, dim=0))  # (B, 128, 128)
+        return torch.stack(per_proj, dim=1)  # (B, 6, 128, 128)
