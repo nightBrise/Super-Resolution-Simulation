@@ -504,11 +504,13 @@ def test_evaluate_h7_undecidable_when_ratio_undefined() -> None:
 def _write_run(results_dir: pathlib.Path, run_id: str, variant: str, seed: int,
                n_eff: float, val_n_eff: float, station: int = 0, n_low: int = N_LOW,
                split: str = "test", obs: float = 0.4,
-               beam_ids: tuple[int, ...] = (1, 2, 3), eval_name: str = "test_eval.json") -> None:
+               beam_ids: tuple[int, ...] = (1, 2, 3), eval_name: str = "test_eval.json",
+               flag: str | None = None) -> None:
+    """假 run 目录（`40` [S1] C2）。``flag`` 非 None 时按 `20` [S3] C2 的端点语义写标记。"""
     run_dir = results_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     per_beam = [
-        {"beam_id": b, "err": 1.0, "n_eff": n_eff, "n_eff_flag": None,
+        {"beam_id": b, "err": 1.0, "n_eff": n_eff, "n_eff_flag": flag,
          "obs": [obs] * N_OBSERVABLES, "n_eff_median": n_eff}
         for b in beam_ids
     ]
@@ -518,7 +520,7 @@ def _write_run(results_dir: pathlib.Path, run_id: str, variant: str, seed: int,
         "curve": {"path": "e0_curve.json", "beams_scope": "valtest",
                   "reference_noise_floor": 0.28},
         "n_beams": len(beam_ids), "n_groups": 2 * len(beam_ids),
-        "err_median": 1.0, "n_eff": n_eff, "n_eff_flag": None,
+        "err_median": 1.0, "n_eff": n_eff, "n_eff_flag": flag,
         "per_beam": per_beam, "code_version": "0" * 40,
     }
     (run_dir / eval_name).write_text(json.dumps(payload), encoding="utf-8")
@@ -603,6 +605,9 @@ def test_evaluate_gates_from_disk_verdicts_and_two_segment_boundary(
     assert out["H7"]["variant"] == "independent"
     assert out["H7"]["verdict"] == "成立" and out["H7"]["weak"] is True
     assert out["H7"]["rho"] == pytest.approx(2.0 / 3.0)
+    assert out["H7"]["rho_median"] == pytest.approx(2.0 / 3.0)   # 同值，聚合语义名
+    assert out["H7"]["flagged_seeds"] == {}                      # 无标记 → 无降级
+    assert "reason_code" not in out["H7"]
     # H8 = 获胜变体的种子中位数偏差 (0.4) 对容差 (0.5) → 全达标
     assert out["H8"]["verdict"] == "成立" and out["H8"]["pass_rate"] == 1.0
     assert out["H8"]["n_beams"] == 3 and out["H8"]["beam_ids"] == [1, 2, 3]
@@ -623,6 +628,93 @@ def test_evaluate_gates_from_disk_verdicts_and_two_segment_boundary(
     # test 段消费面只列 test 产物（站 0 进门禁、站 1 进 H7）
     assert len(out["test_segment"]["gate_inputs"]) == 10
     assert len(out["test_segment"]["cross_station_inputs"]) == 2
+
+
+# ------------------------------------------- H7 聚合条目（`40` [S2] 聚合落地）
+def _h7_results(tmp_path: pathlib.Path, *, s0: dict[int, tuple[float, str | None]],
+                s1: dict[int, tuple[float, str | None]]) -> pathlib.Path:
+    """H7 聚合用例的最小 results：E1 两臂站 0（种子的 n_eff, flag）+ 获胜臂的站 1。
+
+    val 段给独立臂更高 N_eff ⇒ 路由出 ``winner_variant="independent"``，H7 只消费该臂的
+    站 0 与站 1 评估；``flag`` 非 None 的行按 `20` [S3] C2 取报告域端点值。
+    """
+    results = tmp_path / "results"
+    results.mkdir(parents=True)
+    _write_curve_and_tolerance(results)
+    for seed, (n_eff, flag) in sorted(s0.items()):
+        _write_run(results, f"e1_indep_s{seed - 100}", "independent", seed, n_eff, 20_000.0,
+                   flag=flag)
+        _write_run(results, f"e1_joint_s{seed - 100}", "joint", seed, 10_000.0, 5_000.0)
+    for seed, (n_eff, flag) in sorted(s1.items()):
+        _write_run(results, f"e3_indep_s{seed - 100}_st1", "independent", seed, n_eff, 20_000.0,
+                   station=1, eval_name="test_eval_station1.json", flag=flag)
+    return results
+
+
+def test_h7_aggregate_classifies_when_no_seed_is_flagged(tmp_path: pathlib.Path) -> None:
+    """`40` [S2]（聚合落地）：5 个种子全无标记 → 聚合按 ρ 中位数正常三分类。
+
+    鉴别力：本用例防的是**新检查误触发**（无标记不得降级、不得凭空写 reason_code）；
+    旧聚合实现同样通过。
+    """
+    results = _h7_results(
+        tmp_path,
+        s0={s: (40_000.0, None) for s in range(100, 105)},
+        s1={s: (50_000.0, None) for s in range(100, 105)},
+    )
+    h7 = evaluate_gates_from_disk(results)["H7"]
+    assert h7["n_seeds"] == 5 and h7["n_eff_station0_median"] == 40_000.0
+    assert h7["n_eff_station1_median"] == 50_000.0
+    assert h7["verdict"] == "成立" and h7["weak"] is False
+    assert h7["rho_median"] == pytest.approx(1.25)   # 中位数之比，非逐种子 ρ 的中位数
+    assert h7["flagged_seeds"] == {}
+    assert "reason_code" not in h7
+    assert h7["per_seed"]["100"]["verdict"] == "成立"
+
+
+def test_h7_aggregate_indeterminate_when_any_seed_is_flagged(tmp_path: pathlib.Path) -> None:
+    """`40` [S2]（聚合落地）：仅 1/5 种子在站 1 带上溢标记 ⇒ 聚合同样判不可判定。
+
+    依据：`20` [S3] 的上溢语义 = 达到可验证域顶、真值不可辨识；汇总把被截断的端点与实测
+    值混在一份中位数里，故聚合不得据此下结论。`rho_median` 仍披露（该种子未改动中位数，
+    故仍是 4e4/4e4 = 1.0），被标记种子以 (seed → 站 0/站 1 flag) 落盘。
+    鉴别力：旧聚合只看中位数（ρ = 1.0 ≥ 1.0）⇒ 报"成立"，本用例断言"不可判定"。
+    """
+    s1 = {s: (40_000.0, None) for s in range(100, 104)}
+    s1[104] = (100_000.0, "overflow")     # `20` [S3] C2：上溢取域顶 + 显式标记
+    results = _h7_results(
+        tmp_path,
+        s0={s: (40_000.0, None) for s in range(100, 105)},
+        s1=s1,
+    )
+    h7 = evaluate_gates_from_disk(results)["H7"]
+    assert h7["verdict"] == "不可判定" and h7["verdict"] in LEGAL_VERDICTS
+    assert h7["reason_code"] == "n_eff_flag_present"
+    assert h7["rho_median"] == pytest.approx(1.0) and h7["rho"] == pytest.approx(1.0)
+    assert h7["weak"] is False and h7["decay"] is None
+    assert h7["flagged_seeds"] == {"104": {"station0": None, "station1": "overflow"}}
+    assert h7["per_seed"]["104"]["verdict"] == "不可判定"      # 逐种子与聚合口径一致
+    assert h7["per_seed"]["100"]["verdict"] == "成立"          # 未标记的种子不受牵连
+
+
+def test_h7_aggregate_indeterminate_when_all_seeds_overflow(tmp_path: pathlib.Path) -> None:
+    """`40` [S2]（聚合落地）：5 种子在站 0/站 1 双上溢 ⇒ 不可判定，ρ 仍披露。
+
+    域顶两侧的 ρ 恒为 1，会被读成"跨站无衰减"；而域顶只声明"达到 1e4 工况的 10× 可验证
+    上限"（`20` [S1]/[S3]），不是实测放大。鉴别力：旧聚合把这对端点值当普通数值 ⇒ 报
+    "成立"并给出 rho=1.0；新口径判不可判定、rho_median 仅作披露。
+    """
+    both = {s: (100_000.0, "overflow") for s in range(100, 105)}
+    results = _h7_results(tmp_path, s0=both, s1=both)
+    h7 = evaluate_gates_from_disk(results)["H7"]
+    assert h7["verdict"] == "不可判定"
+    assert h7["reason_code"] == "n_eff_flag_present"
+    assert h7["rho_median"] == pytest.approx(1.0)
+    assert h7["flagged_seeds"] == {
+        str(s): {"station0": "overflow", "station1": "overflow"} for s in range(100, 105)
+    }
+    assert h7["per_seed"]["100"]["rho"] == pytest.approx(1.0)
+    assert h7["per_seed"]["100"]["verdict"] == "不可判定"
 
 
 def test_evaluate_gates_from_disk_bitwise_reproducible(fake_results: pathlib.Path) -> None:

@@ -610,14 +610,16 @@ def test_report_discloses_h7_overflow_indeterminacy(fake_products: Path, tmp_pat
     """`40` [S2]/[S4] C2：H7 因上/下溢判不可判定时，报告按 spec 原文披露该事实。
 
     报告的判定表达式必须写 [S2] 的条款（含"标记使 ρ 无法计算 → 不可判定"），而不是
-    实现口径；逐种子表要能看到标记来自哪一侧、ρ 是多少（截断值之比仅作披露）。
+    实现口径；聚合条目的降级原因与中位数比值（`rho_median`）都要进快照表，逐种子表要能
+    看到标记来自哪一侧、ρ 是多少（截断值之比仅作披露）。
     """
     path = fake_products / "e1_gates.json"
     gates = json.loads(path.read_text(encoding="utf-8"))
     gates["H7"] = {
-        "verdict": "不可判定", "rho": 1.0, "weak": False, "decay": None,
+        "verdict": "不可判定", "rho": 1.0, "rho_median": 1.0, "weak": False, "decay": None,
         "variant": "joint", "n_seeds": 1, "aggregation": "seed_median_then_ratio",
         "thresholds": {"strong": 1.0, "weak": 0.5}, "reason_code": "n_eff_flag_present",
+        "flagged_seeds": {"0": {"station0": "underflow", "station1": "underflow"}},
         "per_seed": {"0": {
             "verdict": "不可判定", "rho": 1.0, "weak": False, "decay": None,
             "reason_code": "n_eff_flag_present", "n_eff_station0": 1000.0,
@@ -628,9 +630,12 @@ def test_report_discloses_h7_overflow_indeterminacy(fake_products: Path, tmp_pat
     out = generate(fake_products, out_dir=tmp_path / "out", reports_dir=tmp_path / "reports")
     text = out["report"].read_text(encoding="utf-8")
     assert "N_eff 触发上/下溢标记使 ρ 无法计算 ⟺ 不可判定" in text
-    assert "| reason_code | n_eff_flag_present |" in text
+    assert "| reason_code | n_eff_flag_present |" in text      # 聚合条目的降级原因
+    assert "| rho_median | 1 |" in text                        # 聚合比值（同值只渲染这一行）
+    assert "| rho | 1 |" not in text
     assert "| 0 | 1 | 不可判定 | n_eff_flag_present | underflow | underflow | 1000 | 1000 |" in text
-    assert "1/1 个种子任一侧携带标记（0）" in text
+    assert "1/1 个种子任一侧携带标记（0=station0=underflow, station1=underflow）" in text
+    assert "聚合条目因此同样判不可判定" in text
 
 
 def test_generate_raises_when_e0_order_violated(fake_products: Path, tmp_path: Path) -> None:

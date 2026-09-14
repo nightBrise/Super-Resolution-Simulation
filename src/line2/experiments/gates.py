@@ -264,6 +264,11 @@ def _coerce_n_eff(value: object) -> tuple[float | None, str | None]:
     return float(value), flag
 
 
+def _n_eff_flag(value: object) -> str | None:
+    """落盘 N_eff 条目的上/下溢标记（无标记 → None）。"""
+    return _coerce_n_eff(value)[1]
+
+
 def evaluate_h7_cross_station(n_eff_s0: object, n_eff_s1: object) -> dict:
     """H7（`40` [S2]）：ρ = N_eff(站1)/N_eff(站0) 对预注册边界 {1.0, 0.5} 的三分类。
 
@@ -600,27 +605,49 @@ def evaluate_gates_from_disk(
         }
         s0 = [float(winner_runs[s]["n_eff"]) for s in h7_seeds]
         s1 = [float(cross_by_seed[s]["n_eff"]) for s in h7_seeds]
-        overall = evaluate_h7_cross_station(
-            float(np.median(np.asarray(s0, dtype=np.float64))),
-            float(np.median(np.asarray(s1, dtype=np.float64))),
-        )
+        median0 = float(np.median(np.asarray(s0, dtype=np.float64)))
+        median1 = float(np.median(np.asarray(s1, dtype=np.float64)))
+        overall = evaluate_h7_cross_station(median0, median1)
+        # `40` [S2] 的判据以"同一 ckpt 应用于站 0 与站 1 的比值"为对象；聚合只是把同一测量的
+        # 多个种子汇总（`20` [S4] 口径），故**任一参与聚合的种子在任一站被域端点截断**时，
+        # 汇总出的中位数同样不得下结论——`20` [S3] 的上溢语义是"达到可验证域顶、真值不可
+        # 辨识"，它不是实测值。检查优先级：标记在前、ρ 无定义在后（ρ 无定义时
+        # ``rho_median`` 为 None，结论来源仍是标记）。
+        flagged_seeds = {
+            str(s): {
+                "station0": _n_eff_flag(winner_runs[s]),
+                "station1": _n_eff_flag(cross_by_seed[s]),
+            }
+            for s in h7_seeds
+            if _n_eff_flag(winner_runs[s]) is not None or _n_eff_flag(cross_by_seed[s]) is not None
+        }
         h7: dict = {
-            "verdict": overall["verdict"], "rho": overall["rho"], "weak": overall["weak"],
-            "decay": overall["decay"], "variant": winner, "n_seeds": len(h7_seeds),
+            "verdict": overall["verdict"], "rho": overall["rho"],
+            # `rho` = `40` [S4] C2 的冻结快照键；`rho_median` = 同一数值的聚合语义名——
+            # **先逐站取 5 种子中位数、再取比值**（`aggregation` 字段），不是对逐种子 ρ
+            # 取中位数。有标记时它随结论披露，供读者看截断值之比。
+            "rho_median": overall["rho"], "weak": overall["weak"], "decay": overall["decay"],
+            "variant": winner, "n_seeds": len(h7_seeds),
             "aggregation": "seed_median_then_ratio",
-            "n_eff_station0_median": float(np.median(np.asarray(s0, dtype=np.float64))),
-            "n_eff_station1_median": float(np.median(np.asarray(s1, dtype=np.float64))),
+            "n_eff_station0_median": median0,
+            "n_eff_station1_median": median1,
             "thresholds": {"strong": H7_RHO_STRONG, "weak": H7_RHO_WEAK},
             "per_seed": per_seed,
+            "flagged_seeds": flagged_seeds,
         }
-        if overall.get("reason_code") is not None:
+        if flagged_seeds:
+            h7["verdict"] = VERDICT_INDETERMINATE
+            h7["weak"] = False
+            h7["reason_code"] = H7_REASON_FLAG
+        elif overall.get("reason_code") is not None:
             h7["reason_code"] = overall["reason_code"]
     else:
         h7 = {
-            "verdict": VERDICT_INDETERMINATE, "rho": None, "weak": False, "decay": None,
-            "variant": winner, "n_seeds": 0, "aggregation": "seed_median_then_ratio",
+            "verdict": VERDICT_INDETERMINATE, "rho": None, "rho_median": None,
+            "weak": False, "decay": None, "variant": winner, "n_seeds": 0,
+            "aggregation": "seed_median_then_ratio",
             "thresholds": {"strong": H7_RHO_STRONG, "weak": H7_RHO_WEAK}, "per_seed": {},
-            "reason_code": "station1_missing",
+            "flagged_seeds": {}, "reason_code": "station1_missing",
         }
 
     snapshot = {}

@@ -713,10 +713,15 @@ def _gate_lines(name: str, gate: Mapping) -> list[str]:
         "", "**判定表达式的输入数值快照**（取自门禁产物，本脚本不重算判定）：", "",
     ]
     # per_seed / per_observable 另起明细子表，不挤进"项/值"两列
-    skip = {"H7": ("per_seed",), "H8": ("per_observable",)}.get(name, ())
+    skip = {"H7": ("per_seed", "flagged_seeds"), "H8": ("per_observable",)}.get(name, ())
+    # H7 聚合条目的中位数比值以 `rho_median` 落盘（与冻结快照键 `rho` 同值）：同一数字只渲染
+    # 一行，取聚合语义名；标记清单另在下方逐种子小节披露。聚合的降级原因（如
+    # `n_eff_flag_present`）经 `_GATE_OPTIONAL_KEYS` 照旧进快照表。
+    alias = {"rho": "rho_median"} if name == "H7" and "rho_median" in gate else {}
+    keys = [alias.get(key, key) for key in (*_GATE_SNAPSHOT_KEYS[name], *_GATE_OPTIONAL_KEYS[name])]
     rows = [
         (key, gate[key])
-        for key in (*_GATE_SNAPSHOT_KEYS[name], *_GATE_OPTIONAL_KEYS[name])
+        for key in keys
         if key != "verdict" and key not in skip and key in gate
     ]
     lines += _md_table(["项", "值"], _flatten_snapshot_rows(rows) if name in ("H1", "H3") else rows)
@@ -734,15 +739,20 @@ def _gate_lines(name: str, gate: Mapping) -> list[str]:
             if per_seed else
             ["- 无：`per_seed` 为空（无站 1 的 test 评估，降级原因见上表 `reason_code`）。"]
         )
-        flagged = [
-            seed for seed, item in sorted(per_seed.items(), key=lambda kv: str(kv[0]))
-            if item.get("flag_station0") or item.get("flag_station1")
-        ]
+        flagged = gate.get("flagged_seeds")
+        if flagged is None:  # 兼容未落 `flagged_seeds` 的旧门禁产物：按逐种子条目还原
+            flagged = {
+                seed: {"station0": item.get("flag_station0"),
+                       "station1": item.get("flag_station1")}
+                for seed, item in sorted(per_seed.items(), key=lambda kv: str(kv[0]))
+                if item.get("flag_station0") or item.get("flag_station1")
+            }
         lines += [
             "",
             f"- 上/下溢导致的不可判定：{len(flagged)}/{len(per_seed)} 个种子任一侧携带标记"
             f"（{_fmt(flagged) if flagged else '无'}）——该侧的 N_eff 是 `20` [S3] 报告域端点"
-            "（1e3 / 1e5）的截断值，其 ρ 不构成跨站泛化的结论依据（`40` [S2]）。",
+            "（1e3 / 1e5）的截断值，其 ρ 不构成跨站泛化的结论依据（`40` [S2]）；"
+            "聚合条目因此同样判不可判定（`rho_median` 仅作披露）。",
         ]
     elif name == "H8":
         per_observable = gate["per_observable"]
