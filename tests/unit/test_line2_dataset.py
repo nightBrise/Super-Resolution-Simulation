@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from src.line2.data_pipeline.anchor import ANCHOR_MD5
-from src.line2.data_pipeline.dataset import beam_splits, build_dataset
+from src.line2.data_pipeline.dataset import beam_splits, build_dataset, git_head
 from src.line2.data_pipeline.projections import (
     AXES,
     N_BINS,
@@ -189,14 +189,13 @@ def test_projection_truncation_reports_error() -> None:
     """[S4] C1（零截断报错分支）：粒子落在 edges 之外时 SHALL 报错，而非静默丢样本。
 
     构造：把 x 整体平移出 [min,max] 外扩 1% 的窗口后调用 six_projections ——
-    实现按计数和核对（`projections.six_projections` 的零截断守卫）抛 ValueError。
-    spec 未定错误类型（"报错"），故接受任何异常，但不接受静默丢弃。
+    实现按计数和核对（`projections.six_projections` 的截断守卫）抛 ValueError。
     """
     table = _synthetic_table(2_000, seed=derive_seed(10, 6))
     edges = station_edges(table)
     outside = table.copy()
     outside[:, 0] += 1.0
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         six_projections(outside, edges)
 
 
@@ -370,7 +369,8 @@ def test_beam_group_jitter_metadata_matches_params(small_dataset: pathlib.Path) 
 def test_manifest_contract_fields(small_dataset: pathlib.Path) -> None:
     """[S5] C3：manifest 字段与取值符合冻结契约（`00` GC7 三元组 + 档位/k/FODO/抖动/MD5）。"""
     manifest = json.loads((small_dataset / "manifest.json").read_text(encoding="utf-8"))
-    # `00` GC7 三元组
+    # `00` GC7 三元组（第三元与生成时 git HEAD 对拍，沿 line1 先例）
+    assert manifest["code_version"] == git_head(), manifest["code_version"]
     assert re.fullmatch(r"[0-9a-f]{40}", manifest["code_version"]), manifest["code_version"]
     assert manifest["data_version"] == "test_v1"
     assert manifest["spec_version"] == "line2-spec-v1.0"

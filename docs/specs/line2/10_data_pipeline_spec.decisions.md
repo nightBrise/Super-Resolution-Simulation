@@ -92,10 +92,12 @@
 
 ## D12: [S5] C2 偏差记录——显式身份字段（station/N_low/sub_idx）未落盘，身份由层级命名承载（2026-09-14 实现期发现）
 **Phase:** implementation
-**Chosen:** 记为 deviation、不改 spec、不重建数据集。落盘对象以层级路径承载身份：`beam_<id>/station<s>/tier_<N:06d>_sub_<k:02d>`（外加 group attr `beam_id`、dataset attr `bin_edges`/`axes`），四元组→对象的唯一映射由 `10` [S5] C5 的测试断言；spec [S5] 落盘节所载的平铺字段 `station`/`N_low`/`sub_idx` **未**写成 attr。
-**Rationale:** 身份信息在产出物中完备且机器可读（命名即契约，测试以四元组反查固化），D6 的选择理由（"层级元数据表达自然"）亦以此为准；缺少的只是同一信息的第二种冗余表达。补齐需重写已落盘的 5.2 GB 数据集，而该数据集正被 E1/E2 消费——重写会作废全部已采信 run，代价远超收益。
-**Rejected:** 立刻补 `station`/`n_low`/`sub_idx` attr 并重建数据集 —— 会改变数据集内容哈希与 `code_version`，使在跑的 E1/E2 证据失效；改 spec 落盘清单以匹配实现 —— 冻结期不得改 spec。
-**鉴别力留痕:** `tests/unit/test_line2_dataset.py::test_dataset_explicit_identity_metadata` 以 xfail（strict=False）显式记录该缺口，字段补齐后自动转 XPASS 提示销账；同一测试内已断言"命名四元组可唯一定位对象"这一替代契约。
+**Chosen:** 记为 deviation、不改 spec、不在 E1/E2 运行期改产物。落盘对象以层级路径承载身份：`beam_<id>/station<s>/tier_<N:06d>_sub_<k:02d>`（外加 group attr `beam_id`、dataset attr `bin_edges`/`axes`），四元组→对象的映射由 `10` [S5] C5 的测试（`tests/unit/test_line2_dataset.py::test_build_dataset_deterministic_and_traceable`）断言；spec [S5] 落盘节所载的平铺字段 `station`/`N_low`/`sub_idx` **未**写成 attr（生产件实测 dataset attrs 仅 `bin_edges`/`axes`）。**同批并入**：[S5] 落盘节点名的 group 元数据"`jitter` 参数"对束 0（无抖动基准束）不适用——`src/line2/data_pipeline/dataset.py` 只对 `beam_idx != 0` 求 `jitter_params`，故 `beam_0000` 无 `jitter_*` 字段。
+**Rationale:** 身份信息在产出物中完备且机器可读（命名即契约），D6 的选择理由（"层级元数据表达自然"）亦以此为准；缺少的只是同一信息的第二种冗余表达。真正的约束是**运行期**：该数据集正被在跑的 E1/E2 每个 run 读取，改写产物会造成运行期产物不一致与 I/O 风险；且冻结期不得改 spec。补充事实（评审实测）：`.h5` 不入版本控制（`.gitignore` 排除）、运行证据只记 `data_version` 字符串与 run 自身的 `code_version`，故字段可在 E1/E2 结束后**原地补写**（attr 写入不改数据内容，分钟级，无需重建 75 min 的全量数据集）。
+**Rejected:** 运行期补 `station`/`n_low`/`sub_idx` attr —— 与在跑 run 的读取并发，属运行期产物改写；改 spec 落盘清单以匹配实现 —— 冻结期不得改 spec；为束 0 补零值 `jitter_*` —— 同上（留待下次重建时一并写入）。
+**鉴别力留痕:** `tests/unit/test_line2_dataset.py::test_dataset_explicit_identity_metadata` 用 **imperative `pytest.xfail()`** 显式记录该缺口——字段补齐后该分支不再触发、用例直接 PASS（**不会**产生 XPASS；离开 xfail 清单即销账）。替代契约由 `tests/unit/test_line2_dataset.py::test_build_dataset_deterministic_and_traceable`（`[S5]` C4/C5：两次独立构建数据级全量一致 + 四元组唯一定位）承载；该用例目前只覆盖一个示例路径，属偏弱但真实的证据，已列为后续补强项。
+**Spec section:** [S5] C2
+**Status:** live（待验收闸口裁决）
 **Spec section:** [S5] C2
 **Status:** live（待验收闸口裁决）
 

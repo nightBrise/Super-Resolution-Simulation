@@ -64,8 +64,8 @@ def six_projections(table: np.ndarray, edges: np.ndarray) -> np.ndarray:
     保证 ∑counts = 子样本粒子数（spec [S4] C1）。
     输出为存储布局 [bin_aj, bin_ai]（见模块 docstring 的图内轴向约定）。
 
-    **零截断守卫（`10` [S4] C1 / 决策 D7）**：分箱后逐投影核对计数和被丢粒子的
-    数量；出现截断（粒子落在 edges 之外）即抛 ``ValueError``，不做静默丢弃。
+    **零截断守卫（`10` [S4] C1 / 决策 D7）**：分箱后逐投影核对计数和是否等于输入
+    行数；出现截断（粒子落在 edges 之外）即抛 ``ValueError``，不做静默丢弃。
     生产路径上 edges 由同一张全量表定标并外扩 1%，该守卫恒不触发，只防误用
     （例如传入未按该站定标的 edges）。
     """
@@ -79,8 +79,8 @@ def six_projections(table: np.ndarray, edges: np.ndarray) -> np.ndarray:
         counted = int(h.sum())
         if counted != n_rows:
             raise ValueError(
-                f"投影 ({ai},{aj}) 发生零截断：输入 {n_rows} 个粒子，分箱仅收 {counted} 个"
-                f"（{n_rows - counted} 个落在 edges 之外）——按 `10` [S4] C1 报错而非静默丢弃"
+                f"投影 ({ai},{aj}) 检测到截断：输入 {n_rows} 行，分箱计数和 {counted}"
+                f"（{n_rows - counted} 个粒子落在 edges 之外）——按 `10` [S4] C1 报错而非静默丢弃"
             )
         out[gi] = np.ascontiguousarray(h.T.astype(np.int32))  # 布局 [bin_aj, bin_ai]
     return out
