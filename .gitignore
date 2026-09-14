@@ -79,6 +79,13 @@ archive/
 !studies/line2_particle_sr/data/anchor/
 !studies/line2_particle_sr/data/anchor/injector.sdds
 
+# ----- line2 交付文档（沿 line1 先例：每线 reports 文档入库）-----
+# 实验报告与域地图是 `40` [S4] 的交付物；重产物（*.h5/*.ckpt/results 运行目录）仍被上面的
+# results/ 与扩展名规则排除。注：`results/assets/**` 无法白名单化（父目录 results/ 先被
+# 排除后不能重新包含），与 AGENTS.md「assets 不入库」一致，故图落盘于 reports/ 下随报告入库。
+!studies/line2_particle_sr/reports/
+!studies/line2_particle_sr/reports/**
+
 # ----- Heavy artefacts that should never be committed -----
 *.ckpt
 *.pt
