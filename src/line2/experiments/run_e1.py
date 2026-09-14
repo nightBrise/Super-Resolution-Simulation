@@ -232,7 +232,10 @@ def cmd_eval(args: argparse.Namespace) -> int:
         if not ckpt.is_file():
             print(f"[run_e1] 跳过 {run_id}：无 best_val.ckpt", flush=True)
             continue
-        out = args.results_dir / run_id / evaluate.EVAL_FILENAME
+        # 站 0 用规范名 `test_eval.json`；站 ≠ 0（E3 跨站）另起名，避免与站 0 产物同名相覆
+        # ——门禁按 `evaluate.EVAL_FILENAME` + `test_eval*.json` 的 glob 消费（`40` [S2]）。
+        name = evaluate.EVAL_FILENAME if args.station == 0 else f"test_eval_station{args.station}.json"
+        out = args.results_dir / run_id / name
         argv = [
             "--ckpt", str(ckpt), "--data-dir", str(args.data_dir), "--split", args.split,
             "--station", str(args.station), "--n-low", str(args.n_low), "--subs", args.subs,

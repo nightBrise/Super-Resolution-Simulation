@@ -29,6 +29,13 @@ ACTUAL = {
     'pytest': pytest.__version__,
 }
 
+# `00` [S2] C5：数据管线前置依赖（ocelot 传输引擎 + pylhc SDDS）。
+# ocelot 走 git 安装、无 PyPI 元数据，版本取自模块属性；两者校验"可导入 + 版本一致"。
+PIPELINE_EXPECTED = {
+    'ocelot': '26.06.1',
+    'sdds': '0.4.3',
+}
+
 
 def _version_ok(expected: str, actual: str) -> bool:
     """按期望串比较版本：支持 `>=X` 下限形式与精确相等两种。"""
@@ -47,12 +54,34 @@ def _parse(version: str) -> tuple:
     return tuple(parts)
 
 
+def _pipeline_version(name: str) -> str | None:
+    """导入数据管线依赖并取版本；导入失败返回 None（导入噪声被吞掉）。"""
+    import contextlib
+    import importlib
+    import io
+
+    sink = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            mod = importlib.import_module(name)
+    except Exception:
+        return None
+    return str(getattr(mod, '__version__', '') or '') or None
+
+
 def main() -> int:
     mismatches = []
     for pkg, expected in EXPECTED.items():
         actual = ACTUAL[pkg]
         if not _version_ok(expected, actual):
             mismatches.append(f'  { pkg}: expected {expected}, got {actual}')
+
+    for pkg, expected in PIPELINE_EXPECTED.items():
+        actual = _pipeline_version(pkg)
+        if actual is None:
+            mismatches.append(f'  {pkg}: 无法导入（expected {expected}）')
+        elif not _version_ok(expected, actual):
+            mismatches.append(f'  {pkg}: expected {expected}, got {actual}')
 
     if not mismatches:
         print('OK: 环境依赖版本一致')

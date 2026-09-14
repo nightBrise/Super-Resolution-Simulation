@@ -74,11 +74,44 @@
 **Spec section:** [S3] H8（联动 `20` [S4]）
 **Status:** live
 
+## D10: E1 两臂种子统一为 {100,101,102,103,104}
+**Phase:** review
+**Chosen:** `e1_joint_s0..s4` 与 `e1_indep_s0..s4` 使用**同一组种子** 100–104（原先 joint = 0–4、independent = 100–104，两臂种子集合互不重叠）。
+**Rationale:** `40` [S3] H3 判据是**同种子成对比较**（5 对），`30` [S4] C2 要求两版"相同种子派生链"。原配置下按值配对 = 0 对，H3 永远"不可判定"；这是配置缺陷而非判据缺陷。已加自动断言（两臂种子集合必须逐元素相同、同种子必须落在同序号 run_id 上）。
+**Rejected:** 维持原配置（joint {0–4} / independent {100–104}）—— 按值配对为 0 对，H3 恒判"不可判定"，且两臂不在同一实现噪声下比较，与 `30` [S4] C2 的相同派生链要求冲突。
+**Spec section:** [S1] C3、[S3] H3
+**Status:** live
+
+## D11: E0 门禁曲线口径 = 跨 val+test 束；训练期 val N_eff 用 val 束曲线（两段不交叉）
+**Phase:** review
+**Chosen:** E0（`40` [S1]）的裸误差–N 曲线按 `20` [S2]「跨 val/test 束中位数与 IQR」在 **300 束（val 150 + test 150）× 两站 × 五档 × k=20** 上计算，落盘 `results/e0_curve.json`，完成时间戳落 `results/e0_curve.meta.json`（`40` [S1] C5 的顺序证据）。训练期早停/选型用的 val N_eff 以 **val 束曲线**为插值基底（`30` [S3]）。
+**Rationale:** 两段式判据消费（`40` [S3]）要求 val 段与 test 段各用其口径；E0 是纯数据基线（与任何模型输出无关），故其"完成早于 E1"实质保证"尺子先于读数"。
+**Rejected:** 只用 val 束曲线进门禁 —— 门禁阶段要评 test 束，尺子口径与消费对象不一致会引入系统偏移。
+**实测:** 300 束耗时 100.5 s；参照噪声地板 0.2856（1e5 档配对 M1 中位数 / √2）。
+**Spec section:** [S1] C5、[S3]
+**Status:** live
+
+## D12: test 端评估与 H8 聚合口径
+**Phase:** review
+**Chosen:** run 的 test 端 N_eff = split `test` × station 0 × N_low 1e4 × subs 0–19，逐 (束, 子样本) 推理 → 每束的 err 与 13 维观测量对 sub 取中位数 → run 级 err = 全部束的中位数 → 在 E0 曲线上 log-N 插值得 N_eff（上/下溢带标记）。H8 的聚合按 `20` [S4]：**先对 5 个种子的逐观测量取中位数**，容差线按该束 N_eff（5 种子中位数）映射最近档，达标率 = 达标 (束 × 观测量) 对数 / (束数 × 13)；暗桶（B0/B1）的 M2 相对改进单独报告，不并入达标率。
+**Rationale:** `20` [S4] 只规定"5 种子中位数输出 + 逐观测量先取中位数再判达标"，未规定子样本聚合与分子分母口径；此处把口径钉死以便复算（`40` [S3] C1）。
+**Rejected:** 用 5 种子输出图逐像素中位数 —— 无法从已落的观测量恢复，且 spec 括号已指明按观测量取中位数。
+**Spec section:** [S3] H8、[S4]
+**Status:** live
+
+## D13: E1 运行环境统一为 sr-sim（torch 2.4.0 / Python 3.11）
+**Phase:** review
+**Chosen:** 全部 E1 run 在 `sr-sim` 环境启动，`CUDA_VISIBLE_DEVICES` 逐 run 钉一张卡、`CUBLAS_WORKSPACE_CONFIG=:4096:8` 保证确定性模式无警告降级。首跑曾误入 `acc` 环境（torch 2.3.1 / Python 3.10），该 run 作废重跑。
+**Rationale:** `00` GC4 公平性要求同一实验内除受控变量外全部一致；跨环境（不同 torch 版本）会引入与变体效应不可分离的混杂。
+**Rejected:** 沿用首跑的 `acc` 环境 —— 与其余 run 的 torch 版本不同，构成与变体效应不可分离的混杂（GC4）。
+**Spec section:** [S1] C3
+**Status:** live
+
 ## Progress
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | — | — | pending |
-| [S2] | — | — | pending |
-| [S3] | — | — | pending |
-| [S4] | — | — | pending |
+| [S1] | fb04ef5、21aaedb | L4 批次复审（2026-09-14） | implemented（train/eval/gates 编排） |
+| [S2] | — | L4 批次复审（2026-09-14） | 待 E3 |
+| [S3] | fb04ef5、21aaedb | L4 批次复审（2026-09-14） | implemented |
+| [S4] | — | L4 批次复审（2026-09-14） | 待报告 |
