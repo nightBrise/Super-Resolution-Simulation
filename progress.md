@@ -6,10 +6,10 @@
 
 | 项目 | 值 |
 |---|---|
-| **当前阶段** | 研究线收官（2026-09-12 出口决策定案：「不进入下一阶段」，用户确认） |
-| **当前任务** | line2 **Phase 1 五份 spec 已冻结（docs/specs/line2/ 00/10/20/30/40，v0.2.1 → v1.0，2026-09-14 用户批准；两轮审核 26+8 findings 全清零）**；进入执行：goal 模式派发循环 L1（数据管线）→ L2（判据）→ L3b（训练）→ L4/L5（实验矩阵），每 [Sn] 实现→commit→reviewer 验收，停止条件见 goal 目标 |
+| **当前阶段** | line1 收官（2026-09-12）；line2 Phase 1 执行中 |
+| **当前任务** | line2 Phase 1 spec v1.0 冻结（`docs/specs/line2/` 00/10/20/30/40）；L1 [S1]–[S5] 实现+复审 ✓；L2 [S1]–[S5] 实现+复审 ✓；L3b [S1]–[S5] 实现 ✓；E0 曲线已落盘；**E1 训练运行中**（joint_s0 @GPU0 + indep_s0 @GPU1，50k 步；其余 8 排后续） |
 | **进度** | M0–M6 全部完成；出口决策「不进入下一阶段」定案——分支树 (a) 阴性/等效合法终点（条件 1 等效/种子敏感、非显著负），分支 (b) 不触发（读法裁决随 99 R187 登记）；99 [S4] 未决问题表 7 条全部闭环；核心结论——主指标上先验增益未获跨种子稳健确认（A−B 等效（种子级）/ A−C、B−C 种子敏感不可判定），次指标 ε_z 与预测离散度上方案 C 四种子一致占优（约为 A/B 的一半），G3：A−B 通过、A−C/B−C 极端退化档反转（E 类如实报告） |
-| **下一步** | goal 模式执行 Phase 1：L1 数据管线（前置：environment.yml 增 ocelot+sdds、.gitignore 白名单）→ L2 判据 → L3b 训练 → L4/L5 实验矩阵；运行环境 acc/sr-sim，不自创环境 |
+| **下一步** | E1 训练完成 → L3b 批次复审 → E2（获胜变体 × 5 种子）→ L4 门禁 → L5/L6/L7 → Phase 1 实验报告 |
 | **最近一次报告** | [`final_report.md`](docs/reports/line1_substitute_sr_final_report.md)（M6 最终报告，2026-08-30；2026-09-12 收官时修正 5 处图片相对链接）；[`studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md)（M5）；[`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md)（M4）|
 
 ## 阶段完成历史
