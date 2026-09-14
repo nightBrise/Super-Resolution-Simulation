@@ -2,7 +2,7 @@
 
 只读消费 `results/` 落盘产物，生成 Phase 1 交付物（`00` [S3] C7）：
 
-1. **方法可用域地图** ``<out-dir>/assets/figure_avail_domain.png``（PNG only、300 dpi）；
+1. **方法可用域地图** ``<figure-dir>/figure_avail_domain.png``（PNG only、300 dpi）；
 2. **N_eff 明细表** ``<out-dir>/n_eff_table.csv``（runs × 站 × N_low，含上/下溢标记）；
 3. **实验报告** ``<reports-dir>/phase1_report.md``——章节 1 数据 / 2 设置 / 3 结果 /
    4 失败模式与不可验证项 / 5 门禁结论 / 6 结论范围 / 7 设计理由（Why）。
@@ -36,10 +36,12 @@
 用法::
 
     python -m src.line2.experiments.map_report --results-dir <dir> \
-        [--out-dir <dir>] [--reports-dir <dir>]
+        [--out-dir <dir>] [--reports-dir <dir>] [--figure-dir <dir>]
 
-``--out-dir`` 默认 = ``--results-dir``；``--reports-dir`` 默认 = ``<results-dir>/../reports``
-（`00` [S2] 布局：results 与 reports 同为研究线根的子目录）。
+``--out-dir`` 默认 = ``--results-dir``（只托管 N_eff 明细表）；``--reports-dir`` 默认 =
+``<results-dir>/../reports``（`00` [S2] 布局：results 与 reports 同为研究线根的子目录）；
+``--figure-dir`` 默认 = ``--reports-dir``——图与报告同目录，随 ``reports/`` 一并交付入库
+（``results/`` 内的子目录无法白名单化，见 .gitignore）。
 """
 
 from __future__ import annotations
@@ -91,7 +93,6 @@ CONFIG_FILENAME = "config.json"            # run 目录内的 config 副本（tr
 #: `40` [S1] C2 run 目录契约中只登记存在性（不做内容校验）的文件：训练日志与 ckpt
 RUN_DIR_PRESENCE_ONLY = ("train_log.jsonl", "best_val.ckpt", "last.ckpt")
 
-ASSETS_SUBDIR = "assets"
 FIGURE_NAME = "figure_avail_domain.png"
 TABLE_NAME = "n_eff_table.csv"
 REPORT_NAME = "phase1_report.md"
@@ -1095,17 +1096,20 @@ def generate(
     results_dir: str | Path,
     out_dir: str | Path | None = None,
     reports_dir: str | Path | None = None,
+    figure_dir: str | Path | None = None,
 ) -> dict:
     """一键生成三类产出物（`40` [S4] C1）。返回三份产物路径与行数统计。
 
-    ``out_dir`` 默认 = ``results_dir``（地图落 ``assets/`` 子目录）；``reports_dir`` 默认 =
-    ``<results_dir>/../reports``（`00` [S2] 研究线布局）。除这三个路径外不写任何文件。
+    ``out_dir`` 默认 = ``results_dir``（只托管 N_eff 表）；``reports_dir`` 默认 =
+    ``<results_dir>/../reports``（`00` [S2] 研究线布局）；``figure_dir`` 默认 = ``reports_dir``
+    （图与报告同为交付物、同目录入库）。除这三个路径外不写任何文件。
     """
     results_dir = Path(results_dir)
     if not results_dir.is_dir():
         raise FileNotFoundError(f"results 目录不存在：{results_dir}")
     out_dir = Path(out_dir) if out_dir is not None else results_dir
     reports_dir = Path(reports_dir) if reports_dir is not None else results_dir.parent / "reports"
+    figure_dir = Path(figure_dir) if figure_dir is not None else reports_dir
 
     curve_path = results_dir / CURVE_FILENAME
     curve = _read_json(curve_path, "E0 裸误差–N 曲线 dump（`20` [S2]、`40` [S1] C5 尺子先行）")
@@ -1117,7 +1121,7 @@ def generate(
     run_metas = collect_run_metas(results_dir)
     e0_order = check_e0_precedes_runs(results_dir, run_metas=run_metas)
 
-    figure_path = render_avail_domain(groups, curve, out_dir / ASSETS_SUBDIR / FIGURE_NAME)
+    figure_path = render_avail_domain(groups, curve, figure_dir / FIGURE_NAME)
     table_path = write_n_eff_table(table, out_dir / TABLE_NAME)
     report_text = render_report(
         table=table, groups=groups, curve=curve, curve_meta=curve_meta, gates=gates,
@@ -1144,11 +1148,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--results-dir", type=Path, required=True,
                         help="results 目录（含 e0_curve.json / e1_gates.json / <run_id>/）")
     parser.add_argument("--out-dir", type=Path, default=None,
-                        help=f"地图与 N_eff 表输出目录（默认 = --results-dir；地图落 {ASSETS_SUBDIR}/）")
+                        help=f"N_eff 表输出目录（默认 = --results-dir；只落 {TABLE_NAME}）")
     parser.add_argument("--reports-dir", type=Path, default=None,
-                        help="报告输出目录（默认 = <results-dir>/../reports）")
+                        help=f"报告输出目录（默认 = <results-dir>/../reports；落 {REPORT_NAME}）")
+    parser.add_argument("--figure-dir", type=Path, default=None,
+                        help=f"地图输出目录（默认 = --reports-dir；落 {FIGURE_NAME}）")
     args = parser.parse_args(argv)
-    out = generate(args.results_dir, out_dir=args.out_dir, reports_dir=args.reports_dir)
+    out = generate(args.results_dir, out_dir=args.out_dir, reports_dir=args.reports_dir,
+                   figure_dir=args.figure_dir)
     print(
         json.dumps(
             {

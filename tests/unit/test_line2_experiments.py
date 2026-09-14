@@ -501,7 +501,7 @@ def _digest(paths) -> dict[str, str]:
 
 
 def test_map_report_three_products_bitwise_reproducible(fake_products: Path, tmp_path: Path) -> None:
-    """`40` [S4] C1：同输入两次生成，CSV/报告/PNG 逐位一致；PNG 非空。"""
+    """`40` [S4] C1：同输入两次生成，CSV/报告/PNG 逐位一致；PNG 非空；图落在 reports 侧。"""
     out_dir, reports_dir = tmp_path / "out", tmp_path / "reports"
     first = generate(fake_products, out_dir=out_dir, reports_dir=reports_dir)
     digest1 = _digest((first["figure"], first["table"], first["report"]))
@@ -511,22 +511,44 @@ def test_map_report_three_products_bitwise_reproducible(fake_products: Path, tmp
     assert first["figure"].name == "figure_avail_domain.png"
     assert first["table"].name == "n_eff_table.csv"
     assert first["report"].name == "phase1_report.md"
+    # 地图与报告同目录（交付物随 reports/ 入库）；N_eff 表留在 results 侧的输出目录
+    assert first["figure"] == reports_dir / "figure_avail_domain.png"
+    assert first["report"] == reports_dir / "phase1_report.md"
+    assert first["table"] == out_dir / "n_eff_table.csv"
     assert first["figure"].stat().st_size > 0
     assert first["n_rows"] == 2
 
 
 def test_map_report_writes_only_its_three_outputs(fake_products: Path, tmp_path: Path) -> None:
-    """`40` Global Constraints：产出物脚本只读——输入目录的每个文件内容不变、无新增。"""
+    """`40` Global Constraints：产出物脚本只读——输入目录的每个文件内容不变、无新增。
+
+    写入面恰为三个路径：reports 侧只落图与报告，输出目录只落 N_eff 表（不多建 assets/ 之类）。
+    """
     before = {
         p: (p.stat().st_mtime_ns, hashlib.sha256(p.read_bytes()).hexdigest())
         for p in sorted(fake_products.rglob("*")) if p.is_file()
     }
-    generate(fake_products, out_dir=tmp_path / "out", reports_dir=tmp_path / "reports")
+    out_dir, reports_dir = tmp_path / "out", tmp_path / "reports"
+    generate(fake_products, out_dir=out_dir, reports_dir=reports_dir)
     after = {
         p: (p.stat().st_mtime_ns, hashlib.sha256(p.read_bytes()).hexdigest())
         for p in sorted(fake_products.rglob("*")) if p.is_file()
     }
     assert before == after
+    assert sorted(p.name for p in reports_dir.rglob("*")) == [
+        "figure_avail_domain.png", "phase1_report.md"]
+    assert sorted(p.name for p in out_dir.rglob("*")) == ["n_eff_table.csv"]
+
+
+def test_map_report_figure_dir_overrides_reports_dir(fake_products: Path, tmp_path: Path) -> None:
+    """`--figure-dir` 覆盖图件落盘目录；报告里的配套产出物路径随实际图路径走。"""
+    reports_dir = tmp_path / "reports"
+    out = generate(fake_products, out_dir=tmp_path / "out", reports_dir=reports_dir,
+                   figure_dir=tmp_path / "figs")
+    assert out["figure"] == tmp_path / "figs" / "figure_avail_domain.png"
+    assert out["figure"].is_file()
+    assert sorted(p.name for p in reports_dir.rglob("*")) == ["phase1_report.md"]
+    assert str(out["figure"].resolve()) in out["report"].read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("victim", ["e0_curve.json", "e1_gates.json", "all_test_evals"])
@@ -604,6 +626,9 @@ def test_report_carries_gate_snapshots_and_why_chapter(fake_products: Path, tmp_
         assert code in text
     assert "无任一 `run_meta.json`" in text
     assert "触及报告域端点" in text
+    # 报告头的"配套产出物"指向实际落盘路径（默认：图与报告同在 reports 目录）
+    assert str(out["figure"].resolve()) in text
+    assert str(out["table"].resolve()) in text
 
 
 def test_report_discloses_h7_overflow_indeterminacy(fake_products: Path, tmp_path: Path) -> None:
