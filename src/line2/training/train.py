@@ -152,8 +152,13 @@ def train(cfg: dict) -> dict:
             edges = item["edges"].unsqueeze(0)
             target = item["target"].unsqueeze(0)
             shapes, _totals = normalize_input_group(counts)
-            kappa = condition_vector(counts, edges)
-            prob = net(shapes, kappa)
+            n_low_vec = counts.sum(dim=(1, 2, 3)).clamp_min(1.0)
+            log_n = torch.log10(n_low_vec)
+            if variant == "joint":
+                kappa = condition_vector(counts, edges)
+                prob = net(shapes, kappa)
+            else:
+                prob = net(shapes, edges, log_n)
             n_effs.append(n_eff(prob[0].numpy(), target.numpy()[0], curve)[0])
             nlls.append(float(poisson_nll(prob, target, n_high)))
         net.train()
@@ -169,11 +174,19 @@ def train(cfg: dict) -> dict:
             target = batch["target"].to(device)
             edges = batch["edges"].to(device)
             shapes, _totals = normalize_input_group(counts)
-            kappa = condition_vector(counts, edges)
-            prob = net(shapes, kappa)
-            nll = poisson_nll(prob, target, n_high)
-            pen = psd_penalty(prob, edges)
-            loss = nll + float(cfg.get("w_psd", 0.1)) * pen
+            n_low_vec = counts.sum(dim=(1, 2, 3)).clamp_min(1.0)
+            log_n = torch.log10(n_low_vec)
+            if variant == "joint":
+                kappa = condition_vector(counts, edges)
+                prob = net(shapes, kappa)
+                nll = poisson_nll(prob, target, n_high)
+                pen = psd_penalty(prob, edges)
+                loss = nll + float(cfg.get("w_psd", 0.1)) * pen
+            else:
+                prob = net(shapes, edges, log_n)
+                nll = poisson_nll(prob, target, n_high)
+                pen = torch.tensor(0.0)
+                loss = nll
             opt.zero_grad(set_to_none=True)
             loss.backward()
             grad_norm = float(torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0))
