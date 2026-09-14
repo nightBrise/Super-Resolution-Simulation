@@ -1,0 +1,21 @@
+{
+  "data_dir": "studies/line2_particle_sr/data/line2_ds_v1",
+  "n_low": 10000,
+  "n_high": 200000.0,
+  "max_steps": 50000,
+  "eval_every": 1000,
+  "patience": 10,
+  "batch": 16,
+  "lr": 0.0003,
+  "base": 24,
+  "num_levels": 3,
+  "blocks": 1,
+  "w_psd": 0.1,
+  "device": "cuda:0",
+  "torch_threads": 4,
+  "seed": 103,
+  "variant": "independent",
+  "ind_base": 16,
+  "ind_blocks": 3,
+  "out_dir": "studies/line2_particle_sr/results/e1_indep_s3"
+}
