@@ -9,7 +9,7 @@
 
 契约：
 
-- **只读**（[S4] Global Constraints）：不训练、不推理、不写 run 目录；写入面 = 上述三个路径。
+- **只读**（`40` Global Constraints）：不训练、不推理、不写 run 目录；写入面 = 上述三个路径。
 - **同输入逐位一致**（[S4] C1）：报告与表格不含生成时刻的墙钟时间、git HEAD 或随机量，
   全部数值取自输入产物；PNG 由 matplotlib Agg 后端写出（同版本同输入逐字节一致）。
 - **缺输入明确报错**（不静默跳过）：``e0_curve.json``、``e1_gates.json``、至少一份
@@ -17,8 +17,13 @@
   可选输入（``e0_curve.meta.json``、``<run_id>/run_meta.json``、门禁产物的非判定段）缺失时
   不中断，但一律登记到报告第 4 章"失败模式与不可验证项"。
 - **每条门禁结论附判定表达式的输入数值快照**（[S4] C2）：快照取自 ``e1_gates.json`` 各门禁段的
-  ``inputs`` / ``thresholds`` / ``per_observable`` / ``pairing``（由
+  ``inputs`` / ``thresholds`` / ``per_observable`` / ``pairing`` / ``tolerance_tier_*``（由
   :func:`~src.line2.experiments.gates.evaluate_gates_from_disk` 落盘），本模块不重算判定。
+- **run 目录内的 ``config.yaml`` 副本是已登记的偏差**：`40` [S1] C2 要求 ``results/<run_id>/``
+  含 config 副本，而训练与调度路径只写 ``summary.json``/``run_meta.json``（配置以
+  ``docs/specs/line2/e1_configs/*.json`` 冻结副本 + ``run_meta.json`` 的 ``config``/``cmd``
+  承载，登记于 `40` 的 decisions）。本模块只在报告第 4 章披露该缺口，不补写产物——
+  产出物脚本只读（`40` Global Constraints）。
 
 地图坐标语义（两面板；[S4]"主曲线 N_eff/N_low vs N_low"）：
 
@@ -89,9 +94,10 @@ GATES_FILENAME = "e1_gates.json"           # gates.evaluate_gates_from_disk 产�
 EVAL_GLOB = "test_eval*.json"              # evaluate.py 产物（E3 跨站评估另起名，同 glob 覆盖）
 RUN_META_FILENAME = "run_meta.json"        # 调度器落盘的 run 级溯源（冻结 schema，见下）
 SUMMARY_FILENAME = "summary.json"          # train.py 产物
-CONFIG_FILENAME = "config.json"            # run 目录内的 config 副本（train.py 不写，缺失只登记）
-#: `40` [S1] C2 run 目录契约中只登记存在性（不做内容校验）的文件：训练日志与 ckpt
-RUN_DIR_PRESENCE_ONLY = ("train_log.jsonl", "best_val.ckpt", "last.ckpt")
+#: `40` [S1] C2 契约的 run 目录内 config 副本名（spec 原文；训练/调度路径不写，见模块 docstring）
+CONFIG_FILENAME = "config.yaml"
+#: `40` [S1] C2 run 目录契约中只登记存在性（不做内容校验）的文件：config 副本、训练日志、ckpt
+RUN_DIR_PRESENCE_ONLY = (CONFIG_FILENAME, "train_log.jsonl", "best_val.ckpt", "last.ckpt")
 
 FIGURE_NAME = "figure_avail_domain.png"
 TABLE_NAME = "n_eff_table.csv"
@@ -139,7 +145,10 @@ _GATE_SNAPSHOT_KEYS = {
     "H3": ("verdict", "n_pairs", "joint_wins", "pairing", "inputs"),
     "H7": ("verdict", "rho", "weak", "decay", "variant", "n_seeds", "aggregation",
            "thresholds", "per_seed"),
+    # H8 的容差档映射（`20` [S4] 最近档）是判定表达式的输入：三个字段由 gates.py 恒落盘
+    # （容差线缺失 / 无 run 时为空映射与 None），报告据此渲染"容差档映射"一行
     "H8": ("verdict", "pass_rate", "n_beams", "beam_ids", "seeds", "n_seeds", "tolerance",
+           "tolerance_tier_per_beam", "tolerance_tier_counts", "tolerance_tier_mode",
            "per_observable"),
 }
 #: 条件落盘的快照键（判定不可达时产出不写；缺失以 reason_code 显式解释，不静默）
@@ -338,16 +347,18 @@ def run_dir_triple(run_dir: str | Path) -> dict:
     返回 ``run_id`` / 三元组（``data_version``、``code_version``、``spec_version``）/
     ``variant`` / ``seed`` / ``n_low`` / ``max_steps`` / 时间戳，外加：
 
-    - ``present``：目录内实际落盘的契约文件（run_meta.json、summary.json、config.json、
+    - ``present``：目录内实际落盘的契约文件（run_meta.json、summary.json、config.yaml、
       训练日志、ckpt）；
     - ``missing``：未落盘的契约文件——`train.py` 只写 ``summary.json``、``train_log.jsonl``
-      与 ckpt（config 只以冻结副本形式存在于 ``docs/specs/line2/e1_configs/``，调度器
-      ``run_e1`` 从该目录读取，不向 run 目录复制），故缺失只登记到报告第 4 章，
+      与 ckpt；``config.yaml`` 按 `40` [S1] C2 应在 run 目录内，实况由
+      ``docs/specs/line2/e1_configs/*.json`` 冻结副本 + ``run_meta.json`` 的
+      ``config``/``cmd`` 承载（该缺口登记于 `40` 的 decisions）。故缺失只登记到报告第 4 章，
       不报错；
     - ``best_val_n_eff``：val 段选型准绳（`00` GC3），summary.json 缺失时为 None。
 
-    ``run_meta.json`` 与 ``summary.json``/``config.json`` 的 variant/seed/n_low/max_steps
-    冲突 → :class:`ValueError`（同一 run 的两份溯源必须指向同一次训练）。
+    ``config.yaml`` 只登记存在性：本仓库无生产者，且它是 YAML（内容校验需另引入解析依赖）。
+    ``run_meta.json`` 与 ``summary.json`` 的 variant/seed 冲突 → :class:`ValueError`
+    （同一 run 的两份溯源必须指向同一次训练）。
     """
     run_dir = Path(run_dir)
     if not run_dir.is_dir():
@@ -369,34 +380,29 @@ def run_dir_triple(run_dir: str | Path) -> dict:
         "missing": [],
     }
     summary_path = run_dir / SUMMARY_FILENAME
-    config_path = run_dir / CONFIG_FILENAME
     for name in RUN_DIR_PRESENCE_ONLY:
         (record["present"] if (run_dir / name).is_file() else record["missing"]).append(name)
-    for path, shared_keys in (
-        (summary_path, ("variant", "seed")),
-        (config_path, ("variant", "seed", "n_low", "max_steps")),
-    ):
-        if not path.is_file():
-            record["missing"].append(path.name)
-            continue
-        record["present"].append(path.name)
-        payload = _read_json(path, f"run 目录产物 {path.name}")
-        for key in shared_keys:
-            if key not in payload:
-                continue  # summary/config 各自的字段集由 `30` 定义，此处只校验共有键的取值一致
-            if key in ("seed", "n_low", "max_steps"):
-                if int(payload[key]) != record[key]:
-                    raise ValueError(
-                        f"{_display_path(path)}：{key}={payload[key]!r} 与 run_meta 的 "
-                        f"{record[key]!r} 冲突（`40` [S1] C2 run 目录契约）"
-                    )
-            elif str(payload[key]) != str(record[key]):
+    if not summary_path.is_file():
+        record["missing"].append(summary_path.name)
+        return record
+    record["present"].append(summary_path.name)
+    payload = _read_json(summary_path, f"run 目录产物 {summary_path.name}")
+    for key in ("variant", "seed"):
+        if key not in payload:
+            continue  # summary 的字段集由 `30` 定义，此处只校验与 run_meta 共有的键
+        if key == "seed":
+            if int(payload[key]) != record[key]:
                 raise ValueError(
-                    f"{_display_path(path)}：{key}={payload[key]!r} 与 run_meta 的 "
+                    f"{_display_path(summary_path)}：seed={payload[key]!r} 与 run_meta 的 "
                     f"{record[key]!r} 冲突（`40` [S1] C2 run 目录契约）"
                 )
-        if "best_val_n_eff" in payload:
-            record["best_val_n_eff"] = payload["best_val_n_eff"]
+        elif str(payload[key]) != str(record[key]):
+            raise ValueError(
+                f"{_display_path(summary_path)}：{key}={payload[key]!r} 与 run_meta 的 "
+                f"{record[key]!r} 冲突（`40` [S1] C2 run 目录契约）"
+            )
+    if "best_val_n_eff" in payload:
+        record["best_val_n_eff"] = payload["best_val_n_eff"]
     return record
 
 
@@ -711,6 +717,40 @@ def _flatten_snapshot_rows(rows: Sequence[tuple[str, object]]) -> list[tuple[str
     return flat
 
 
+#: H8 容差档映射在快照表内的行标签（映射由 `e1_gates.json:H8` 落盘，报告只渲染汇总行）
+_H8_TIER_ROW_LABEL = "容差档映射"
+
+
+def _fmt_tier(tier: object) -> str:
+    """档位字面量：整数尾数的量级写作 ``NeK``（1e4 / 3e3 / 1e5，与报告正文口径一致）。"""
+    if tier is None:
+        return "—"
+    value = int(tier)
+    exponent = len(str(value)) - 1 if value > 0 else 0
+    divisor = 10 ** exponent
+    if exponent >= 3 and value % divisor == 0:
+        return f"{value // divisor}e{exponent}"
+    return str(value)
+
+
+def _tolerance_tier_row(gate: Mapping) -> str:
+    """H8 容差档映射的一行披露：众数档 + 档位分布（未映射时给出降级原因）。
+
+    逐束映射明细（束级 N_eff 中位数 → 档位）留在门禁产物的 ``tolerance_tier_per_beam``，
+    不挤进"项/值"两列。
+    """
+    mode = gate.get("tolerance_tier_mode")
+    if mode is None:
+        return f"—（未映射，原因 {_fmt(gate.get('reason_code'))}）"
+    counts = gate.get("tolerance_tier_counts") or {}
+    dist = ", ".join(
+        f"{_fmt_tier(int(tier))}×{count}"
+        for tier, count in sorted(counts.items(), key=lambda kv: int(kv[0]))
+    )
+    tail = f"；档位分布 {dist}" if dist else ""
+    return f"{_fmt_tier(mode)}（每束 N_eff 中位数最近档，`20` [S4]{tail}）"
+
+
 def _gate_lines(name: str, gate: Mapping) -> list[str]:
     """单条门禁的报告块：结论 + 冻结判定表达式 + 输入数值快照（`40` [S4] C2）。"""
     source = f"e1_gates.json:{name}"
@@ -722,18 +762,31 @@ def _gate_lines(name: str, gate: Mapping) -> list[str]:
         f"- **判定表达式**（`40` [S3]，阈值冻结）：{_GATE_RULES[name]}",
         "", "**判定表达式的输入数值快照**（取自门禁产物，本脚本不重算判定）：", "",
     ]
-    # per_seed / per_observable 另起明细子表，不挤进"项/值"两列
-    skip = {"H7": ("per_seed", "flagged_seeds"), "H8": ("per_observable",)}.get(name, ())
+    # per_seed / per_observable 另起明细子表，不挤进"项/值"两列；H8 的逐束档位映射（每束一条）
+    # 同理只在表内渲染一行汇总
+    skip = {
+        "H7": ("per_seed", "flagged_seeds"),
+        "H8": ("per_observable", "tolerance_tier_per_beam", "tolerance_tier_counts",
+               "tolerance_tier_mode"),
+    }.get(name, ())
     # H7 聚合条目的中位数比值以 `rho_median` 落盘（与冻结快照键 `rho` 同值）：同一数字只渲染
     # 一行，取聚合语义名；标记清单另在下方逐种子小节披露。聚合的降级原因（如
     # `n_eff_flag_present`）经 `_GATE_OPTIONAL_KEYS` 照旧进快照表。
     alias = {"rho": "rho_median"} if name == "H7" and "rho_median" in gate else {}
     keys = [alias.get(key, key) for key in (*_GATE_SNAPSHOT_KEYS[name], *_GATE_OPTIONAL_KEYS[name])]
-    rows = [
-        (key, gate[key])
-        for key in keys
-        if key != "verdict" and key not in skip and key in gate
-    ]
+    rows: list[tuple[str, object]] = []
+    for key in keys:
+        if key == "verdict" or key in skip or key not in gate:
+            continue
+        value = gate[key]
+        if key == "tolerance" and isinstance(value, str):
+            # 门禁产物里存的是运行时绝对路径（全文唯一未归一的路径字面量）：与 §1.1/§3.1
+            # 一致按 `_display_path` 归一
+            value = _display_path(value)
+        rows.append((key, value))
+        if name == "H8" and key == "tolerance":
+            # 容差档映射（`20` [S4] 最近档）紧随容差线路径：它是 H8 判定表达式的输入
+            rows.append((_H8_TIER_ROW_LABEL, _tolerance_tier_row(gate)))
     lines += _md_table(["项", "值"], _flatten_snapshot_rows(rows) if name in ("H1", "H3") else rows)
 
     if name == "H3" and gate.get("tied_at_domain_edge"):
@@ -851,9 +904,10 @@ def render_report(
         "（只读；同输入逐位一致，[S4] C1）。",
         f"> 输入产物：`e0_curve.json`、`{GATES_FILENAME}`、{len(table)} 份 `*/{EVAL_GLOB}`"
         f"、{len(run_metas)} 份 `*/{RUN_META_FILENAME}`。",
-        f"> 代码版本：{_fmt(gates.get('code_version'))}｜数据版本："
-        f"{_fmt((curve_meta or {}).get('data_version'))}｜spec 版本："
-        f"{_fmt((curve_meta or {}).get('spec_version'))}（`00` GC7）",
+        f"> 门禁产物 code_version：{_fmt(gates.get('code_version'))}"
+        "（产生 `e1_gates.json` 的判定代码版本；`00` GC7 要求的每个 run 的三元组见 §1.2）"
+        f"｜数据版本：{_fmt((curve_meta or {}).get('data_version'))}｜spec 版本："
+        f"{_fmt((curve_meta or {}).get('spec_version'))}",
         f"> 配套产出物：地图 `{_display_path(figure_path)}`、N_eff 表 `{_display_path(table_path)}`。",
         "",
         "## 1. 数据",
@@ -922,7 +976,10 @@ def render_report(
     lines += ["## 3. 结果", "", "### 3.1 N_eff 明细表", "",
               f"落盘：`{_display_path(table_path)}`（列序 = {', '.join(TABLE_COLUMNS)}）。", ""]
     lines += _md_table(list(TABLE_COLUMNS), [[r[col] for col in TABLE_COLUMNS] for r in table])
-    lines += ["", "### 3.2 主曲线三点（方法可用域地图面板 A 的数值）", "",
+    # 主曲线的档位数随实验矩阵推进而变（E1 = 1e4 一点，E2 补入 3e3 / 1e5 后成三点），
+    # 故小节名由实际聚合出（不写死"三点"）
+    n_low_list = ", ".join(_fmt_tier(n) for n in sorted({int(g["n_low"]) for g in groups}))
+    lines += ["", f"### 3.2 主曲线聚合（N_low = {n_low_list}；方法可用域地图面板 A 的数值）", "",
               "放大比 = N_eff / N_low；N_eff 取 `20` [S3] 报告域 [1e3, 1e5]，"
               "上/下溢行以域端点计入并在表中计数（图内以空心叉号标注）。", ""]
     lines += _md_table(
@@ -957,10 +1014,17 @@ def render_report(
         for name in meta["missing"]:
             missing_by_file.setdefault(name, []).append(run_id)
     for name, run_ids in sorted(missing_by_file.items()):
-        gaps.append(
+        gap = (
             f"{len(run_ids)}/{len(run_metas)} 个 run 目录缺 `{name}`（`40` [S1] C2 契约文件）："
             + ", ".join(run_ids)
         )
+        if name == CONFIG_FILENAME:
+            gap += (
+                "——配置实由 `docs/specs/line2/e1_configs/*.json` 冻结副本与 "
+                f"`{RUN_META_FILENAME}` 的 `config`/`cmd` 字段承载；该缺口登记于 `40` 的 "
+                "decisions，本报告只披露、不补写产物。"
+            )
+        gaps.append(gap)
     if not e0_order["verifiable"]:
         gaps.append(
             "顺序审计（`40` [S1] C5）判**不可验证**（不据此判通过），缺失证据："
@@ -1026,7 +1090,7 @@ def render_report(
         "- 备选：把图表与报告塞进 `evaluate_gates_from_disk`——被否，门禁的职责是判定"
         "（`40` [S3] C1 要求同输入逐位一致的可复算判定），产出物是判定的呈现层；"
         "混在一起会让\"改报告格式\"变成\"改门禁\"，也让 [S3] C2 的\"只消费落盘 summary\"边界模糊。",
-        "- 取舍依据：[S4] Global Constraints 要求产出物脚本只读；分层后门禁可独立复算，"
+        "- 取舍依据：`40` Global Constraints 要求产出物脚本只读；分层后门禁可独立复算，"
         "报告可反复重生成而不触碰判定。",
         "",
         "### 7.2 为什么报告不写生成时间戳与当次 git HEAD",
@@ -1072,8 +1136,8 @@ def render_report(
         "- 选择：证据齐全且存在 run 的 started_at ≤ E0 completed_at → 抛错；"
         "证据缺失 → verifiable=False，第 4 章显式登记。",
         "- 备选：证据缺失时默认通过——被否，那等于把\"没记录\"读成\"守规矩\"，"
-        "与 D8\"顺序约束不编码就会在执行中被跳过\"的立意相反。",
-        "- 取舍依据：与门禁的\"不可判定\"一等地位一致（D4）：缺证据是一种结论，"
+        "与 `40` D8\"顺序约束不编码就会在执行中被跳过\"的立意相反。",
+        "- 取舍依据：与门禁的\"不可判定\"一等地位一致（`40` D4）：缺证据是一种结论，"
         "不是通过。违例则必须中断——尺子后行的批次其 N_eff 无定义基底，"
         "继续生成报告等于把无效矩阵包装成交付物。",
         "",

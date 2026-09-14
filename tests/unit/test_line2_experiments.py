@@ -358,20 +358,35 @@ def test_check_e0_precedes_runs_unverifiable_without_evidence(tmp_path: Path) ->
 
 # --------------------------------------------- `40` [S1] C2：run 目录契约与 GC7 三元组
 def test_run_dir_triple_reads_triple_and_registers_presence(tmp_path: Path) -> None:
-    """`40` [S1] C2：假 run 目录读全三元组；未落盘的契约文件显式登记。"""
+    """`40` [S1] C2：假 run 目录读全三元组；未落盘的契约文件显式登记。
+
+    契约文件名取 spec 原文 ``config.yaml``（`40` [S1] C2）；该文件只登记存在性
+    （YAML，无生产者，不做内容校验）。
+    """
     run = tmp_path / "e1_joint_s0"
     _write_run_meta(run, "2026-09-14T05:00:00+00:00", "2026-09-14T06:00:00+00:00")
     (run / "summary.json").write_text(
         json.dumps({"variant": "joint", "seed": 0, "best_val_n_eff": 15000.0}), encoding="utf-8")
-    (run / "config.json").write_text(
-        json.dumps({"variant": "joint", "seed": 0, "n_low": 10000, "max_steps": 50000}),
-        encoding="utf-8")
+    (run / "config.yaml").write_text("variant: joint\nseed: 0\n", encoding="utf-8")
     record = run_dir_triple(run)
     assert (record["data_version"], record["code_version"], record["spec_version"]) == (
         "line2_ds_v1", "a" * 40, "line2-spec-v1.0")
     assert record["run_id"] == "e1_joint_s0"
     assert record["best_val_n_eff"] == 15000.0
+    assert "config.yaml" in record["present"]
     assert record["missing"] == ["train_log.jsonl", "best_val.ckpt", "last.ckpt"]
+
+
+def test_run_dir_triple_registers_missing_config_yaml_by_spec_name(tmp_path: Path) -> None:
+    """`40` [S1] C2：config 副本未落盘时按 spec 名 ``config.yaml`` 登记（实况缺口）。"""
+    run = tmp_path / "e1_joint_s0"
+    _write_run_meta(run, "2026-09-14T05:00:00+00:00", "2026-09-14T06:00:00+00:00")
+    (run / "summary.json").write_text(
+        json.dumps({"variant": "joint", "seed": 0, "best_val_n_eff": 15000.0}), encoding="utf-8")
+    record = run_dir_triple(run)
+    assert record["missing"] == [
+        "config.yaml", "train_log.jsonl", "best_val.ckpt", "last.ckpt"]
+    assert "config.yaml" not in record["present"]
 
 
 def test_run_dir_triple_raises_on_missing_field(tmp_path: Path) -> None:
@@ -471,6 +486,8 @@ def _fake_gates() -> dict:
                "reason_code": "station1_missing"},
         "H8": {"seeds": [0], "n_seeds": 1, "tolerance": None, "verdict": "不可判定",
                "pass_rate": None, "per_observable": [], "n_beams": 0, "beam_ids": [],
+               "tolerance_tier_per_beam": {}, "tolerance_tier_counts": {},
+               "tolerance_tier_mode": None,
                "variant": "joint", "reason_code": "tolerance_missing"},
         "beam_n_eff_snapshot": {"joint": [{"beam_id": 1, "n_eff_median": 40000.0,
                                            "n_eff_per_seed": {"0": 40000.0},
@@ -618,7 +635,9 @@ def test_report_carries_gate_snapshots_and_why_chapter(fake_products: Path, tmp_
     for row in ("| median_n_eff | 40000 |", "| n_above_n_low | 1 |",
                 "| joint_wins | 1 |", "| pairing.basis | seed_value |",
                 "| rho | — |", "| aggregation | seed_median_then_ratio |",
-                "| pass_rate | — |", "| tolerance | — |"):
+                "| pass_rate | — |", "| tolerance | — |",
+                # H8 的容差档映射：未映射时按同一行位置显式给出降级原因（不静默省略）
+                "| 容差档映射 | —（未映射，原因 tolerance_missing） |"):
         assert row in text
     # 降级原因显式登记（第 4 章），不静默
     for code in ("winner_or_seeds_insufficient", "pairs_insufficient",
@@ -629,6 +648,81 @@ def test_report_carries_gate_snapshots_and_why_chapter(fake_products: Path, tmp_
     # 报告头的"配套产出物"指向实际落盘路径（默认：图与报告同在 reports 目录）
     assert str(out["figure"].resolve()) in text
     assert str(out["table"].resolve()) in text
+    # 报告头不把门禁产物的 code_version 冒充"本批实验的代码版本"：`00` GC7 要求的是每个 run
+    # 的 manifest 三元组，run 级三元组在第 1.2 节
+    assert "门禁产物 code_version" in text
+    assert "`00` GC7 要求的每个 run 的三元组见 §1.2" in text
+
+
+def test_report_discloses_h8_tolerance_tier_mapping(fake_products: Path, tmp_path: Path) -> None:
+    """`40` [S4] C2 + `20` [S4]：H8 快照披露容差档映射，容差线路径归一为仓库相对路径。
+
+    容差档（N_eff → 最近曲线档）是 H8 判定表达式的输入，而 H8 的结论恰由该档决定；
+    鉴别力：旧实现只列 `tolerance` 路径（且是本机绝对路径），读者必须回读 `gates.py` 才能
+    知道用了哪一条容差线——本用例断言的"容差档映射"行在旧实现下不存在。
+    """
+    path = fake_products / "e1_gates.json"
+    gates = json.loads(path.read_text(encoding="utf-8"))
+    absolute = str(PROJECT_ROOT / "studies" / "line2_particle_sr" / "results" / "tolerance.json")
+    gates["H8"].update({
+        "tolerance": absolute, "verdict": "不成立", "pass_rate": 0.25,
+        "n_beams": 3, "beam_ids": [1, 2, 3],
+        "tolerance_tier_per_beam": {
+            "1": {"n_eff_median": 100_000.0, "tier": 100_000},
+            "2": {"n_eff_median": 100_000.0, "tier": 100_000},
+            "3": {"n_eff_median": 3_000.0, "tier": 3_000},
+        },
+        "tolerance_tier_counts": {"3000": 1, "100000": 2},
+        "tolerance_tier_mode": 100_000,
+        "per_observable": [{"index": 0, "name": "sigma_xx_rel", "n_pass": 0, "n_beams": 3,
+                            "pass_rate": 0.0}],
+    })
+    path.write_text(json.dumps(gates), encoding="utf-8")
+    text = generate(fake_products, out_dir=tmp_path / "out",
+                    reports_dir=tmp_path / "reports")["report"].read_text(encoding="utf-8")
+    assert ("| 容差档映射 | 1e5（每束 N_eff 中位数最近档，`20` [S4]；档位分布 3e3×1, 1e5×2） |"
+            in text)
+    assert "| tolerance | studies/line2_particle_sr/results/tolerance.json |" in text
+    assert absolute not in text          # 本机绝对路径不进报告
+    # 逐束映射明细（每束一条）留在门禁产物里，不挤进"项/值"两列
+    assert "tolerance_tier_per_beam" not in text
+
+
+def test_report_title_and_anchors_follow_actual_products(fake_products: Path, tmp_path: Path
+                                                         ) -> None:
+    """§3.2 标题随实际档位自适应；§7 的锚点带 spec 前缀；Global Constraints 归属 `40`。
+
+    鉴别力：旧实现的标题写死"主曲线三点"，而本批产物只有 1e4 / 1e5 两档；旧 §7.6 写裸锚
+    "（D8）""（D4）"（四份 `.decisions.md` 都有 D4/D8，读者无法解析），旧 §7.1 把顶层
+    `## Global Constraints` 记成 `[S4]` 的子节。
+    """
+    text = generate(fake_products, out_dir=tmp_path / "out",
+                    reports_dir=tmp_path / "reports")["report"].read_text(encoding="utf-8")
+    assert "主曲线三点" not in text
+    assert "### 3.2 主曲线聚合（N_low = 1e4, 1e5；方法可用域地图面板 A 的数值）" in text
+    assert "与 `40` D8" in text and "（`40` D4）" in text
+    assert "[S4] Global Constraints" not in text
+    assert "`40` Global Constraints" in text
+
+
+def test_report_discloses_config_yaml_gap_by_spec_name(fake_products: Path, tmp_path: Path) -> None:
+    """`40` [S1] C2：run 目录缺 config 副本时按 spec 名 ``config.yaml`` 披露，不补写产物。
+
+    缺口披露还必须写明配置的实际承载（冻结副本 + `run_meta.json`），否则读者会把
+    "缺 config" 读成"该 run 无配置可核"。
+    """
+    for run_id in ("e1_joint_s0", "e2_joint_s0_1e5"):
+        _write_run_meta(fake_products / run_id, "2026-09-14T05:00:00+00:00",
+                        "2026-09-14T06:00:00+00:00")
+    before = sorted(p.name for p in fake_products.rglob("*") if p.is_file())
+    out = generate(fake_products, out_dir=tmp_path / "out", reports_dir=tmp_path / "reports")
+    text = out["report"].read_text(encoding="utf-8")
+    assert "2/2 个 run 目录缺 `config.yaml`（`40` [S1] C2 契约文件）" in text
+    assert "config.json" not in text            # 缺口名与 spec 一致
+    assert "`run_meta.json` 的 `config`/`cmd` 字段承载" in text
+    # 只披露、不补写：输入目录没有新增文件
+    after = sorted(p.name for p in fake_products.rglob("*") if p.is_file())
+    assert before == after and "config.yaml" not in after
 
 
 def test_report_discloses_h7_overflow_indeterminacy(fake_products: Path, tmp_path: Path) -> None:

@@ -578,8 +578,13 @@ def _write_run(results_dir: pathlib.Path, run_id: str, variant: str, seed: int,
     )
 
 
-def _write_curve_and_tolerance(results: pathlib.Path) -> None:
-    """写门禁所需的曲线 dump（+ meta 侧文件）与 `20` [S4] 容差线产物。"""
+def _write_curve_and_tolerance(results: pathlib.Path,
+                               tier_tolerance: dict[int, float] | None = None) -> None:
+    """写门禁所需的曲线 dump（+ meta 侧文件）与 `20` [S4] 容差线产物。
+
+    ``tier_tolerance`` 按档位给不同的容差线（缺省 = 各档统一 0.5）——用于验证
+    "同一 obs、映射到不同档 ⇒ 结论不同"。
+    """
     curve = {
         "tiers": list(CURVE_TIERS), "k": 2, "beam_ids": [1, 2, 3],
         "points": [
@@ -594,9 +599,11 @@ def _write_curve_and_tolerance(results: pathlib.Path) -> None:
     (results / "e0_curve.meta.json").write_text(
         json.dumps({"beams_scope": "valtest"}), encoding="utf-8"
     )
+    per_tier = {t: 0.5 for t in CURVE_TIERS} if tier_tolerance is None else tier_tolerance
     (results / "tolerance.json").write_text(
         json.dumps({"quantile": 0.95, "scope": "valtest_pooled",
-                    "dev_table": {str(t): [0.5] * N_OBSERVABLES for t in CURVE_TIERS}}),
+                    "dev_table": {str(t): [float(v)] * N_OBSERVABLES
+                                  for t, v in per_tier.items()}}),
         encoding="utf-8",
     )
 
@@ -867,6 +874,104 @@ def test_evaluate_gates_h8_degrades_without_tolerance(fake_results: pathlib.Path
     assert out["H8"]["verdict"] == "不可判定"
     assert out["H8"]["reason_code"] == "tolerance_missing" and out["H8"]["pass_rate"] is None
     assert out["H1"]["verdict"] == "成立"  # 其余门禁不受影响
+
+
+# ------------------------------------------- H8 容差档映射（`20` [S4] / [S4] C2 输入快照）
+#: 档位 → 容差线（各观测量同值）：1e5 宽、1e4 严、1e3 最严。obs 恒 0.4 ⇒ 落在 1e5 档达标、
+#: 落在 1e4/1e3 档不达标——映射出的档位因此可由 pass_rate 反推。
+TIER_TOLERANCE = {1_000: 0.05, 10_000: 0.1, 100_000: 0.5}
+
+
+def _h8_tier_results(results: pathlib.Path, *, n_eff: float, flag: str | None = None,
+                     tier_tolerance: dict[int, float] | None = None) -> pathlib.Path:
+    """H8 档映射用例的最小 results：两臂各 5 种子站 0，获胜臂（val 更强 = independent）同值。
+
+    ``_write_run`` 把 ``n_eff`` 同时写进 run 级与逐束字段，故束级（5 种子）中位数 = ``n_eff``。
+    """
+    results.mkdir(parents=True, exist_ok=True)
+    _write_curve_and_tolerance(results, tier_tolerance=tier_tolerance)
+    for slot in range(5):
+        _write_run(results, f"e1_joint_s{slot}", "joint", 100 + slot, 10_000.0, 5_000.0)
+        _write_run(results, f"e1_indep_s{slot}", "independent", 100 + slot, n_eff, 20_000.0,
+                   flag=flag)
+    return results
+
+
+def test_h8_tier_mapping_persisted_at_domain_ceiling(tmp_path: pathlib.Path) -> None:
+    """束级 N_eff 触顶 1e5 ⇒ 档位映射 = 1e5 档，pass_rate 与该档一致。
+
+    鉴别力：旧实现现算档位后即丢弃，`e1_gates.json:H8` 里查不到"用了哪条容差线"
+    （`tolerance` 只有路径），这三个键在旧实现下不存在（KeyError）。
+    """
+    results = _h8_tier_results(tmp_path / "results", n_eff=100_000.0, flag="overflow",
+                               tier_tolerance=TIER_TOLERANCE)
+    h8 = evaluate_gates_from_disk(results)["H8"]
+    assert h8["tolerance_tier_mode"] == 100_000
+    assert h8["tolerance_tier_counts"] == {"100000": 3}
+    assert h8["tolerance_tier_per_beam"] == {
+        str(beam_id): {"n_eff_median": 100_000.0, "tier": 100_000} for beam_id in (1, 2, 3)
+    }
+    # obs = 0.4 ≤ 1e5 档容差 0.5 ⇒ 3 束 × 13 项全达标
+    assert h8["pass_rate"] == 1.0 and h8["verdict"] == "成立"
+
+
+def test_h8_tier_mapping_follows_beam_n_eff_median(tmp_path: pathlib.Path) -> None:
+    """束级 N_eff = 1e4（非触顶）⇒ 档位 = 1e4 档；结论随该档的严容差翻转。"""
+    results = _h8_tier_results(tmp_path / "results", n_eff=10_000.0,
+                               tier_tolerance=TIER_TOLERANCE)
+    h8 = evaluate_gates_from_disk(results)["H8"]
+    assert h8["tolerance_tier_mode"] == 10_000
+    assert h8["tolerance_tier_counts"] == {"10000": 3}
+    assert h8["tolerance_tier_per_beam"]["1"] == {"n_eff_median": 10_000.0, "tier": 10_000}
+    # 1e4 档容差 0.1 < obs 0.4 ⇒ 全不达标
+    assert h8["pass_rate"] == 0.0 and h8["verdict"] == "不成立"
+
+
+def test_h8_conclusion_is_sensitive_to_mapped_tier(tmp_path: pathlib.Path) -> None:
+    """同一 obs、同一容差表，仅束级 N_eff 不同 ⇒ 映射档位不同、结论随之翻转。
+
+    容差表刻意与上面两例反相（1e4 宽 0.5 / 1e5 严 0.1）：若实现把"触顶"当成固定的宽严，
+    翻转就不会出现——本用例把"结论由映射档位决定"钉在断言上。
+    """
+    inverted = {1_000: 0.05, 10_000: 0.5, 100_000: 0.1}
+    ceiling = evaluate_gates_from_disk(
+        _h8_tier_results(tmp_path / "ceiling", n_eff=100_000.0, flag="overflow",
+                         tier_tolerance=inverted)
+    )["H8"]
+    baseline = evaluate_gates_from_disk(
+        _h8_tier_results(tmp_path / "baseline", n_eff=10_000.0, tier_tolerance=inverted)
+    )["H8"]
+    assert ceiling["tolerance_tier_mode"] == 100_000
+    assert baseline["tolerance_tier_mode"] == 10_000
+    assert ceiling["pass_rate"] == 0.0 and ceiling["verdict"] == "不成立"
+    assert baseline["pass_rate"] == 1.0 and baseline["verdict"] == "成立"
+
+
+def test_h8_tier_fields_keep_shape_without_tolerance(tmp_path: pathlib.Path) -> None:
+    """容差线缺失 / 无获胜 run ⇒ 仍判不可判定，三个档位字段按同一形状落盘（空 / None）。"""
+    usable = _h8_tier_results(tmp_path / "usable", n_eff=10_000.0,
+                              tier_tolerance=TIER_TOLERANCE)
+    full = evaluate_gates_from_disk(usable)["H8"]
+    (usable / "tolerance.json").unlink()
+    missing = evaluate_gates_from_disk(usable)["H8"]
+    assert missing["verdict"] == "不可判定" and missing["reason_code"] == "tolerance_missing"
+    assert missing["tolerance_tier_per_beam"] == {} and missing["tolerance_tier_counts"] == {}
+    assert missing["tolerance_tier_mode"] is None
+    # 形状一致：判定不可达时只多一个 `reason_code`（`_GATE_OPTIONAL_KEYS` 的口径），
+    # 档位三键在任何分支都在场——报告无需对"字段缺失"另写分支
+    assert set(missing) - {"reason_code"} == set(full)
+
+    # 无获胜 run（independent 臂产物缺失 ⇒ 路由不可判定 ⇒ H8 无输入）
+    no_runs = _h8_tier_results(tmp_path / "no_runs", n_eff=10_000.0,
+                               tier_tolerance=TIER_TOLERANCE)
+    for pattern in ("e1_indep_s*/test_eval.json", "e1_indep_s*/summary.json"):
+        for path in sorted(no_runs.glob(pattern)):
+            path.unlink()
+    empty = evaluate_gates_from_disk(no_runs)["H8"]
+    assert empty["verdict"] == "不可判定" and empty["reason_code"] == "no_runs"
+    assert empty["tolerance_tier_mode"] is None and empty["tolerance_tier_counts"] == {}
+    assert empty["tolerance_tier_per_beam"] == {}
+    assert set(empty) - {"reason_code"} == set(full)
 
 
 def test_evaluate_gates_partial_seeds_are_undecidable(fake_results: pathlib.Path) -> None:

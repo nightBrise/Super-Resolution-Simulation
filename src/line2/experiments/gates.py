@@ -13,7 +13,8 @@
 - H7（跨站泛化，[S2]）：ρ = N_eff(站1)/N_eff(站0) 对预注册边界 {1.0, 0.5} 的三分类；
   任一侧携带上/下溢标记（端点截断值）⇒ 不可判定，ρ 仅作披露
 - H8（细结构可恢复性，[S3]）：13 项观测量对容差线的达标率 ≥80% 成立 / ≤50% 不成立 /
-  之间不可判定；聚合 = test 束 × 站 0 × 1e4 × 5 种子**中位数输出**（`20` [S4]）
+  之间不可判定；聚合 = test 束 × 站 0 × 1e4 × 5 种子**中位数输出**（`20` [S4]）；
+  容差档映射（束级 N_eff 中位数 → 最近曲线档）是判定表达式的输入，随结论落盘
 - `evaluate_gates_from_disk`：只读 run 目录产物出 `e1_gates.json`（不训练、不推理，[S3] C2）
 
 两段式消费边界（[S3]、D6）：变体路由只吃 **val** 段（run 目录 summary.json 的
@@ -32,7 +33,7 @@ from pathlib import Path
 import numpy as np
 
 from src.line2.data_pipeline.dataset import git_head
-from src.line2.metrics.tolerance import N_OBSERVABLES, tolerance_for
+from src.line2.metrics.tolerance import N_OBSERVABLES, nearest_node, tolerance_for
 
 from .evaluate import curve_from_json
 
@@ -482,15 +483,40 @@ def _pairs_by_seed_or_reason(
         return [], "seed_sets_differ", seed_sets
 
 
+def _h8_tier_summary(tier_per_beam: Mapping[str, Mapping]) -> dict:
+    """逐束档位映射 → 档位分布 + 众数档位（并列取较小档，确定性；空映射 → None）。"""
+    counts: dict[str, int] = {}
+    for entry in tier_per_beam.values():
+        key = str(int(entry["tier"]))
+        counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return {"tolerance_tier_counts": {}, "tolerance_tier_mode": None}
+    top = max(counts.values())
+    return {
+        "tolerance_tier_counts": counts,
+        "tolerance_tier_mode": min(int(tier) for tier, n in counts.items() if n == top),
+    }
+
+
 def _h8_from_disk(
     runs_by_seed: dict[int, dict],
     curve_nodes: tuple[int, ...],
     tolerance_path: Path,
 ) -> dict:
-    """获胜变体的 test 束 × 站 0 × 1e4 观测量 → 种子中位数 → 达标率（`40` [S3] H8）。"""
+    """获胜变体的 test 束 × 站 0 × 1e4 观测量 → 种子中位数 → 达标率（`40` [S3] H8）。
+
+    容差档映射（`20` [S4]：束级 N_eff 对数距离最近的曲线档）是 H8 判定表达式的输入，
+    故与逐束 N_eff 一并落盘（``tolerance_tier_per_beam`` / ``_counts`` / ``_mode``）：
+    `40` [S4] C2 要求读者由产物本身即可确认"用了哪条容差线"，不必回读本模块。
+    容差线缺失或无 run 时三个字段仍按同一形状落盘（空映射 / None）。
+    """
     seeds = sorted(runs_by_seed)
     runs = [runs_by_seed[s] for s in seeds]
-    base = {"seeds": [int(s) for s in seeds], "n_seeds": len(seeds), "tolerance": None}
+    base = {
+        "seeds": [int(s) for s in seeds], "n_seeds": len(seeds), "tolerance": None,
+        "tolerance_tier_per_beam": {}, "tolerance_tier_counts": {},
+        "tolerance_tier_mode": None,
+    }
     if not runs:
         return {
             **base, "verdict": VERDICT_INDETERMINATE, "pass_rate": None,
@@ -510,20 +536,23 @@ def _h8_from_disk(
     if missing:
         raise ValueError(f"{tolerance_path}：容差表缺曲线档 {missing}，`20` [S4] 最近档映射无法执行")
     # 容差节点 = 与该束 N_eff 对数距离最近的曲线档（`20` [S4]）；束级 N_eff 取种子中位数
-    tol_rows = [
-        tolerance_for(
-            dev_table,
-            curve_nodes,
-            float(np.median([rec[beam_id]["n_eff"] for rec in records])),
-        )
-        for beam_id in beam_ids
-    ]
+    tier_per_beam: dict[str, dict] = {}
+    tol_rows = []
+    for beam_id in beam_ids:
+        median_n_eff = float(np.median([rec[beam_id]["n_eff"] for rec in records]))
+        tier_per_beam[str(beam_id)] = {
+            "n_eff_median": median_n_eff,
+            "tier": int(nearest_node(curve_nodes, median_n_eff)),
+        }
+        tol_rows.append(tolerance_for(dev_table, curve_nodes, median_n_eff))
     return {
         **base,
         **evaluate_h8(dev, np.stack(tol_rows)),
         "n_beams": len(beam_ids),
         "beam_ids": beam_ids,
         "tolerance": str(tolerance_path),
+        "tolerance_tier_per_beam": tier_per_beam,
+        **_h8_tier_summary(tier_per_beam),
     }
 
 
