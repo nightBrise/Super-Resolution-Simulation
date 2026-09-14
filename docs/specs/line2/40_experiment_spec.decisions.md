@@ -107,7 +107,13 @@
 **Spec section:** [S1] C3
 **Status:** live
 
-## Progress
+## D14: [S1] C2 偏差记录——run 目录内未落 spec 点名的 config 副本（2026-09-15 评审发现）
+**Phase:** review
+**Chosen:** 记为 deviation、不回填伪造产物。`40` [S1] C2 点名 run 目录应含 `config.yaml`，实况是 run 目录内**没有** config 副本；实际承载方式为：`run_meta.json` 的 `config` 字段（冻结副本路径 `docs/specs/line2/e1_configs/<run_id>.json` 或 `e2_configs/`）与 `cmd`（完整启动命令），加上训练 summary 里的 `cfg_hash`。`map_report` 的缺口清单已按 spec 的名字（`config.yaml`）显式披露该缺口。
+**Rationale:** 配置的权威副本以**冻结件**形式入库（`docs/specs/line2/{e1,e2}_configs/`），比 run 目录内的散落副本更强（可核对、可 diff、随代码版本入库）；run 级三元组与启动命令在 `run_meta.json` 中可追溯。补副本需回填 20 个 run 目录（会与"运行时产物如实记录"的口径混淆），收益仅是与 spec 文件名对齐。
+**Rejected:** 运行结束后向既有 run 目录回填 `config.yaml` —— 事后写入会被读作运行时产物，破坏"run 目录记录实际执行状态"的可审计性；改 spec 的 [S1] C2 落盘清单 —— 冻结期不得改 spec。
+**Spec section:** [S1] C2
+**Status:** live（待验收闸口裁决）
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
