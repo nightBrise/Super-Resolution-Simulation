@@ -7,9 +7,9 @@
 | 项目 | 值 |
 |---|---|
 | **当前阶段** | line1 收官（2026-09-12）；line2 Phase 1 执行中 |
-| **当前任务** | line2 Phase 1 spec v1.0 冻结（`docs/specs/line2/` 00/10/20/30/40）；L1 [S1]–[S5] 实现+复审 ✓；L2 [S1]–[S5] 实现+复审 ✓；L3b [S1]–[S5] 实现 ✓；E0 曲线已落盘；**E1 训练运行中**（joint_s0 @GPU0 + indep_s0 @GPU1，50k 步；其余 8 排后续） |
+| **当前任务** | line2 Phase 1 spec v1.0 冻结（`docs/specs/line2/` 00/10/20/30/40）；L1/L2/L3b/L4 实现 + 两轮复审整改（`needs fixes` → B1/M1–M5/m1–m10 全部清零，默认套件 423 passed）；E0 裸误差–N 曲线 + 容差线尺子落盘（纯数据基线，时间戳先于 E1）；**E1 十次训练运行中**（joint ×5 @GPU0 / independent ×5 @GPU1，同种子 {100..104}；两臂 val N_eff 已达报告域顶 1e5）。执行期修掉两个实测缺陷并重跑：图内轴向布局的生产者/消费者不一致（M4/κ/PSD/B-moment 对角误差 −87%…+653%）、E1 配置两臂种子不重叠 + 独立臂 `num_levels=3` 致参数量 −76.9% |
 | **进度** | M0–M6 全部完成；出口决策「不进入下一阶段」定案——分支树 (a) 阴性/等效合法终点（条件 1 等效/种子敏感、非显著负），分支 (b) 不触发（读法裁决随 99 R187 登记）；99 [S4] 未决问题表 7 条全部闭环；核心结论——主指标上先验增益未获跨种子稳健确认（A−B 等效（种子级）/ A−C、B−C 种子敏感不可判定），次指标 ε_z 与预测离散度上方案 C 四种子一致占优（约为 A/B 的一半），G3：A−B 通过、A−C/B−C 极端退化档反转（E 类如实报告） |
-| **下一步** | E1 训练完成 → L3b 批次复审 → E2（获胜变体 × 5 种子）→ L4 门禁 → L5/L6/L7 → Phase 1 实验报告 |
+| **下一步** | E1 十次训练完成 → 站 0 test 端评估（10 run）→ E2 脚本化路由（`40` [S1] C4）+ 站 1 评估（E3）→ `e1_gates.json`（H1/H3/H7/H8）→ E2 十次训练（获胜变体 × {3e3,1e5} × 5 种子）→ 方法可用域地图 + 实验报告 → 最终验收审查（qwen3.8-max）。两条自动链已就位：`results/phase1_chain.sh` + `results/phase1_e2_chain.sh` |
 | **最近一次报告** | [`final_report.md`](docs/reports/line1_substitute_sr_final_report.md)（M6 最终报告，2026-08-30；2026-09-12 收官时修正 5 处图片相对链接）；[`studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md)（M5）；[`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md)（M4）|
 
 ## 阶段完成历史
@@ -38,6 +38,10 @@
 - [x] M6：最终报告 + 出口决策（final_report 完成 + N8 通过；出口决策 2026-09-12 用户定案「不进入下一阶段」，line1_substitute_sr 收官）
 - [x] line2 立项：4D 六投影一致超分（大纲 v0.8；五份 spec v1.0 冻结 2026-09-14，`docs/specs/line2/`）
 - [ ] line2 Phase 1 执行（goal 模式进行中）：L1 数据管线 → L2 判据 → L3b 训练 → L4/L5 实验矩阵
+  - [x] L1 `10` [S1]–[S5]：锚点入库（MD5 f39d905f…）+ 1000 束抖动群 700/150/150 + FODO + 五档 ×k=20 子采样落盘（`studies/line2_particle_sr/data/line2_ds_v1/`）
+  - [x] L2 `20` [S1]–[S5]：度量族 M1–M6、裸误差–N 曲线（含参照噪声地板）、N_eff 恒等测试、容差线、基线族
+  - [x] L3b `30` [S1]–[S5]：U-Net 概率头 + FiLM 条件化 + 独立/联合两版 + ★防泄露测试（**C4 未满足**：DDP 双卡缓期，已登记 D12）
+  - [ ] L4/L5 `40` [S1]–[S4]：E0 ✓ → **E1 运行中** → E2/E3 按路由 → H1/H3/H8 门禁 + 域地图 + 报告
 
 ## Agent 工作守则（与 `00 [S13]` 同步）
 
