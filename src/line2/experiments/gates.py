@@ -10,7 +10,8 @@
   - 方向成立（弱）：4/5
   - 不成立：≤ 2/5
   - 不可判定：3/5
-- H7（跨站泛化，[S2]）：ρ = N_eff(站1)/N_eff(站0) 对预注册边界 {1.0, 0.5} 的三分类
+- H7（跨站泛化，[S2]）：ρ = N_eff(站1)/N_eff(站0) 对预注册边界 {1.0, 0.5} 的三分类；
+  任一侧携带上/下溢标记（端点截断值）⇒ 不可判定，ρ 仅作披露
 - H8（细结构可恢复性，[S3]）：13 项观测量对容差线的达标率 ≥80% 成立 / ≤50% 不成立 /
   之间不可判定；聚合 = test 束 × 站 0 × 1e4 × 5 种子**中位数输出**（`20` [S4]）
 - `evaluate_gates_from_disk`：只读 run 目录产物出 `e1_gates.json`（不训练、不推理，[S3] C2）
@@ -64,6 +65,9 @@ H8_PASS_RATE = 0.80   # `40` [S3] H8 成立线（冻结）
 H8_FAIL_RATE = 0.50   # `40` [S3] H8 不成立线（冻结）
 H7_RHO_STRONG = 1.0   # `40` [S2] ρ 边界（冻结）
 H7_RHO_WEAK = 0.5
+# `40` [S2] H7 判不可判定的两种原因（随 H7 段落盘，供报告披露）
+H7_REASON_FLAG = "n_eff_flag_present"   # 任一侧携带上/下溢标记（端点为截断值）
+H7_REASON_UNDEFINED = "rho_undefined"   # ρ 无定义（缺失 / 非有限 / 分母 ≤ 0）
 GATE_STATION = 0      # `40` [S3] H8 聚合维度：站 0
 GATE_N_LOW = 10_000   # `40` [S3] H8 聚合维度：N_low = 1e4
 E1_SEEDS = 5          # `40` [S1] E1 每变体 5 种子
@@ -264,13 +268,16 @@ def evaluate_h7_cross_station(n_eff_s0: object, n_eff_s1: object) -> dict:
     """H7（`40` [S2]）：ρ = N_eff(站1)/N_eff(站0) 对预注册边界 {1.0, 0.5} 的三分类。
 
     ρ ≥ 1 → 成立；0.5 ≤ ρ < 1 → 成立（弱，``weak=True`` + ``decay`` 报衰减系数）；
-    ρ < 0.5 → 不成立；ρ 无法计算 → 不可判定。
+    ρ < 0.5 → 不成立。
 
-    "无法计算"的界定（依据 `40` [S2] C2：结论 SHALL 由 ρ 与 {1.0, 0.5} **唯一**决定，
-    不得人工裁量）：上/下溢标记只说明 N_eff 触及报告域端点（1e3 / 1e5），端点本身
-    是有限正数，比值仍可算——两侧同触端点时 ρ = 1（例：双上溢 = 双域顶，跨站无衰减）。
-    因此标记不增设不可判定分支，只随结论输出供报告披露饱和；真正不可判定的是
-    任一侧缺失、非有限或非正（除零/无定义）的情形。
+    不可判定的两种情形（`40` [S2] 原文："N_eff 触发上/下溢标记使 ρ 无法计算 → 不可判定"）：
+
+    - **任一侧携带上/下溢标记**（``reason_code="n_eff_flag_present"``）：标记意味着该侧
+      N_eff 被钉在 `20` [S3] 报告域端点（1e3 / 1e5）上，端点值是截断而非实测；据此算出的
+      比值不构成跨站泛化的结论（双下溢的 ρ = 1 会读成"跨站无衰减"，而上溢侧分母被截断
+      会给出偏乐观的 ρ）。此时 ``rho``/``decay`` 仍随结论输出供报告披露，``weak`` 恒为
+      False——"成立（弱）"不是结论，结论只由 ``verdict`` 承载。
+    - **ρ 本身无定义**（``reason_code="rho_undefined"``）：任一侧缺失、非有限，或分母 ≤ 0。
     """
     v0, flag0 = _coerce_n_eff(n_eff_s0)
     v1, flag1 = _coerce_n_eff(n_eff_s1)
@@ -286,9 +293,15 @@ def evaluate_h7_cross_station(n_eff_s0: object, n_eff_s1: object) -> dict:
         "thresholds": {"strong": H7_RHO_STRONG, "weak": H7_RHO_WEAK},
     }
     if v0 is None or v1 is None or not (math.isfinite(v0) and math.isfinite(v1)) or v0 <= 0.0:
+        out["reason_code"] = H7_REASON_UNDEFINED
         return out
     rho = v1 / v0
     out["rho"] = float(rho)
+    if flag0 is not None or flag1 is not None:
+        out["reason_code"] = H7_REASON_FLAG
+        if H7_RHO_WEAK <= rho < H7_RHO_STRONG:
+            out["decay"] = float(rho)  # 截断值比值仅作披露，不构成 [S2]"成立（弱）"
+        return out
     if rho >= H7_RHO_STRONG:
         out["verdict"] = VERDICT_PASS
     elif rho >= H7_RHO_WEAK:
@@ -600,6 +613,8 @@ def evaluate_gates_from_disk(
             "thresholds": {"strong": H7_RHO_STRONG, "weak": H7_RHO_WEAK},
             "per_seed": per_seed,
         }
+        if overall.get("reason_code") is not None:
+            h7["reason_code"] = overall["reason_code"]
     else:
         h7 = {
             "verdict": VERDICT_INDETERMINATE, "rho": None, "weak": False, "decay": None,

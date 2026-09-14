@@ -133,12 +133,37 @@
 **Spec section:** [S1] M1
 **Status:** live
 
+## D17: 两臂 κ 的实际定义（与 `30` [S4] 文字的差异登记）
+**Phase:** review
+**Chosen:** 如实记录——联合臂 κ = 输入图组 4×4 Σ 的 10 个唯一分量（对角 4 + 上三角 6，`unet.condition_vector` 配 `batch_sigma_from_counts`；第 11 维为 log₁₀N_low）；独立臂 κ = **(var_i, var_j, cov_ij, log₁₀N_low)**（`independent.proj_condition_batch`，第三分量取 `Σ p·d_i·d_j`）。
+**Rationale:** `30` [S4] 的文字写独立臂为 `(σ_i, σ_j, ρ_ij, log₁₀N_low)`（ρ = 相关系数、无量纲），实现取**协方差**（第三分量 ~1e-8，与 log₁₀N≈4.78 不同量级）。语义差异影响该分量的 FiLM 有效性（与 D13 的尺度惰性叠加）：若用相关系数（本束 corr(x,x′)≈0.86）该分量本可与 log₁₀N 同量级。属实现与文字不符，登记待验收闸口裁决。
+**影响面:** H3 结论只支持"共享主干带来的跨投影信息流动"，不得表述为"独立臂的物理条件与联合同构"。
+**Rejected:** 本轮改用相关系数 —— 会改变在跑 run 的条件输入（需重跑 Phase 1 全部训练证据）。
+**Spec section:** [S4]、[S1]
+**Status:** live
+
+## D18: 确定性执行模式：`warn_only=True` 恒开
+**Phase:** review
+**Chosen:** `train.py` 固定 `torch.use_deterministic_algorithms(True, warn_only=True)`；执行模式（`deterministic_algorithms`/`warn_only`/`cudnn_deterministic`）逐 run 记入 `summary.json` 的 `exec_mode`。确定性由环境变量 `CUBLAS_WORKSPACE_CONFIG=:4096:8` 保证（E1 全部 run 已设）。
+**Rationale:** `30` [S3] C1 的"逐位一致"严格分支要求无不可确定算子；如实记录比"声明严格逐位"更可审计。已实测：同种子两次 CPU 训练 val N_eff 轨迹逐位一致；GPU 侧以"容差一致 + exec_mode 记录"处置。
+**Rejected:** 把 `warn_only` 设为 False（遇到不可确定算子直接抛错）—— 会在长跑中途中断 run，代价高于收益；不记录执行模式 —— 无法审计确定性口径。
+**Spec section:** [S3] C1
+**Status:** live
+
+## D19: 早停/选型的 val 子集口径
+**Phase:** review
+**Chosen:** val N_eff 在 **val 前 4 束 × 子样本 {0,1,2,3} × 两站**（32 组）上取中位数；插值基底用全 150 个 val 束的裸曲线（`val_curve_for`）。
+**Rationale:** `30` [S3] 只规定"val 束上计算"，未规定子集大小；固定小子集保证评估开销可控（每 1000 步一次）且两臂完全一致 ⇒ 不破坏 GC4 公平性。噪声水平记录在此以备复核。
+**Rejected:** 用全部 150 val 束 × 20 子样本做早停 —— 评估开销 ×60，与早停的信息增量不成比例。
+**Spec section:** [S3]
+**Status:** live
+
 ## Progress
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
 | [S1] | 807d949、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（Phase1Net：FiLM U-Net + Softplus 概率头；参数 ≤6e7；条件化防泄露） |
 | [S2] | 807d949、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（Poisson NLL 手算 + PSD 判别 + 率语义） |
-| [S3] | f3c45f5、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（冒烟+确定性 30 步 ×2 轨迹一致；max_steps=50000 预注册；混合站台逐样本 edges PSD；D12 DDP 偏差登记） |
+| [S3] | f3c45f5、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（C1/C2/C3/C5；**C4 未满足**——DDP 双卡缓期，见 D12）——冒烟+确定性 30 步 ×2 轨迹一致；max_steps=50000 预注册；混合站台逐样本 edges PSD |
 | [S4] | f3c45f5、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（独立版 6×SingleProjNet，4 维物理 κ；H3 对照臂就绪） |
 | [S5] | f3c45f5、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（infer：确定性、率图逐投影和 = N_high、ckpt config 驱动重建） |

@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,7 +30,50 @@ K = 20
 QUANTILE = 0.95
 SCOPE = "valtest_pooled"
 
-__all__ = ["main", "DEFAULT_DATA_DIR", "DEFAULT_OUT"]
+__all__ = ["main", "build_payload", "DEFAULT_DATA_DIR", "DEFAULT_OUT"]
+
+
+def build_payload(
+    table: Mapping[int, np.ndarray],
+    *,
+    beam_ids: Sequence[int],
+    tiers: Sequence[int],
+    k: int,
+    data_dir: str | Path,
+    beams_scope: str,
+    code_version: str,
+    data_version: str | None = None,
+    spec_version: str | None = None,
+    quantile: float = QUANTILE,
+    scope: str = SCOPE,
+    started_at: str | None = None,
+    completed_at: str | None = None,
+    elapsed_s: float | None = None,
+) -> dict:
+    """`deviation_table` 输出 → 落盘 payload（纯函数：无 IO、无时钟、无随机量）。
+
+    ``dev_table`` 的键按 `20` [S4] 落成**字符串档位**，值 = 13 维分位向量的列表——
+    消费侧 :func:`src.line2.experiments.gates._load_tolerance` 与 `map_report` 按此格式
+    读回（键 `int()` 还原、值转 ndarray）。
+    """
+    return {
+        "quantile": float(quantile),
+        "scope": scope,
+        "tiers": [int(t) for t in tiers],
+        "k": int(k),
+        "beams_scope": beams_scope,
+        "n_beams": len(beam_ids),
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "elapsed_s": None if elapsed_s is None else round(float(elapsed_s), 1),
+        "data_dir": str(data_dir),
+        "data_version": data_version,
+        "spec_version": spec_version,
+        "code_version": code_version,
+        "dev_table": {
+            str(int(t)): [float(v) for v in np.asarray(table[int(t)]).ravel()] for t in tiers
+        },
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,25 +98,13 @@ def main(argv: list[str] | None = None) -> int:
     table = deviation_table(
         args.data_dir, beam_ids, tuple(args.tiers), args.k, quantile=QUANTILE
     )
-    payload = {
-        "quantile": QUANTILE,
-        "scope": SCOPE,
-        "tiers": [int(t) for t in args.tiers],
-        "k": int(args.k),
-        "beams_scope": args.beams,
-        "n_beams": len(beam_ids),
-        "started_at": started_at,
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-        "elapsed_s": round(time.time() - t0, 1),
-        "data_dir": str(args.data_dir),
-        "data_version": manifest.get("data_version"),
-        "spec_version": manifest.get("spec_version"),
-        "code_version": code_version(),
-        "dev_table": {
-            str(int(t)): [float(v) for v in np.asarray(table[int(t)]).ravel()]
-            for t in args.tiers
-        },
-    }
+    payload = build_payload(
+        table, beam_ids=beam_ids, tiers=args.tiers, k=args.k, data_dir=args.data_dir,
+        beams_scope=args.beams, code_version=code_version(),
+        data_version=manifest.get("data_version"), spec_version=manifest.get("spec_version"),
+        started_at=started_at, completed_at=datetime.now(timezone.utc).isoformat(),
+        elapsed_s=time.time() - t0,
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(

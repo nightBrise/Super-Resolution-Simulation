@@ -449,23 +449,45 @@ def test_evaluate_h7_cross_station_all_branches() -> None:
         assert result["verdict"] in LEGAL_VERDICTS
 
 
-def test_evaluate_h7_flags_do_not_block_ratio() -> None:
-    """上/下溢只表示 N_eff 触及报告域端点（1e3/1e5），端点值有限 → ρ 仍可算。
+def test_evaluate_h7_flags_make_verdict_indeterminate() -> None:
+    """`40` [S2]：任一侧携带上/下溢标记 ⇒ 不可判定；`rho`/`decay` 仍被披露。
 
-    `40` [S2] C2 要求结论由 ρ 与边界唯一决定，故标记不增设不可判定分支，只随结论
-    输出供报告披露饱和情形（双上溢 = 双域顶 → ρ = 1）。
+    [S2] 原文 = "N_eff 触发上/下溢标记使 ρ 无法计算 → 不可判定"。标记侧的 N_eff 是报告域
+    端点（1e3 / 1e5）的截断值：双下溢的 ρ = 1 会被读成"跨站无衰减"、上溢侧分母被截断会
+    给出偏乐观的 ρ，故标记不参与三分类。比值本身仍可算，随结论输出供报告披露。
     """
-    both_over = evaluate_h7_cross_station((1e5, "overflow"), (1e5, "overflow"))
-    assert both_over["verdict"] == "成立" and both_over["rho"] == 1.0
-    assert both_over["flag_station0"] == "overflow" and both_over["flag_station1"] == "overflow"
     both_under = evaluate_h7_cross_station((1e3, "underflow"), (1e3, "underflow"))
-    assert both_under["verdict"] == "成立" and both_under["rho"] == 1.0
-    asymmetric = evaluate_h7_cross_station((1e5, "overflow"), (3e4, None))
-    assert asymmetric["verdict"] == "不成立" and asymmetric["rho"] == pytest.approx(0.3)
+    assert both_under["verdict"] == "不可判定"
+    assert both_under["reason_code"] == "n_eff_flag_present"
+    assert both_under["rho"] == 1.0 and both_under["weak"] is False   # 披露，不构成结论
+    assert both_under["flag_station0"] == "underflow"
+    assert both_under["flag_station1"] == "underflow"
+
+    both_over = evaluate_h7_cross_station((1e5, "overflow"), (1e5, "overflow"))
+    assert both_over["verdict"] == "不可判定" and both_over["rho"] == 1.0
+    assert both_over["reason_code"] == "n_eff_flag_present"
+
+    # 单侧标记：站 0 上溢（分母截断在域顶）与站 1 下溢各一例
+    s0_overflow = evaluate_h7_cross_station((1e5, "overflow"), (3e4, None))
+    assert s0_overflow["verdict"] == "不可判定" and s0_overflow["rho"] == pytest.approx(0.3)
+    s1_underflow = evaluate_h7_cross_station((1e5, None), (1e3, "underflow"))
+    assert s1_underflow["verdict"] == "不可判定" and s1_underflow["rho"] == pytest.approx(1e-2)
+
+    # 弱档内的标记：衰减系数（截断值之比）仍披露，但 verdict 不可判定且 weak=False
+    weak_flagged = evaluate_h7_cross_station((1e4, "overflow"), (8e3, None))
+    assert weak_flagged["verdict"] == "不可判定"
+    assert weak_flagged["reason_code"] == "n_eff_flag_present"
+    assert weak_flagged["weak"] is False and weak_flagged["decay"] == pytest.approx(0.8)
+
+    # dict 形态（test_eval.json 的束级字典）同样识别标记
     dict_form = evaluate_h7_cross_station(
         {"n_eff": 1e4, "n_eff_flag": None}, {"n_eff": 1e5, "n_eff_flag": "overflow"}
     )
-    assert dict_form["verdict"] == "成立" and dict_form["flag_station1"] == "overflow"
+    assert dict_form["verdict"] == "不可判定" and dict_form["rho"] == pytest.approx(10.0)
+    assert dict_form["flag_station1"] == "overflow"
+
+    for result in (both_under, both_over, s0_overflow, s1_underflow, weak_flagged, dict_form):
+        assert result["verdict"] in LEGAL_VERDICTS
 
 
 def test_evaluate_h7_undecidable_when_ratio_undefined() -> None:
@@ -475,6 +497,7 @@ def test_evaluate_h7_undecidable_when_ratio_undefined() -> None:
         result = evaluate_h7_cross_station(s0, s1)
         assert result["verdict"] == "不可判定", (s0, s1)
         assert result["rho"] is None and result["weak"] is False
+        assert result["reason_code"] == "rho_undefined"
 
 
 # ------------------------------------------------- evaluate_gates_from_disk

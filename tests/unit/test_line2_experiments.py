@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import json
@@ -10,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from src.line2.experiments import evaluate, run_e1
 from src.line2.experiments.gates import (
     evaluate_e1_gates,
     evaluate_h1,
@@ -217,9 +219,82 @@ def test_e1_configs_differ_only_in_variant_and_seed() -> None:
     assert {Path(cfg["out_dir"]).name for cfg in configs.values()} == set(configs)
 
 
+# ------------------------------------- `40` [S1] C1：eval 档位按 run 自己的 n_low
+def _write_fake_run(results: Path, run_id: str, n_low: int, *, with_meta: bool = True) -> Path:
+    """假 run 目录：best_val.ckpt（+ run_meta.json）——eval 档位测试的最小输入。"""
+    run_dir = results / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "best_val.ckpt").write_bytes(b"fake-ckpt")
+    if with_meta:
+        (run_dir / "run_meta.json").write_text(
+            json.dumps({"n_low": n_low, "variant": "joint", "seed": 0}), encoding="utf-8"
+        )
+    return run_dir
+
+
+def _eval_namespace(results: Path, data_dir: Path, n_low: int | None = None) -> argparse.Namespace:
+    return argparse.Namespace(
+        results_dir=results, data_dir=data_dir, runs=None, split="test", station=0,
+        n_low=n_low, subs="0-1", device="cpu",
+    )
+
+
+def test_cmd_eval_takes_n_low_from_each_run_meta(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`40` [S1] E2：`--n-low` 缺省 = 各 run 自己的档位（不是统一 1e4）。
+
+    E1（1e4）与 E2（3e3 / 1e5）共用这条 eval 路径，而数据集五个档位都在——"缺省 1e4"
+    不会报错，只会把 E2 的 run 按训练期未见的档位评估并把结果标成该 run 的 N_eff。
+    """
+    results = tmp_path / "results"
+    results.mkdir(parents=True)
+    for run_id, n_low in (("e2_joint_s0_3e3", 3000), ("e2_joint_s0_1e5", 100000)):
+        _write_fake_run(results, run_id, n_low)
+
+    captured: list[list[str]] = []
+    monkeypatch.setattr(evaluate, "main", lambda argv: captured.append(list(argv)) or 0)
+    assert run_e1.cmd_eval(_eval_namespace(results, tmp_path / "data")) == 0
+
+    by_ckpt = {
+        argv[argv.index("--ckpt") + 1]: argv[argv.index("--n-low") + 1] for argv in captured
+    }
+    assert by_ckpt == {
+        str(results / "e2_joint_s0_3e3" / "best_val.ckpt"): "3000",
+        str(results / "e2_joint_s0_1e5" / "best_val.ckpt"): "100000",
+    }
+    # 站 0 写规范产物名：门禁与产出物按 test_eval*.json 的 glob 消费（`40` [S2]/[S4]）
+    assert all(argv[argv.index("--out") + 1].endswith("test_eval.json") for argv in captured)
+
+
+def test_cmd_eval_explicit_n_low_wins_and_missing_meta_is_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """显式 `--n-low` 覆盖各 run 档位；缺 run_meta.json 的 run 跳过而非套用别的档位。"""
+    results = tmp_path / "results"
+    results.mkdir(parents=True)
+    _write_fake_run(results, "e1_joint_s0", 10000)
+    _write_fake_run(results, "e1_indep_s0", 10000, with_meta=False)
+
+    captured: list[list[str]] = []
+    monkeypatch.setattr(evaluate, "main", lambda argv: captured.append(list(argv)) or 0)
+    assert run_e1.cmd_eval(_eval_namespace(results, tmp_path / "data")) == 0
+    assert [argv[argv.index("--ckpt") + 1] for argv in captured] == [
+        str(results / "e1_joint_s0" / "best_val.ckpt")
+    ]
+    assert captured[0][captured[0].index("--n-low") + 1] == "10000"
+    assert "缺 run_meta.json" in capsys.readouterr().out
+
+    captured.clear()
+    assert run_e1.cmd_eval(_eval_namespace(results, tmp_path / "data", n_low=50000)) == 0
+    assert captured[0][captured[0].index("--n-low") + 1] == "50000"
+
+
 # --------------------------------------------- `40` [S1] C5：尺子先行的顺序约束
-def _write_run_meta(run_dir: Path, started_at: str, completed_at: str, seed: int = 0,
-                    variant: str = "joint") -> None:
+def _write_run_meta(
+    run_dir: Path, started_at: str, completed_at: str, seed: int = 0,
+    variant: str = "joint",
+) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run_meta.json").write_text(
         json.dumps({
@@ -529,6 +604,33 @@ def test_report_carries_gate_snapshots_and_why_chapter(fake_products: Path, tmp_
         assert code in text
     assert "无任一 `run_meta.json`" in text
     assert "触及报告域端点" in text
+
+
+def test_report_discloses_h7_overflow_indeterminacy(fake_products: Path, tmp_path: Path) -> None:
+    """`40` [S2]/[S4] C2：H7 因上/下溢判不可判定时，报告按 spec 原文披露该事实。
+
+    报告的判定表达式必须写 [S2] 的条款（含"标记使 ρ 无法计算 → 不可判定"），而不是
+    实现口径；逐种子表要能看到标记来自哪一侧、ρ 是多少（截断值之比仅作披露）。
+    """
+    path = fake_products / "e1_gates.json"
+    gates = json.loads(path.read_text(encoding="utf-8"))
+    gates["H7"] = {
+        "verdict": "不可判定", "rho": 1.0, "weak": False, "decay": None,
+        "variant": "joint", "n_seeds": 1, "aggregation": "seed_median_then_ratio",
+        "thresholds": {"strong": 1.0, "weak": 0.5}, "reason_code": "n_eff_flag_present",
+        "per_seed": {"0": {
+            "verdict": "不可判定", "rho": 1.0, "weak": False, "decay": None,
+            "reason_code": "n_eff_flag_present", "n_eff_station0": 1000.0,
+            "n_eff_station1": 1000.0, "flag_station0": "underflow", "flag_station1": "underflow",
+        }},
+    }
+    path.write_text(json.dumps(gates), encoding="utf-8")
+    out = generate(fake_products, out_dir=tmp_path / "out", reports_dir=tmp_path / "reports")
+    text = out["report"].read_text(encoding="utf-8")
+    assert "N_eff 触发上/下溢标记使 ρ 无法计算 ⟺ 不可判定" in text
+    assert "| reason_code | n_eff_flag_present |" in text
+    assert "| 0 | 1 | 不可判定 | n_eff_flag_present | underflow | underflow | 1000 | 1000 |" in text
+    assert "1/1 个种子任一侧携带标记（0）" in text
 
 
 def test_generate_raises_when_e0_order_violated(fake_products: Path, tmp_path: Path) -> None:

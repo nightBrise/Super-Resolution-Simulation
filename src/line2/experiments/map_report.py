@@ -155,7 +155,8 @@ _GATE_RULES = {
     "H3": ("联合优于独立：同种子成对 5 对——成立 ⟺ 5/5 对联合 N_eff ≥ 独立；方向成立 ⟺ 4/5；"
            "不成立 ⟺ ≤ 2/5；3/5 不可判定。"),
     "H7": ("跨站泛化：ρ = N_eff(站1)/N_eff(站0)——成立 ⟺ ρ ≥ 1.0；成立（弱，报衰减系数）⟺ "
-           "0.5 ≤ ρ < 1.0；不成立 ⟺ ρ < 0.5；ρ 无定义则不可判定。"),
+           "0.5 ≤ ρ < 1.0；不成立 ⟺ ρ < 0.5；N_eff 触发上/下溢标记使 ρ 无法计算 ⟺ 不可判定"
+           "（任一侧携带标记即降级为不可判定，此时 ρ 为截断值之比、仅作披露）。"),
     "H8": ("细结构可恢复性：13 项观测量对容差线的达标率（test 束 × 站 0 × 1e4 × 5 种子中位数输出）"
            "——成立 ⟺ ≥ 80%；不成立 ⟺ ≤ 50%；之间不可判定。"),
 }
@@ -337,7 +338,8 @@ def run_dir_triple(run_dir: str | Path) -> dict:
     - ``present``：目录内实际落盘的契约文件（run_meta.json、summary.json、config.json、
       训练日志、ckpt）；
     - ``missing``：未落盘的契约文件——`train.py` 只写 ``summary.json``、``train_log.jsonl``
-      与 ckpt（config 由调度器保管在 ``results/e1_configs/``），故缺失只登记到报告第 4 章，
+      与 ckpt（config 只以冻结副本形式存在于 ``docs/specs/line2/e1_configs/``，调度器
+      ``run_e1`` 从该目录读取，不向 run 目录复制），故缺失只登记到报告第 4 章，
       不报错；
     - ``best_val_n_eff``：val 段选型准绳（`00` GC3），summary.json 缺失时为 None。
 
@@ -723,13 +725,25 @@ def _gate_lines(name: str, gate: Mapping) -> list[str]:
         per_seed = gate["per_seed"]
         lines += ["", "逐种子跨站比值：", ""]
         lines += (
-            _md_table(["seed", "rho", "verdict", "N_eff(站0)", "N_eff(站1)"],
-                      [[seed, item.get("rho"), item.get("verdict"), item.get("n_eff_station0"),
-                        item.get("n_eff_station1")]
+            _md_table(["seed", "rho", "verdict", "reason_code", "flag(站0)", "flag(站1)",
+                       "N_eff(站0)", "N_eff(站1)"],
+                      [[seed, item.get("rho"), item.get("verdict"), item.get("reason_code"),
+                        item.get("flag_station0"), item.get("flag_station1"),
+                        item.get("n_eff_station0"), item.get("n_eff_station1")]
                        for seed, item in sorted(per_seed.items(), key=lambda kv: str(kv[0]))])
             if per_seed else
             ["- 无：`per_seed` 为空（无站 1 的 test 评估，降级原因见上表 `reason_code`）。"]
         )
+        flagged = [
+            seed for seed, item in sorted(per_seed.items(), key=lambda kv: str(kv[0]))
+            if item.get("flag_station0") or item.get("flag_station1")
+        ]
+        lines += [
+            "",
+            f"- 上/下溢导致的不可判定：{len(flagged)}/{len(per_seed)} 个种子任一侧携带标记"
+            f"（{_fmt(flagged) if flagged else '无'}）——该侧的 N_eff 是 `20` [S3] 报告域端点"
+            "（1e3 / 1e5）的截断值，其 ρ 不构成跨站泛化的结论依据（`40` [S2]）。",
+        ]
     elif name == "H8":
         per_observable = gate["per_observable"]
         lines += ["", "逐观测量达标明细（13 项，`20` [S4]）：", ""]

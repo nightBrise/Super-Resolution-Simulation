@@ -8,12 +8,12 @@
   config 的 `device` 保持 `cuda:0`（映射到被钉的物理卡）。
 - **确定性**：`CUBLAS_WORKSPACE_CONFIG=:4096:8` + `PYTHONHASHSEED=0`，与手工启动一致。
 - **run 目录契约**（`40` [S1] C2 + GC7）：`results/<run_id>/` 内含
-  `run_meta.json`（启动/结束时间戳 + code/data/spec 三元组 + 变体/种子/档位/GPU）
-  与训练产出的 `train_log.jsonl`/`best_val.ckpt`/`summary.json`。
+  `run_meta.json`（启动/结束时间戳 + code/data/spec 三元组 + 变体/种子/档位/GPU
+  + `tree_dirty` 工作树脏标记）与训练产出的 `train_log.jsonl`/`best_val.ckpt`/`summary.json`。
 
 子命令：
     python -m src.line2.experiments.run_e1 train [--runs ...] [--gpus 0 1]
-    python -m src.line2.experiments.run_e1 eval  [--runs ...] [--station 0] [--n-low 10000]
+    python -m src.line2.experiments.run_e1 eval  [--runs ...] [--station 0] [--n-low <档位>]
     python -m src.line2.experiments.run_e1 gates [--out <json>]
 """
 
@@ -34,11 +34,27 @@ DEFAULT_CONFIGS = REPO / "docs/specs/line2/e1_configs"
 DEFAULT_RESULTS = REPO / "studies/line2_particle_sr/results"
 DEFAULT_DATA = REPO / "studies/line2_particle_sr/data/line2_ds_v1"
 
-__all__ = ["main", "run_meta_path", "check_e0_precedes", "gpu_free_mib", "plan_queue"]
+__all__ = [
+    "main", "run_meta_path", "check_e0_precedes", "gpu_free_mib", "plan_queue", "tree_dirty",
+]
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def tree_dirty() -> bool:
+    """工作树是否有未提交改动（``git status --porcelain`` 非空）。
+
+    ``run_meta.json`` 的 ``code_version`` 记的是 HEAD，而训练子进程导入的是**启动时刻的
+    磁盘代码**：树脏时两者可能不一致（`00` GC7 三元组的语义是"这次 run 用的就是这份代码"）。
+    因此脏树不阻断启动，但必须留痕——``run_meta.json`` 记 ``tree_dirty``，``train`` 子命令
+    启动时打印告警。
+    """
+    out = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=REPO, capture_output=True, text=True, check=True
+    )
+    return bool(out.stdout.strip())
 
 
 def e0_completed_at(results_dir: Path) -> str:
@@ -151,6 +167,7 @@ def run_one_train(
         "code_version": subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True
         ).stdout.strip(),
+        "tree_dirty": tree_dirty(),
         "cmd": [sys.executable, "-u", "-m", "src.line2.training.train", "--config", str(cfg_path)],
     }
     meta_path = run_meta_path(results_dir, run_id)
@@ -193,6 +210,13 @@ def _worker(
 
 
 def cmd_train(args: argparse.Namespace) -> int:
+    if tree_dirty():
+        print(
+            "[run_e1] 警告：工作树有未提交改动（git status --porcelain 非空）——"
+            "run_meta.json 的 code_version 记的是 HEAD，与训练进程实际导入的磁盘代码可能"
+            "不一致；本次各 run 的 run_meta.json 将记 tree_dirty=true（00 GC7 留痕）",
+            flush=True,
+        )
     runs = args.runs or sorted(p.stem for p in args.configs_dir.glob("e1_*.json"))
     queue = plan_queue(runs, args.gpus)
     print(f"[run_e1] 计划：{queue}", flush=True)
@@ -223,25 +247,34 @@ def cmd_eval(args: argparse.Namespace) -> int:
     """对每个 run 的 best_val.ckpt 产出 `results/<run_id>/test_eval.json`。"""
     from src.line2.experiments import evaluate
 
-    runs = args.runs or [
-        p.name for p in sorted(args.results_dir.glob("e1_*")) if (p / "best_val.ckpt").is_file()
-    ]
+    runs = args.runs or sorted(
+        p.name for p in args.results_dir.glob("*") if (p / "best_val.ckpt").is_file()
+    )
     curve = args.results_dir / "e0_curve.json"
     for run_id in runs:
         ckpt = args.results_dir / run_id / "best_val.ckpt"
         if not ckpt.is_file():
             print(f"[run_e1] 跳过 {run_id}：无 best_val.ckpt", flush=True)
             continue
+        # `--n-low` 缺省 = 按 run 自己的档位（E2 的 3e3/1e5 run 与 E1 的 1e4 同表，
+        # `40` [S1] C1 要求覆盖五档；档位是 config 的既有字段，读 run_meta 而非人工传参）
+        n_low = args.n_low
+        if n_low is None:
+            meta = run_meta_path(args.results_dir, run_id)
+            if not meta.is_file():
+                print(f"[run_e1] 跳过 {run_id}：缺 run_meta.json，无法确定 n_low", flush=True)
+                continue
+            n_low = int(_load_json(meta)["n_low"])
         # 站 0 用规范名 `test_eval.json`；站 ≠ 0（E3 跨站）另起名，避免与站 0 产物同名相覆
         # ——门禁按 `evaluate.EVAL_FILENAME` + `test_eval*.json` 的 glob 消费（`40` [S2]）。
         name = evaluate.EVAL_FILENAME if args.station == 0 else f"test_eval_station{args.station}.json"
         out = args.results_dir / run_id / name
         argv = [
             "--ckpt", str(ckpt), "--data-dir", str(args.data_dir), "--split", args.split,
-            "--station", str(args.station), "--n-low", str(args.n_low), "--subs", args.subs,
+            "--station", str(args.station), "--n-low", str(n_low), "--subs", args.subs,
             "--curve", str(curve), "--out", str(out), "--device", args.device,
         ]
-        print(f"[run_e1] eval {run_id} → {out.name}", flush=True)
+        print(f"[run_e1] eval {run_id} (n_low={n_low}) → {out.name}", flush=True)
         rc = evaluate.main(argv)
         if rc != 0:
             print(f"[run_e1] eval {run_id} 返回 {rc}", flush=True)
@@ -275,7 +308,10 @@ def main(argv: list[str] | None = None) -> int:
     p_eval.add_argument("--runs", nargs="*", default=None)
     p_eval.add_argument("--split", default="test")
     p_eval.add_argument("--station", type=int, default=0)
-    p_eval.add_argument("--n-low", type=int, default=10000)
+    p_eval.add_argument(
+        "--n-low", type=int, default=None,
+        help="缺省 = 按各 run 的 run_meta.json 的 n_low（E2 的 3e3/1e5 run 需按 run 档位）",
+    )
     p_eval.add_argument("--subs", default="0-19")
     p_eval.add_argument("--device", default="cpu")
     p_eval.set_defaults(func=cmd_eval)

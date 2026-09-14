@@ -1,12 +1,14 @@
 """L3b [S4] 独立版对照：6 个互不共享权重的单投影 FiLM U-Net。
 
 H3 对照臂设计（v0.2.1 复审修订）：E1 比较"联合 vs 独立"时，对照变量只剩
-"跨投影信息是否流动"。条件 = 单投影 4 维物理摘要 (σ_i, σ_j, ρ_ij, log₁₀N_low)
-（与联合版 κ 同源的物理 edges 矩，非 bin-index 代理——H3 公平性）。
+"跨投影信息是否流动"。条件 = 单投影 4 维物理摘要 **(var_i, var_j, cov_ij, log₁₀N_low)**
+（与联合版 κ 同源的物理 edges 矩，非 bin-index 代理——H3 公平性）；`30` [S4] 的文字
+写 ρ_ij（相关系数、无量纲），实现取**协方差**（第三分量与 log₁₀N_low 不同量级）——
+差异已登记于 `30_...decisions.md` D17「两臂 κ 的实际定义」。
 
 参数量对齐（`30` [S4] C1 ±30%）：spec 公式 ceil(C/√6)=20 与 line1 冻结主干
 `GroupNorm(min(8,ch), ch)` 的 8 整除约束冲突（构造即崩，审核 B-1）——偏差登记
-于 .decisions.md D17，采用 **C_ind=16、blocks=3**（实测 10,092,870 参数，
+于 .decisions.md D11，采用 **C_ind=16、blocks=3**（实测 10,092,870 参数，
 对联合版 10,708,710 为 −5.8%，±30% 内）。
 """
 
@@ -59,9 +61,11 @@ def proj_condition_batch(
     shape: torch.Tensor, centers_i: torch.Tensor, centers_j: torch.Tensor,
     log_n_low: torch.Tensor,
 ) -> torch.Tensor:
-    """批量 4 维条件：(σ_i, σ_j, ρ_ij, log₁₀N_low)（物理 bin 中心矩）。
+    """批量 4 维条件：(var_i, var_j, cov_ij, log₁₀N_low)（物理 bin 中心矩）。
 
     shape (B, H, W)、centers_i (B, H)、centers_j (B, W)、log_n_low (B,) → (B, 4)。
+    第三分量是**协方差** Σ p·d_i·d_j（`30` [S4] 的文字写 ρ_ij 相关系数，差异见模块
+    docstring 与 D17），故其量级与 log₁₀N_low 相差多个数量级。
 
     图组存储布局 = `[后一坐标 a_j, 前一坐标 a_i]`（生产端 `six_projections` 的
     `h.T`，见 `10` [S4]）——此处先转置回 `[a_i, a_j]` 语义，下游 `sum(dim=2)`
@@ -80,8 +84,8 @@ def proj_condition_batch(
     dj = centers_j - mj.unsqueeze(1)
     var_i = (pi * di ** 2).sum(dim=1)
     var_j = (pj * dj ** 2).sum(dim=1)
-    rho = (p * di.unsqueeze(2) * dj.unsqueeze(1)).sum(dim=(1, 2))
-    return torch.stack([var_i, var_j, rho, log_n_low.to(shape.dtype)], dim=1)
+    cov_ij = (p * di.unsqueeze(2) * dj.unsqueeze(1)).sum(dim=(1, 2))
+    return torch.stack([var_i, var_j, cov_ij, log_n_low.to(shape.dtype)], dim=1)
 
 
 def proj_condition(

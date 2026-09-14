@@ -203,17 +203,19 @@ def test_param_cap_and_validation() -> None:
 def test_conditioning_changes_output() -> None:
     """[S1] FiLM 条件化生效：同输入、不同 κ → 输出不同。"""
     net = _small_net().eval()
-    x = torch.rand(1, 6, 128, 128)
+    gen = torch.Generator().manual_seed(derive_seed(4))
+    x = torch.rand(1, 6, 128, 128, generator=gen)
     with torch.no_grad():
         d = float((net(x, torch.zeros(1, 11)) - net(x, torch.ones(1, 11))).abs().max())
     assert d > 0
 
 
 def test_checkpoint_roundtrip(tmp_path: pathlib.Path) -> None:
-    """[S1] C3：checkpoint 往返 → 同输入逐位同输出。"""
+    """[S1] C3：checkpoint 往返 → 同输入输出**逐位一致**（`torch.equal`，非容差比较）。"""
     net = _small_net().eval()
-    x = torch.rand(1, 6, 128, 128)
-    kappa = torch.randn(1, 11)
+    gen = torch.Generator().manual_seed(derive_seed(5))
+    x = torch.rand(1, 6, 128, 128, generator=gen)
+    kappa = torch.randn(1, 11, generator=gen)
     with torch.no_grad():
         before = net(x, kappa)
     ckpt = tmp_path / "model.ckpt"
@@ -223,7 +225,9 @@ def test_checkpoint_roundtrip(tmp_path: pathlib.Path) -> None:
     net2.eval()
     with torch.no_grad():
         after = net2(x, kappa)
-    torch.testing.assert_close(before, after)
+    assert torch.equal(before, after), (
+        f"ckpt 往返后输出有位差：max|Δ|={float((before - after).abs().max())}"
+    )
 
 
 def test_input_channel_order_is_projection_enumeration() -> None:
@@ -321,7 +325,7 @@ def test_independent_channel_and_axis_binding() -> None:
 
     轴依赖在 **κ 层**逐位可判：改某轴 edges ⇔ 恰好该投影对含此轴的通道的 κ 变化。
     输出层的连接性只在 Δκ 大于 float32 分辨率时成立——κ 未做尺度归一（见
-    `.decisions.md` D19），Σ 分量为物理单位²（~1e-4…1e-9）而 log₁₀N_low ~4.8，
+    `.decisions.md` D13），Σ 分量为物理单位²（~1e-4…1e-9）而 log₁₀N_low ~4.8，
     FiLM 线性层对 <1e-8 的 κ 变化在 float32 下不响应。故输出层断言只覆盖
     Δκ > 1e-8 的轴（x、y），其余轴由 κ 层断言承载——避免把一条设计局限写成红灯。
     """
@@ -566,10 +570,9 @@ def test_param_alignment_calibrated_design_point() -> None:
 def test_param_alignment_e1_production_configs() -> None:
     """[S4] C1（E1 生产档）：按 e1_configs 实际取值构造两臂，参数量差 ≤ 30%。
 
-    标定值（`30` [S4] C1「设计期以实测参数量校准」）：两臂同为 num_levels=4 /
-    blocks=2，独立臂取 ind_base=16、ind_blocks=3 → 10,092,870 vs 联合 10,708,710
-    = −5.8%。此前 indep config 的 `num_levels=3` 使独立臂掉到 2,476,230（−76.9%），
-    破坏 H3 的公平性前提，已按标定值改正。
+    生产档取值：联合臂 `base=48, num_levels=4, blocks=2`（10,708,710 参数）；独立臂
+    由 `ind_base=16, ind_blocks=3` 决定（`build_model` 对 independent 不读 `blocks`，
+    故 config 里的 `blocks=1` 是死键）→ 10,092,870 = −5.8%，标定来源见 `30` D11。
     """
     cfg_joint = json.loads((_E1_CONFIGS / "e1_joint_s0.json").read_text(encoding="utf-8"))
     cfg_independent = json.loads((_E1_CONFIGS / "e1_indep_s0.json").read_text(encoding="utf-8"))
@@ -672,7 +675,10 @@ def test_proj_condition_single_sample_matches_batch() -> None:
 
 
 def test_proj_condition_matches_metric_sigma_convention() -> None:
-    """[S4]/[S1]：独立臂 κ 的 (σ_i, σ_j, ρ_ij) 与 `20` [S1] M4 的 Σ 同口径。
+    """[S4]/[S1]：独立臂 κ 的 (var_i, var_j, cov_ij) 与 `20` [S1] M4 的 Σ 同口径。
+
+    第三分量是协方差而非相关系数（`30` [S4] 的文字写 ρ_ij，差异见 `30` D17），
+    故此处直接与 Σ 的对应分量比，不做 σ_i·σ_j 归一。
 
     图组存储布局为 `[后一坐标 a_j, 前一坐标 a_i]`（生产端 `six_projections` 的
     `h.T`）。κ 若按 `[a_i, a_j]` 误读边缘，会把"另一轴边缘在本轴网格上的展宽"
@@ -692,7 +698,7 @@ def test_proj_condition_matches_metric_sigma_convention() -> None:
         cond = proj_condition(
             torch.from_numpy(group[gi].astype(np.float32)), centers[i], centers[j], 4.0
         )
-        var_i, var_j, rho = (float(cond[0]), float(cond[1]), float(cond[2]))
+        var_i, var_j, cov_ij = (float(cond[0]), float(cond[1]), float(cond[2]))
         assert abs(var_i - sigma[i, i]) / sigma[i, i] < 1e-4, (ai, aj, var_i, sigma[i, i])
         assert abs(var_j - sigma[j, j]) / sigma[j, j] < 1e-4, (ai, aj, var_j, sigma[j, j])
-        assert abs(rho - sigma[i, j]) / abs(sigma[i, j]) < 1e-4
+        assert abs(cov_ij - sigma[i, j]) / abs(sigma[i, j]) < 1e-4

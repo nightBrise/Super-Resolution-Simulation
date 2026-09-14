@@ -177,20 +177,22 @@ def test_m4_image_sigma_matches_quantized_particle_moments(anchor: dict) -> None
 def test_m4_image_sigma_vs_twiss_binning_band(anchor: dict) -> None:
     """[S1] C3（图路径·落盘对拍）：M4 的 Σ/ε_4D 对 twiss.json 落在分箱量级容差内。
 
-    容差按 20_metrics_spec.decisions.md **D13** 的验收语义设定（字面 1e-12 在图路径
-    物理不可达，放宽为分箱量化级），不是 spec 原文口径。真实锚点实测：Σ 对角相对
-    误差 7.8×10⁻⁴/5.3×10⁻⁴/6.9×10⁻⁴/5.9×10⁻⁴、max|Δρ| = 5.9×10⁻⁴、ε_4D 相对误差
-    4.8×10⁻³——三者均与量化矩对的同一指标逐位相同（见
-    :func:`test_binning_sets_the_reachable_floor` 及上一条），即偏差已全部落在分箱
-    地板内、不含实现贡献。因此本条只作**量级**回归护栏（抓单位错、整轴错配、转置、
-    ddof 混用），紧口径（1e-12）由 :func:`test_m4_image_sigma_matches_quantized_
+    容差按 20_metrics_spec.decisions.md **D16** 的验收语义设定（字面 1e-12 在图路径
+    物理不可达，取 1e-2 = 实测分箱地板 5.3×10⁻⁴–7.8×10⁻⁴ 之上约 12× 裕度），不是 spec
+    原文口径。真实锚点实测：Σ 对角相对误差 7.8×10⁻⁴/5.3×10⁻⁴/6.9×10⁻⁴/5.9×10⁻⁴、
+    max|Δρ| = 5.9×10⁻⁴、ε_4D 相对误差 4.8×10⁻³——三者均与量化矩对的同一指标逐位相同
+    （见 :func:`test_binning_sets_the_reachable_floor` 及上一条），即偏差已全部落在分箱
+    地板内、不含实现贡献。紧口径（1e-12）由 :func:`test_m4_image_sigma_matches_quantized_
     particle_moments` 在可实现的那一对实现上承载。
+
+    这条带宽**不是**宽松护栏：轴序错置（旧缺陷）会把对角相对误差推到
+    0.86 / 5.96 / 5.30 / 0.84，故 1e-2 即可翻红；0.25 只在单位错（量级差）时才报警。
     """
     sigma_img = reconstruct_sigma(anchor["group"], anchor["edges"])
     sigma_twiss = anchor["sigma_twiss"]
 
     diag_rel = [abs(sigma_img[i, i] - sigma_twiss[i, i]) / sigma_twiss[i, i] for i in range(4)]
-    assert max(diag_rel) < 0.25, f"Σ 对角相对误差超出分箱量级：{diag_rel}"
+    assert max(diag_rel) < 1e-2, f"Σ 对角相对误差超出分箱量级：{diag_rel}"
 
     rho_img, rho_t = _corr(sigma_img), _corr(sigma_twiss)
     d_rho = [abs(rho_img[i, j] - rho_t[i, j]) for i, j in OFF_DIAG]
