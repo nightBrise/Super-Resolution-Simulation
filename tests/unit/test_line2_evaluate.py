@@ -27,8 +27,10 @@ from src.line2.experiments.evaluate import (
 from src.line2.experiments.gates import (
     OBSERVABLE_NAMES,
     evaluate_gates_from_disk,
+    evaluate_h3,
     evaluate_h7_cross_station,
     evaluate_h8,
+    h3_disclosure,
     h8_deviation_matrix,
 )
 from src.line2.metrics.n_eff import error_n_curve, n_eff_from_err
@@ -500,6 +502,52 @@ def test_evaluate_h7_undecidable_when_ratio_undefined() -> None:
         assert result["reason_code"] == "rho_undefined"
 
 
+# ------------------------------------------------------------ H3 披露字段
+def test_h3_disclosure_keeps_literal_verdict_and_counts_ties() -> None:
+    """`40` [S3] H3（披露层）：5/5 域顶平局的字面结论是"成立"，事实由披露字段承载。
+
+    平局计入胜是冻结判据（`evaluate_h3` 只返回枚举、语义不变），但两侧同为 1e5 上溢的
+    "平局"是达到可验证域顶的饱和值（`20` [S3]），故 `n_ties=5`、
+    `n_strict_joint_wins=0`、`tied_at_domain_edge=True` 一并给出。
+    """
+    joint = [100_000.0] * 5
+    indep = [100_000.0] * 5
+    assert evaluate_h3(joint, indep) == "成立"          # 判据冻结：平局计入胜
+    assert h3_disclosure(joint, indep, flags=["overflow"] * 10) == {
+        "n_ties": 5, "n_strict_joint_wins": 0, "tied_at_domain_edge": True,
+    }
+    # 同样的平局但无标记 ⇒ 计票一样，只是不声称"平局发生在域端点"
+    assert h3_disclosure(joint, indep) == {
+        "n_ties": 5, "n_strict_joint_wins": 0, "tied_at_domain_edge": False,
+    }
+
+
+def test_h3_disclosure_mixed_pairs_tally() -> None:
+    """混合（2 对联合严格更大、2 对相等、1 对更小）→ 计票正确（4/5 → 方向成立）。"""
+    joint = [5e4, 5e4, 5e4, 5e4, 1e4]
+    indep = [3e4, 3e4, 5e4, 5e4, 9e4]
+    assert evaluate_h3(joint, indep) == "方向成立"
+    assert h3_disclosure(joint, indep, flags=[None] * 10) == {
+        "n_ties": 2, "n_strict_joint_wins": 2, "tied_at_domain_edge": False,
+    }
+
+
+def test_h3_disclosure_strict_wins_are_not_ties() -> None:
+    """全严格更大 → `n_strict_joint_wins=5`、`n_ties=0`；无平局时域顶标志恒 False。
+
+    标志的定义是"存在平局 **且** 参与比较的值带标记"：没有平局时"平局发生在域端点"这句
+    话本身不成立（若只看标记，5/5 严格获胜也会被写成语义错误的提示）。
+    """
+    joint = [5e4] * 5
+    indep = [1e4] * 5
+    assert evaluate_h3(joint, indep) == "成立"
+    assert h3_disclosure(joint, indep)["n_strict_joint_wins"] == 5
+    assert h3_disclosure(joint, indep)["n_ties"] == 0
+    assert h3_disclosure(joint, indep, flags=["overflow"] * 10) == {
+        "n_ties": 0, "n_strict_joint_wins": 5, "tied_at_domain_edge": False,
+    }
+
+
 # ------------------------------------------------- evaluate_gates_from_disk
 def _write_run(results_dir: pathlib.Path, run_id: str, variant: str, seed: int,
                n_eff: float, val_n_eff: float, station: int = 0, n_low: int = N_LOW,
@@ -601,6 +649,13 @@ def test_evaluate_gates_from_disk_verdicts_and_two_segment_boundary(
     assert out["H3"]["verdict"] == "成立" and out["H3"]["joint_wins"] == 5
     assert out["H3"]["pairing"]["basis"] == "seed_value"
     assert out["H3"]["pairing"]["pairs"] == [[100 + s, 100 + s] for s in range(5)]
+    # 披露字段（判定不变）：本批 5 对全为严格获胜、无标记 ⇒ 平局 0、不声称域顶平局
+    assert out["H3"]["n_ties"] == 0 and out["H3"]["n_strict_joint_wins"] == 5
+    assert out["H3"]["tied_at_domain_edge"] is False
+    assert out["H3"]["n_eff_flags"] == {
+        "joint": {str(100 + s): None for s in range(5)},
+        "independent": {str(100 + s): None for s in range(5)},
+    }
     # H7 = 获胜变体的站 1/站 0 比：20000/30000 → 成立（弱），衰减系数 = ρ
     assert out["H7"]["variant"] == "independent"
     assert out["H7"]["verdict"] == "成立" and out["H7"]["weak"] is True
@@ -715,6 +770,54 @@ def test_h7_aggregate_indeterminate_when_all_seeds_overflow(tmp_path: pathlib.Pa
     }
     assert h7["per_seed"]["100"]["rho"] == pytest.approx(1.0)
     assert h7["per_seed"]["100"]["verdict"] == "不可判定"
+
+
+# ------------------------------------------- H3 计票落盘（披露字段，判定不变）
+def _h3_results(tmp_path: pathlib.Path,
+                *, joint: dict[int, tuple[float, str | None]],
+                indep: dict[int, tuple[float, str | None]]) -> pathlib.Path:
+    """H3 计票用例的最小 results：两臂各 5 种子站 0 的 test 评估（值 + 可选上/下溢标记）。
+
+    val 段两臂同值 ⇒ 路由视 5 对全为"联合 ≥ 独立"，获胜变体判 joint，不影响 H3 的计票。
+    """
+    results = tmp_path / "results"
+    results.mkdir(parents=True)
+    _write_curve_and_tolerance(results)
+    for variant, spec in (("joint", joint), ("independent", indep)):
+        for seed, (n_eff, flag) in sorted(spec.items()):
+            _write_run(results, f"e1_{variant}_s{seed - 100}", variant, seed, n_eff,
+                       20_000.0, flag=flag)
+    return results
+
+
+def test_h3_aggregate_discloses_domain_edge_ties(tmp_path: pathlib.Path) -> None:
+    """`40` [S3] H3（落盘层）：5/5 域顶平局 → 结论仍是"成立"，另附平局事实与证据。
+
+    鉴别力：旧实现只落 `joint_wins`，读者无法区分"5/5 严格获胜"与"5/5 平局（两侧同为
+    1e5 上溢、该档无区分力）"——本用例断言的 `n_ties`/`n_strict_joint_wins`/
+    `tied_at_domain_edge`/`n_eff_flags` 四个键在旧实现下不存在（KeyError）。
+    """
+    both = {s: (100_000.0, "overflow") for s in range(100, 105)}
+    h3 = evaluate_gates_from_disk(_h3_results(tmp_path, joint=both, indep=both))["H3"]
+    assert h3["verdict"] == "成立" and h3["joint_wins"] == 5      # 判据字面不变
+    assert h3["n_pairs"] == 5 and h3["n_ties"] == 5
+    assert h3["n_strict_joint_wins"] == 0
+    assert h3["tied_at_domain_edge"] is True
+    assert h3["n_eff_flags"] == {
+        "joint": {str(s): "overflow" for s in range(100, 105)},
+        "independent": {str(s): "overflow" for s in range(100, 105)},
+    }
+
+
+def test_h3_aggregate_strict_wins_are_not_domain_edge_ties(tmp_path: pathlib.Path) -> None:
+    """全严格更大且无标记 → 计票 5/0，`tied_at_domain_edge` 不置位（不误报提示）。"""
+    joint = {s: (40_000.0 + s, None) for s in range(100, 105)}
+    indep = {s: (30_000.0, None) for s in range(100, 105)}
+    h3 = evaluate_gates_from_disk(_h3_results(tmp_path, joint=joint, indep=indep))["H3"]
+    assert h3["verdict"] == "成立" and h3["joint_wins"] == 5
+    assert h3["n_ties"] == 0 and h3["n_strict_joint_wins"] == 5
+    assert h3["tied_at_domain_edge"] is False
+    assert h3["n_eff_flags"]["joint"] == {str(s): None for s in range(100, 105)}
 
 
 def test_evaluate_gates_from_disk_bitwise_reproducible(fake_results: pathlib.Path) -> None:

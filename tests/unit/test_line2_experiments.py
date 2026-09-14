@@ -638,6 +638,40 @@ def test_report_discloses_h7_overflow_indeterminacy(fake_products: Path, tmp_pat
     assert "聚合条目因此同样判不可判定" in text
 
 
+def test_report_discloses_h3_domain_edge_ties(fake_products: Path, tmp_path: Path) -> None:
+    """`40` [S3]/[S4] C2：H3 的"成立"若来自域顶平局，报告必须写清它只是字面结论。
+
+    平局计入胜是冻结判据（结论照旧输出"成立"），但两侧同触 1e5 的平局是被截断的饱和值、
+    不具备区分力：报告要给出平局数/严格获胜数（及其证据 `n_eff_flags`），并明说"不表示联合
+    严格更优"。无平局的档位不得出现该提示（防误报）。
+    """
+    plain = generate(fake_products, out_dir=tmp_path / "out",
+                     reports_dir=tmp_path / "reports")["report"].read_text(encoding="utf-8")
+    assert "域顶平局提示" not in plain          # 默认假产物：H3 无披露字段 → 无提示
+
+    path = fake_products / "e1_gates.json"
+    gates = json.loads(path.read_text(encoding="utf-8"))
+    gates["H3"].update({
+        "verdict": "成立", "n_pairs": 5, "joint_wins": 5,
+        "n_ties": 5, "n_strict_joint_wins": 0, "tied_at_domain_edge": True,
+        "n_eff_flags": {
+            "joint": {str(100 + s): "overflow" for s in range(5)},
+            "independent": {str(100 + s): "overflow" for s in range(5)},
+        },
+    })
+    path.write_text(json.dumps(gates), encoding="utf-8")
+    text = generate(fake_products, out_dir=tmp_path / "out",
+                    reports_dir=tmp_path / "reports")["report"].read_text(encoding="utf-8")
+    assert "| n_ties | 5 |" in text
+    assert "| n_strict_joint_wins | 0 |" in text
+    assert "| tied_at_domain_edge | 是 |" in text
+    assert "| n_eff_flags.joint[100] | overflow |" in text
+    assert "| n_eff_flags.independent[104] | overflow |" in text
+    assert "**域顶平局提示**：5/5 对为域端点平局" in text
+    assert "该档**不具备区分力**" in text
+    assert "不表示联合严格更优（严格更优仅 0 对）" in text
+
+
 def test_generate_raises_when_e0_order_violated(fake_products: Path, tmp_path: Path) -> None:
     """`40` [S1] C5：一键路径同样强制尺子先行——违例时不产出报告。"""
     _write_e0_meta(fake_products, "2026-09-14T04:11:22+00:00")

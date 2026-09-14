@@ -39,6 +39,7 @@ from .evaluate import curve_from_json
 __all__ = [
     "evaluate_h1",
     "evaluate_h3",
+    "h3_disclosure",
     "evaluate_e1_gates",
     "winner_variant",
     "pair_by_seed",
@@ -134,20 +135,77 @@ def evaluate_h1(n_eff_values: Sequence[float]) -> str:
     return "不可判定"
 
 
+def _pair_tally(joint: Sequence[float], independent: Sequence[float]) -> dict:
+    """H3 成对计票（**单一实现点**）：对数、联合 ≥ 独立的对数、平局对数。
+
+    平局 = 两侧数值字面相等。`40` [S3] H3 的判据是"联合 N_eff ≥ 独立"，故平局**计入胜**
+    （判据冻结，不得改）——但域端点上的平局不构成"联合更优"的证据，见
+    :func:`h3_disclosure`。
+    """
+    if len(joint) != len(independent):
+        raise ValueError("joint 与 independent 种子数不匹配")
+    n_ge = sum(1 for j, i in zip(joint, independent) if j >= i)
+    n_ties = sum(1 for j, i in zip(joint, independent) if j == i)
+    return {
+        "n_pairs": len(joint),
+        "n_joint_ge": n_ge,
+        "n_ties": n_ties,
+        "n_strict_joint_wins": n_ge - n_ties,
+    }
+
+
+def h3_disclosure(
+    joint: Sequence[float],
+    independent: Sequence[float],
+    flags: Sequence[str | None] | None = None,
+) -> dict:
+    """H3 的**披露字段**（不改判定表达式、不改阈值，`40` [S3] H3 冻结）：
+
+    - ``n_ties``：``joint == independent`` 的对数；
+    - ``n_strict_joint_wins``：``joint > independent`` 的对数；
+    - ``tied_at_domain_edge``：存在平局且参与比较的值中任一携带上/下溢标记。
+
+    依据：`20` [S3] 的上溢语义 = "达到可验证域顶"，端点值是截断而非实测（真值不可辨识）。
+    两侧同被截断在 1e5 时的"平局"只说明**该档不再具备区分力**，不得据此解读为"联合更优"；
+    H3 输出的"成立"是判据把平局计入胜后的**字面结论**，本条把这一事实随结论披露。
+
+    Args:
+        joint: 联合臂的成对 N_eff（与 ``independent`` 同序、同长）。
+        independent: 独立臂的成对 N_eff。
+        flags: 参与比较的 N_eff 的落盘标记（建议两臂拼接；无标记传 None）。
+
+    Returns:
+        ``{"n_ties", "n_strict_joint_wins", "tied_at_domain_edge"}``。
+
+    Raises:
+        ValueError: 两臂长度不一致。
+    """
+    tally = _pair_tally(joint, independent)
+    flagged = flags is not None and any(flag is not None for flag in flags)
+    return {
+        "n_ties": tally["n_ties"],
+        "n_strict_joint_wins": tally["n_strict_joint_wins"],
+        # 只有"确实有平局"时"平局发生在域端点"才是句真话：仅有标记而无平局时不置位
+        "tied_at_domain_edge": bool(tally["n_ties"] > 0 and flagged),
+    }
+
+
 def evaluate_h3(
     joint: Sequence[float], independent: Sequence[float]
 ) -> str:
     """H3（spec 40 [S3]：联合优于独立，同种子成对 5 对）。
 
-    成立：5/5 对联合 ≥ 独立
+    成立：5/5 对联合 ≥ 独立（**平局计入胜**——判据冻结）
     方向成立（弱）：4/5
     不成立：≤ 2/5
     不可判定：3/5
+
+    平局与"域顶平局无区分力"这两件事不在这里表达（本函数只返回枚举字符串），
+    由 :func:`h3_disclosure` 随门禁结论落盘。
     """
     if len(joint) != 5 or len(independent) != 5:
         raise ValueError("H3 需要各 5 种子 N_eff")
-    pairs = [(j, i) for j, i in zip(joint, independent)]
-    joint_wins = sum(1 for j, i in pairs if j >= i)
+    joint_wins = _pair_tally(joint, independent)["n_joint_ge"]
     if joint_wins == 5:
         return "成立"
     if joint_wins == 4:
@@ -543,23 +601,33 @@ def evaluate_gates_from_disk(
     }
     test_pairs, test_reason, test_seed_sets = _pairs_by_seed_or_reason(joint_test, indep_test)
     if len(test_pairs) == E1_SEEDS:
+        joint_vals = [joint_test[a] for a, _ in test_pairs]
+        indep_vals = [indep_test[b] for _, b in test_pairs]
+        joint_flags = [_n_eff_flag(by_variant["joint"][a]) for a, _ in test_pairs]
+        indep_flags = [_n_eff_flag(by_variant["independent"][b]) for _, b in test_pairs]
+        tally = _pair_tally(joint_vals, indep_vals)
+        # H3 的披露字段（判定表达式不变）：平局计入胜是 `40` [S3] 的冻结判据，但两侧同触
+        # 报告域端点时的平局只说明该档不具备区分力（`20` [S3] 上溢 = 达到可验证域顶、
+        # 真值不可辨识），故把平局数/严格获胜数与域顶标志一并落盘供报告披露。
         h3: dict = {
-            "verdict": evaluate_h3(
-                [joint_test[a] for a, _ in test_pairs], [indep_test[b] for _, b in test_pairs]
-            ),
-            "n_pairs": len(test_pairs),
-            "joint_wins": int(
-                sum(1 for a, b in test_pairs if joint_test[a] >= indep_test[b])
-            ),
+            "verdict": evaluate_h3(joint_vals, indep_vals),
+            "n_pairs": tally["n_pairs"],
+            "joint_wins": tally["n_joint_ge"],
             "pairing": _pairing_record(test_pairs),
             "inputs": {
                 "joint": {str(a): joint_test[a] for a, _ in test_pairs},
                 "independent": {str(b): indep_test[b] for _, b in test_pairs},
             },
+            "n_eff_flags": {
+                "joint": {str(a): f for (a, _), f in zip(test_pairs, joint_flags)},
+                "independent": {str(b): f for (_, b), f in zip(test_pairs, indep_flags)},
+            },
+            **h3_disclosure(joint_vals, indep_vals, flags=[*joint_flags, *indep_flags]),
         }
     else:
         h3 = {
             "verdict": VERDICT_INDETERMINATE, "n_pairs": len(test_pairs), "joint_wins": None,
+            "n_ties": None, "n_strict_joint_wins": None, "tied_at_domain_edge": None,
             "pairing": _pairing_record(test_pairs, test_seed_sets if test_reason else None),
             "inputs": {"joint": {str(k): v for k, v in joint_test.items()},
                        "independent": {str(k): v for k, v in indep_test.items()}},

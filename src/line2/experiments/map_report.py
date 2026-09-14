@@ -144,7 +144,9 @@ _GATE_SNAPSHOT_KEYS = {
 #: 条件落盘的快照键（判定不可达时产出不写；缺失以 reason_code 显式解释，不静默）
 _GATE_OPTIONAL_KEYS = {
     "H1": ("reason_code",),
-    "H3": ("reason_code",),
+    # H3 的披露字段：平局数 / 严格获胜数 / 域顶平局标志 + 其证据（成对 N_eff 的落盘标记）
+    "H3": ("n_ties", "n_strict_joint_wins", "tied_at_domain_edge", "n_eff_flags",
+           "reason_code"),
     "H7": ("n_eff_station0_median", "n_eff_station1_median", "reason_code"),
     "H8": ("variant", "reason_code"),
 }
@@ -696,6 +698,13 @@ def _flatten_snapshot_rows(rows: Sequence[tuple[str, object]]) -> list[tuple[str
         elif key == "pairing" and isinstance(value, Mapping):
             flat.append(("pairing.basis", value.get("basis")))
             flat.append(("pairing.pairs", value.get("pairs")))
+        elif key == "n_eff_flags" and isinstance(value, Mapping):
+            # H3 披露 `tied_at_domain_edge` 的证据：成对 N_eff 各自的落盘标记，逐臂逐种子摊平
+            for arm, per_seed in sorted(value.items(), key=lambda kv: str(kv[0])):
+                flat.extend(
+                    (f"n_eff_flags.{arm}[{seed}]", flag)
+                    for seed, flag in sorted(per_seed.items(), key=lambda kv: str(kv[0]))
+                )
         else:
             flat.append((key, value))
     return flat
@@ -726,6 +735,17 @@ def _gate_lines(name: str, gate: Mapping) -> list[str]:
     ]
     lines += _md_table(["项", "值"], _flatten_snapshot_rows(rows) if name in ("H1", "H3") else rows)
 
+    if name == "H3" and gate.get("tied_at_domain_edge"):
+        # 平局计入胜是 `40` [S3] 的冻结判据，故结论必须照旧输出；但域端点上的平局是被截断的
+        # 饱和值（`20` [S3] 上溢 = 达到可验证域顶、真值不可辨识），不具备区分力——这句是
+        # 事实披露，不改判定。
+        lines += [
+            "",
+            f"- **域顶平局提示**：{_fmt(gate.get('n_ties'))}/{_fmt(gate.get('n_pairs'))} 对为"
+            "域端点平局（两侧 N_eff 均携带上/下溢标记，见上表 `n_eff_flags` 与 3.1 的 N_eff "
+            "表），该档**不具备区分力**；`40` [S3] H3 把平局计入胜，故上面的结论是**字面结论**，"
+            f"不表示联合严格更优（严格更优仅 {_fmt(gate.get('n_strict_joint_wins'))} 对）。",
+        ]
     if name == "H7":
         per_seed = gate["per_seed"]
         lines += ["", "逐种子跨站比值：", ""]
