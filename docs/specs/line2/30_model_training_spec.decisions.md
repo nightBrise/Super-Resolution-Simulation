@@ -86,8 +86,8 @@
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | — | — | pending |
-| [S2] | — | — | pending |
-| [S3] | — | — | pending |
-| [S4] | — | — | pending |
-| [S5] | — | — | pending |
+| [S1] | 807d949 | L3b 批次复审 | implemented（Phase1Net：FiLM U-Net + Softplus 概率头；参数 ≤6e7；条件化防泄露） |
+| [S2] | 807d949 | L3b 批次复审 | implemented（Poisson NLL 手算 + PSD 判别 + 率语义） |
+| [S3] | f3c45f5 | L3b 批次复审 | implemented（冒烟+确定性 30 步 ×2 轨迹一致；max_steps=50000 预注册；混合站台逐样本 edges PSD；D16 DDP 偏差登记） |
+| [S4] | f3c45f5 | L3b 批次复审 | implemented（独立版 6×SingleProjNet，4 维物理 κ；H3 对照臂就绪） |
+| [S5] | f3c45f5 | L3b 批次复审 | implemented（infer：确定性、率图逐投影和 = N_high、ckpt config 驱动重建） |

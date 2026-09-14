@@ -11,7 +11,8 @@ import h5py
 import numpy as np
 import torch
 
-from .unet import Phase1Net, condition_vector, normalize_input_group
+from .train import build_model
+from .unet import condition_vector, normalize_input_group
 
 
 def _sha_of(path: Path) -> str:
@@ -23,26 +24,32 @@ def infer(
     counts: np.ndarray,
     edges: np.ndarray,
     n_high: float,
-    n_low: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """单图组推理（确定性，eval 模式）。返回 (概率图, 率图)。网络结构取自 ckpt config。"""
+    """单图组推理（确定性，eval 模式）。返回 (概率图, 率图)。
+
+    网络拓扑由 ckpt 的 ``config`` 经 ``train.build_model`` 重建：联合版与独立版
+    共用本入口（`40` [S2] E3 对获胜变体 ckpt 直接推理，不重训练）。前向分支与
+    ``train._forward_variant`` 同构。
+    """
     payload = torch.load(ckpt, map_location="cpu", weights_only=True)
     cfg = payload.get("config", {})
-    net = Phase1Net(
-        base=int(cfg.get("base", 48)),
-        num_levels=int(cfg.get("num_levels", 4)),
-        blocks=int(cfg.get("blocks", 2)),
-        cond_dim=11,
-    )
+    variant = str(cfg.get("variant", "joint"))
+    net = build_model(cfg)
     net.load_state_dict(payload["state_dict"])
     net.eval()
     counts_t = torch.from_numpy(counts.astype(np.float32)).unsqueeze(0)
     edges_t = torch.from_numpy(edges.astype(np.float32))
     shape_maps, _totals = normalize_input_group(counts_t)
-    log_n = torch.log10(torch.tensor([[float(n_low)]]))
-    kappa = condition_vector(counts_t, edges_t, log_n_low=log_n)
+    # κ（联合版）与独立版条件的 log₁₀N_low 一律从**输入计数和**派生，与训练侧
+    # condition_vector(log_n_low=None) / _forward_variant 同口径：名义档位与实际计数和
+    # 不符时（跨站套用、子样本缺粒）不会给网络喂一个训练期从未见过的条件值。
     with torch.no_grad():
-        p = net(shape_maps, kappa)  # (1, 6, 128, 128)
+        if variant == "joint":
+            kappa = condition_vector(counts_t, edges_t)
+            p = net(shape_maps, kappa)  # (1, 6, 128, 128)
+        else:
+            log_n = torch.log10(counts_t.sum(dim=(1, 2, 3)).clamp_min(1.0))
+            p = net(shape_maps, edges_t, log_n)
     prob = p[0].numpy().astype(np.float64)          # (6, 128, 128)
     rate = (prob * float(n_high)).astype(np.float64)  # 逐格期望计数
     return prob, rate
@@ -66,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         counts = stg[f"tier_{args.n_low:06d}_sub_{args.sub:02d}"][...]
         edges = stg[f"tier_{args.n_low:06d}_sub_{args.sub:02d}"].attrs["bin_edges"]
 
-    prob, rate = infer(args.ckpt, counts, edges, args.n_high, float(args.n_low))
+    prob, rate = infer(args.ckpt, counts, edges, args.n_high)
     args.out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         args.out / "group_n.npz",

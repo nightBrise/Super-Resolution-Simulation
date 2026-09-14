@@ -13,7 +13,7 @@
   "w_psd": 0.1,
   "device": "cuda:0",
   "torch_threads": 4,
-  "seed": 1,
+  "seed": 101,
   "variant": "joint",
   "out_dir": "studies/line2_particle_sr/results/e1_joint_s1"
 }

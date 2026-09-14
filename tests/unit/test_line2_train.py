@@ -1,12 +1,14 @@
-"""L3b [S3]/[S5] 验收测试（spec line2/30）：训练冒烟、确定性、checkpoint、推理。
+"""L3b [S3]–[S5] 验收测试（spec line2/30）：训练冒烟、确定性、日志契约、test 束隔离、推理。
 
-小配置（3 束 × 100,001 粒子数据集、base=24、depth=3、30 步）保证单元测试
-时间预算；生产规模运行由管线 CLI 承担。
+小配置（10 束 × 100,001 粒子合成数据集、joint base=24 / independent ind_base=16、
+depth=3、20–30 步）保证单元测试时间预算；生产规模运行由管线 CLI 承担。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import pathlib
 
 import h5py
@@ -15,11 +17,16 @@ import pytest
 import torch
 
 from src.line2.data_pipeline.dataset import build_dataset
-from src.line2.training.data import Line2Pairs
-from src.line2.training.infer import infer
-from src.line2.training.train import train
+from src.line2.training.common import config_hash
+from src.line2.training.infer import main as infer_main
+from src.line2.training.train import should_update_best, train
 
 pytestmark = pytest.mark.unit
+
+#: `30` [S3] C3 要求逐评估周期落盘的字段。
+LOG_KEYS = ("step", "train_nll", "val_nll", "val_n_eff", "lr", "grad_norm")
+
+SEED = 20260913
 
 
 @pytest.fixture(scope="module")
@@ -28,20 +35,43 @@ def data_dir(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
 
     out = tmp_path_factory.mktemp("ds_train")
     anchor = _synthetic_table(100_001, seed=99)
-    # 10 束：保证 val 切分非空（70/15/15 → 7/2/1）；构建 ~1-2 min
+    # 10 束：保证 val 切分非空（70/15/15 → 7/2/1）；构建 ~40 s
     return build_dataset(out, anchor, n_beams=10, data_version="test_train")
 
 
 @pytest.fixture(scope="module")
-def train_out(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
-    """训练冒烟的输出目录（模块级共享，供 infer 测试消费 best_val.ckpt）。"""
-    out = tmp_path_factory.mktemp("train_runs") / "run_a"
-    out.mkdir(parents=True, exist_ok=True)
-    return out
-
-
-def _cfg(data_dir: pathlib.Path, out_dir: pathlib.Path, seed: int) -> dict:
+def joint_run(tmp_path_factory: pytest.TempPathFactory, data_dir: pathlib.Path) -> dict:
+    """联合版 30 步冒烟（模块级共享）：run A 供日志/ckpt 消费，run B 供确定性对比。"""
+    root = tmp_path_factory.mktemp("train_runs")
+    cfg = _cfg(data_dir, root / "run_a", SEED)
     return {
+        "cfg": cfg,
+        "out_a": root / "run_a",
+        "out_b": root / "run_b",
+        "a": train(cfg),
+        "b": train(dict(cfg, out_dir=str(root / "run_b"))),
+    }
+
+
+@pytest.fixture(scope="module")
+def ind_run(tmp_path_factory: pytest.TempPathFactory, data_dir: pathlib.Path) -> dict:
+    """独立版 20 步冒烟（`30` [S4] C2 训练路径）：同种子两次，供确定性与推理消费。"""
+    root = tmp_path_factory.mktemp("ind_runs")
+    cfg = _cfg(
+        data_dir, root / "run_a", SEED,
+        variant="independent", ind_base=16, ind_blocks=3, max_steps=20, eval_every=10,
+    )
+    return {
+        "cfg": cfg,
+        "out_a": root / "run_a",
+        "out_b": root / "run_b",
+        "a": train(cfg),
+        "b": train(dict(cfg, out_dir=str(root / "run_b"))),
+    }
+
+
+def _cfg(data_dir: pathlib.Path, out_dir: pathlib.Path, seed: int, **over) -> dict:
+    cfg = {
         "data_dir": str(data_dir),
         "out_dir": str(out_dir),
         "seed": seed,
@@ -59,64 +89,177 @@ def _cfg(data_dir: pathlib.Path, out_dir: pathlib.Path, seed: int) -> dict:
         "device": "cpu",
         "torch_threads": 2,
     }
+    cfg.update(over)
+    return cfg
 
 
-def test_train_smoke_and_determinism(data_dir: pathlib.Path, train_out: pathlib.Path) -> None:
-    """[S3] C1/C3：训练可运行、日志/ckpt 落盘；同种子 val N_eff 轨迹逐位一致。"""
-    out_a = train_out
-    out_b = train_out.parent / "run_b"
-    summary_a = train(_cfg(data_dir, out_a, seed=20260913))
-    summary_b = train(_cfg(data_dir, out_b, seed=20260913))
-    assert summary_a["steps"] == 30 and summary_b["steps"] == 30
-    assert summary_a["val_n_eff_history"] == summary_b["val_n_eff_history"]
-    assert (out_a / "best_val.ckpt").is_file() and (out_a / "last.ckpt").is_file()
-    entries = [
-        json.loads(line)
-        for line in (out_a / "train_log.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
-    assert len(entries) == 3  # eval_every=10 × 30 步
-    assert all("val_n_eff" in e and "train_nll" in e for e in entries)
+def _read_log(run_dir: pathlib.Path) -> list[dict]:
+    text = (run_dir / "train_log.jsonl").read_text(encoding="utf-8")
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def test_infer_roundtrip(data_dir: pathlib.Path, train_out: pathlib.Path, tmp_path: pathlib.Path) -> None:
-    best_ckpt = train_out / "best_val.ckpt"
-    if not best_ckpt.is_file():
-        # 自足守卫：字母序下本测试可能先于训练冒烟运行——先跑一次 30 步训练
-        train(_cfg(data_dir, train_out, seed=20260913))
-    """[S5] C1–C3：推理确定性、率图总计数 = N_high。"""
-    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
-    beam_id = int(manifest["splits"]["train"][0])
-    out = tmp_path / "infer_out"
-    args = [
-        "--ckpt", str(data_dir / ".." / "ckpt_placeholder" / "best_val.ckpt"),
+def _load_ckpt(run_dir: pathlib.Path, name: str = "best_val.ckpt") -> dict:
+    return torch.load(run_dir / name, map_location="cpu", weights_only=True)
+
+
+# ---------------------------------------------------------------- [S3] 训练循环
+def test_should_update_best_strict() -> None:
+    """[S3] C2：best_val 选择规则 = 严格更优才更新（人工退化/持平序列）。"""
+    best = float("-inf")
+    updated_at: list[int] = []
+    for i, val in enumerate([1.0, 0.9, 0.95, 1.1, 1.1]):
+        if should_update_best(val, best):
+            best = val
+            updated_at.append(i)
+    assert updated_at == [0, 3]  # 0.9/0.95 劣于 1.0；末尾 1.1 与 best 持平不再更新
+    assert best == 1.1
+    assert not should_update_best(1.1, 1.1)
+    assert not should_update_best(0.5, 1.1)
+    assert should_update_best(-2.0, float("-inf"))  # 初值哨兵下首次评估必更新
+
+
+def test_train_smoke_and_determinism(joint_run: dict) -> None:
+    """[S3] C1：训练可运行、ckpt 落盘；同种子同 config 的 val N_eff 轨迹逐位一致。"""
+    assert joint_run["a"]["steps"] == 30 and joint_run["b"]["steps"] == 30
+    assert joint_run["a"]["val_n_eff_history"] == joint_run["b"]["val_n_eff_history"]
+    for key in ("out_a", "out_b"):
+        assert (joint_run[key] / "best_val.ckpt").is_file()
+        assert (joint_run[key] / "last.ckpt").is_file()
+
+
+def test_best_ckpt_matches_argmax(joint_run: dict) -> None:
+    """[S3] C2：best_val.ckpt 对应 val N_eff 最优的评估周期，且携带 config 哈希与种子。"""
+    summary = joint_run["a"]
+    history = summary["val_n_eff_history"]
+    assert summary["best_val_n_eff"] == max(history)
+    # eval_every=10 且严格更优才更新 → best_step = 首个最大值所在周期
+    assert summary["best_step"] == 10 * (int(np.argmax(history)) + 1)
+    payload = _load_ckpt(joint_run["out_a"])
+    assert payload["step"] == summary["best_step"]
+    assert payload["best_val_n_eff"] == summary["best_val_n_eff"]
+    assert payload["master_seed"] == SEED
+    assert payload["cfg_hash"] == config_hash(payload["config"])
+
+
+def test_train_log_contract(joint_run: dict) -> None:
+    """[S3] C3：逐评估周期落盘 step/train NLL/val NLL/val N_eff/lr/grad_norm，可 json 解析。"""
+    entries = _read_log(joint_run["out_a"])
+    assert [e["step"] for e in entries] == [10, 20, 30]  # eval_every=10 × max_steps=30
+    for entry in entries:
+        assert set(LOG_KEYS) <= set(entry)
+        for key in LOG_KEYS:
+            assert isinstance(entry[key], int | float) and math.isfinite(entry[key])
+        assert entry["grad_norm"] >= 0.0  # clip_grad_norm_ 的总范数不变量
+        assert entry["lr"] == pytest.approx(3e-4)  # 记录的是优化器实际 lr
+
+
+def test_training_never_reads_test_split(
+    data_dir: pathlib.Path, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """[S3] C5 / GC3：训练全程不读 test 束——数据目录里根本没有 test.h5 也能跑完。
+
+    可证伪性：``train`` 只经 ``h5py.File`` 触达数据集；若实现（含 ``val_curve_for``
+    的曲线口径）打开 test.h5，此处会因文件缺失抛 FileNotFoundError 而失败；spy 同时
+    记录全部实际打开路径，任何指向 test 束的读取都会被第二条断言直接捕获。
+    """
+    ds = tmp_path / "ds_no_test"
+    ds.mkdir()
+    for name in ("train.h5", "val.h5", "manifest.json"):
+        (ds / name).symlink_to(data_dir / name)
+    assert not (ds / "test.h5").exists()
+
+    opened: list[str] = []
+    real_file = h5py.File
+
+    def spy(path, *args, **kwargs):
+        opened.append(str(path))
+        return real_file(path, *args, **kwargs)
+
+    monkeypatch.setattr(h5py, "File", spy)
+    summary = train(_cfg(ds, tmp_path / "out_no_test", SEED))
+
+    assert summary["steps"] == 30
+    assert any(p.endswith("train.h5") for p in opened)  # spy 生效（否则下条形同虚设）
+    assert any(p.endswith("val.h5") for p in opened)
+    assert not [p for p in opened if "test.h5" in p]
+
+
+# ---------------------------------------------------------------- [S4] 独立版对照
+def test_independent_variant_training(ind_run: dict) -> None:
+    """[S4] C2：独立版训练路径可跑完并落盘 summary；同种子 val N_eff 轨迹逐位一致。"""
+    assert ind_run["a"]["variant"] == "independent" == ind_run["b"]["variant"]
+    assert ind_run["a"]["steps"] == 20 == ind_run["b"]["steps"]
+    assert ind_run["a"]["val_n_eff_history"] == ind_run["b"]["val_n_eff_history"]
+    for key in ("out_a", "out_b"):
+        run_dir = ind_run[key]
+        summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+        assert summary["variant"] == "independent" and summary["steps"] == 20
+        assert len(_read_log(run_dir)) == 2  # eval_every=10 × max_steps=20
+        assert all("val_n_eff" in e for e in _read_log(run_dir))
+
+    # 结构契约（`30` [S4] / D4）：6 个互不共享权重的单投影子网，无共享骨干
+    state = _load_ckpt(ind_run["out_a"])["state_dict"]
+    assert {k.split(".")[0] for k in state} == {"nets"}
+    assert {k.split(".")[1] for k in state} == {str(i) for i in range(6)}
+
+
+# ---------------------------------------------------------------- [S5] 推理
+def _run_infer(ckpt: pathlib.Path, data_dir: pathlib.Path, out: pathlib.Path,
+               beam_id: int, station: int = 0, sub: int = 0) -> dict:
+    """跑一次推理 CLI 并返回 npz 全部数组（返回码在此断言，调用方只看内容）。"""
+    rc = infer_main([
+        "--ckpt", str(ckpt),
         "--input", str(data_dir / "train.h5"),
         "--beam-id", str(beam_id),
-        "--station", "0",
+        "--station", str(station),
         "--n-low", "10000",
-        "--sub", "0",
+        "--sub", str(sub),
         "--n-high", "200000",
         "--out", str(out),
-    ]
-    # 训练冒烟产出的 best_val.ckpt 作为 ckpt（占位路径替换）
-    best_ckpt = train_out / "best_val.ckpt"
-    if not best_ckpt.is_file():  # 依赖顺序保护：smoke 先行时已存在
-        pytest.skip("训练冒烟未先行")
-    args[args.index("--ckpt") + 1] = str(best_ckpt)
-    rc = infer_main(args)
+    ])
     assert rc == 0
-    data = np.load(out / "group_n.npz")
-    assert data["prob"].shape == (6, 128, 128) and data["rate"].shape == (6, 128, 128)
-    per_proj = data["rate"].sum(axis=(1, 2))
-    np.testing.assert_allclose(per_proj, 200_000.0, rtol=1e-4)  # C3 率语义
-    # 确定性
-    out2 = tmp_path / "infer_out2"
-    args[args.index("--out") + 1] = str(out2)
-    assert infer_main(args) == 0
-    a = np.load(out2 / "group_n.npz")
-    np.testing.assert_array_equal(a["prob"], data["prob"])
+    with np.load(out / "group_n.npz") as data:
+        return {k: data[k] for k in data.files}
 
 
-def infer_main(argv: list[str]) -> int:
-    from src.line2.training import infer as infer_mod
+def _assert_group_n(arrays: dict, ckpt: pathlib.Path, beam_id: int, sub: int,
+                    station: int = 0) -> None:
+    """[S5] C2/C3：双套数组、形状、严格正、逐投影率和 = N_high、来源四元组 + ckpt 哈希。"""
+    prob, rate = arrays["prob"], arrays["rate"]
+    assert prob.shape == (6, 128, 128) and rate.shape == (6, 128, 128)
+    assert prob.dtype == np.float64 and rate.dtype == np.float64
+    assert (prob > 0).all()
+    np.testing.assert_allclose(prob.sum(axis=(1, 2)), 1.0, rtol=1e-5)
+    np.testing.assert_allclose(rate.sum(axis=(1, 2)), 200_000.0, rtol=1e-4)
+    np.testing.assert_array_equal(rate, prob * 200_000.0)  # D7 率语义：rate = p·N_high
+    assert int(arrays["beam_id"]) == beam_id
+    assert int(arrays["station"]) == station
+    assert int(arrays["n_low"]) == 10_000
+    assert int(arrays["sub_idx"]) == sub
+    assert str(arrays["ckpt_md5"]) == hashlib.md5(ckpt.read_bytes()).hexdigest()
 
-    return infer_mod.main(argv)
+
+def test_infer_roundtrip(joint_run: dict, data_dir: pathlib.Path,
+                         tmp_path: pathlib.Path) -> None:
+    """[S5] C1–C3：联合版 ckpt 推理确定性、概率/率双套输出、率图总计数 = N_high。"""
+    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
+    beam_id = int(manifest["splits"]["train"][0])
+    ckpt = joint_run["out_a"] / "best_val.ckpt"
+    first = _run_infer(ckpt, data_dir, tmp_path / "infer_out", beam_id)
+    _assert_group_n(first, ckpt, beam_id, sub=0)
+    again = _run_infer(ckpt, data_dir, tmp_path / "infer_out2", beam_id)
+    np.testing.assert_array_equal(again["prob"], first["prob"])  # C1 确定性
+    np.testing.assert_array_equal(again["rate"], first["rate"])
+
+
+def test_infer_independent_ckpt(ind_run: dict, data_dir: pathlib.Path,
+                                tmp_path: pathlib.Path) -> None:
+    """[S5] C1–C3 + `40` [S2] E3 前提：变体由 ckpt config 决定，独立版 ckpt 走同一入口。"""
+    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
+    beam_id = int(manifest["splits"]["train"][0])
+    ckpt = ind_run["out_a"] / "best_val.ckpt"
+    assert _load_ckpt(ind_run["out_a"])["config"]["variant"] == "independent"
+    first = _run_infer(ckpt, data_dir, tmp_path / "infer_ind", beam_id, sub=1)
+    _assert_group_n(first, ckpt, beam_id, sub=1)
+    again = _run_infer(ckpt, data_dir, tmp_path / "infer_ind2", beam_id, sub=1)
+    np.testing.assert_array_equal(again["prob"], first["prob"])

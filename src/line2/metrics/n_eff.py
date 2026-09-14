@@ -13,6 +13,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 import h5py
 import numpy as np
@@ -74,8 +75,13 @@ def error_n_curve(
     tiers: tuple[int, ...] = _CURVE_TIERS,
     k: int = 20,
     dump: str | Path | None = None,
+    progress_every: int | None = None,
 ) -> CurveResult:
-    """[S2] 裸误差–N 曲线（默认门禁口径 = val+test 束；train 束诊断曲线另行传 beam_ids）。"""
+    """[S2] 裸误差–N 曲线（默认门禁口径 = val+test 束；train 束诊断曲线另行传 beam_ids）。
+
+    ``progress_every`` 每处理 N 束向 stderr 打一行进度（长时跑的可观测性；
+    默认 None = 静默，不影响返回值）。
+    """
     manifest, data_dir = _dataset_layout(data_dir)
     if beam_ids is None:
         beam_ids = [b for s in ("val", "test") for b in manifest["splits"][s]]
@@ -83,7 +89,7 @@ def error_n_curve(
     samples: dict[int, list[float]] = {t: [] for t in tiers}
     pair_m1: dict[int, list[float]] = {t: [] for t in tiers}
     try:
-        for beam_id in beam_ids:
+        for n_done, beam_id in enumerate(beam_ids, start=1):
             split = _beam_split(manifest, beam_id)
             h5 = files.setdefault(
                 split, h5py.File(data_dir / f"{split}.h5", "r")
@@ -100,6 +106,8 @@ def error_n_curve(
                     samples[tier].extend(_group_m1(img, ref) for img in imgs)
                     for a in range(0, k - 1, 2):  # 预注册配对：(0,1),(2,3),…
                         pair_m1[tier].append(_group_m1(imgs[a], imgs[a + 1]))
+            if progress_every and n_done % progress_every == 0:
+                print(f"[e0] {n_done}/{len(beam_ids)} 束已处理", file=sys.stderr, flush=True)
     finally:
         for f in files.values():
             f.close()

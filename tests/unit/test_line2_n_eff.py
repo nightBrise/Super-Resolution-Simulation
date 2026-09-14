@@ -5,13 +5,21 @@ from __future__ import annotations
 import json
 import pathlib
 
+import h5py
 import numpy as np
 import pytest
 
 from src.line2.data_pipeline.dataset import build_dataset
+from src.line2.metrics.metrics import group_rel_rmse
 from src.line2.metrics.n_eff import error_n_curve, n_eff
 
 pytestmark = pytest.mark.unit
+
+#: `20` [S2] 预注册档位（2e5 = 参照本身，不设节点，D7）。
+CURVE_TIERS = (1_000, 3_000, 10_000, 30_000, 100_000)
+#: 每档独立子样本数（`10` [S2]）；相邻不相交对 → k//2 对/束/站（20 D14）。
+SUBSAMPLE_K = 20
+STATIONS = (0, 1)
 
 
 @pytest.fixture(scope="module")
@@ -49,10 +57,85 @@ def test_curve_structure(small_dataset: pathlib.Path, curve, tmp_path: pathlib.P
     assert len(payload["raw_samples"]["10000"]) == 4 * 2 * 20
 
 
+def _manual_pair_m1(data_dir: pathlib.Path, beam_ids: list[int]) -> dict[int, list[float]]:
+    """按 D14 口径（相邻不相交对 (0,1),(2,3),…）从数据集手工重算每档 M1 互差样本。
+
+    独立于 ``error_n_curve``：直接读 HDF5 子样本图组、自己配对、自己调 M1，
+    用于对拍实现返回的地板值（不引入外部随机性，`20` [S2] C2）。
+    """
+    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
+    split_of = {int(b): s for s, ids in manifest["splits"].items() for b in ids}
+    pairs: dict[int, list[float]] = {t: [] for t in CURVE_TIERS}
+    files: dict[str, h5py.File] = {}
+    try:
+        for beam_id in beam_ids:
+            split = split_of[beam_id]
+            h5 = files.setdefault(split, h5py.File(data_dir / f"{split}.h5", "r"))
+            for station_idx in STATIONS:
+                stg = h5[f"beam_{beam_id:04d}/station{station_idx}"]
+                for tier in CURVE_TIERS:
+                    imgs = [
+                        stg[f"tier_{tier:06d}_sub_{sub_idx:02d}"][...]
+                        for sub_idx in range(SUBSAMPLE_K)
+                    ]
+                    for a in range(0, SUBSAMPLE_K - 1, 2):
+                        pairs[tier].append(group_rel_rmse(imgs[a], imgs[a + 1]))
+    finally:
+        for f in files.values():
+            f.close()
+    return pairs
+
+
+def test_floor_definitions_match_manual_recompute(small_dataset: pathlib.Path, curve) -> None:
+    """[S2] C2/C3：两条地板线与曲线点的口径 = 手工重算值（rtol 1e-12）。
+
+    - 互差地板 = 同档两两独立子样本 M1 差的中位数；配对口径取 D14 钉死的
+      **相邻不相交对** (0,1),(2,3),…,(18,19)（k=20 → 10 对/束/站）。若实现改用
+      全组合 C(20,2)=190 对，参与中位数的样本集不同，数值对拍即失败——配对口径
+      由此可证伪。
+    - 参照噪声地板 = 1e5 档**同一配对集合**的中位数 / √2（C3），故它必须恰等于
+      ``mutual_floor[100_000] / √2``（逐位，不允许各自独立估计）。
+    - 曲线点 = ``raw_samples`` 的中位数与 25/75 分位（C1 的落盘复核口径）。
+    """
+    beam_ids = list(range(4))
+    pairs = _manual_pair_m1(small_dataset, beam_ids)
+    n_pairs_expected = len(beam_ids) * len(STATIONS) * (SUBSAMPLE_K // 2)
+    for tier in CURVE_TIERS:
+        assert len(pairs[tier]) == n_pairs_expected
+        np.testing.assert_allclose(
+            curve.mutual_floor[tier],
+            float(np.median(pairs[tier])),
+            rtol=1e-12,
+            atol=0.0,
+            err_msg=f"档 {tier} 互差地板与手工重算不符",
+        )
+    assert curve.reference_noise_floor == curve.mutual_floor[100_000] / np.sqrt(2.0)
+
+    for p in curve.points:
+        vals = np.asarray(curve.raw_samples[p.n_low], dtype=np.float64)
+        assert p.n_samples == vals.size == len(beam_ids) * len(STATIONS) * SUBSAMPLE_K
+        assert p.median == float(np.median(vals))
+        lo, hi = np.percentile(vals, [25, 75])
+        assert (p.iqr_lo, p.iqr_hi) == (float(lo), float(hi))
+
+
+def test_error_n_curve_repeat_call_identical(small_dataset: pathlib.Path, curve) -> None:
+    """[S2] C1：同数据集同参数两次调用 → 曲线点/两条地板/原始样本逐位一致。"""
+    again = error_n_curve(small_dataset, beam_ids=list(range(4)))
+
+    def point_tuples(result) -> list[tuple]:
+        return [
+            (p.n_low, p.median, p.iqr_lo, p.iqr_hi, p.n_samples) for p in result.points
+        ]
+
+    assert point_tuples(again) == point_tuples(curve)
+    assert again.mutual_floor == curve.mutual_floor
+    assert again.reference_noise_floor == curve.reference_noise_floor
+    assert again.raw_samples == curve.raw_samples  # dict[int, list[float]] → 逐位比较
+
+
 def test_n_eff_identity(small_dataset: pathlib.Path, curve) -> None:
     """[S3] C3 恒等测试：裸 1e4 子样本（tier_010000）作为"输出"，N_eff ∈ [3e3, 3e4]。"""
-    import h5py
-
     manifest = json.loads((small_dataset / "manifest.json").read_text(encoding="utf-8"))
     beam_id = manifest["splits"]["train"][0]
     with h5py.File(small_dataset / "train.h5", "r") as h5:
@@ -66,8 +149,6 @@ def test_n_eff_identity(small_dataset: pathlib.Path, curve) -> None:
 
 def test_n_eff_overflow_and_determinism(small_dataset: pathlib.Path, curve) -> None:
     """[S3] C2：完美输出（=参照自身）→ 上溢（10× 达成）；同输入逐位确定。"""
-    import h5py
-
     manifest = json.loads((small_dataset / "manifest.json").read_text(encoding="utf-8"))
     beam_id = manifest["splits"]["train"][0]
     with h5py.File(small_dataset / "train.h5", "r") as h5:

@@ -1,0 +1,10 @@
+{
+  "extraction_date": "2026-09-14",
+  "extraction_script": "src/line2/data_pipeline/anchor.py",
+  "master_seed": 20260913,
+  "md5": "f39d905f96abd5588091dad6dd3884b2",
+  "size_bytes": 9600397,
+  "source_path": "/home/zhangny/pyaml-main/examples/SXFEL/elegant_files/injector.sdds",
+  "twiss": "twiss.json",
+  "units_p": "beta_gamma"
+}

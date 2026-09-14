@@ -19,7 +19,13 @@ from src.models.unet import UNetBackbone
 
 N_BINS = 128
 
-__all__ = ["SingleProjNet", "IndependentEnsemble", "proj_condition", "PROJ_PAIRS"]
+__all__ = [
+    "SingleProjNet",
+    "IndependentEnsemble",
+    "proj_condition",
+    "proj_condition_batch",
+    "PROJ_PAIRS",
+]
 
 PROJ_PAIRS: tuple[tuple[str, str], ...] = (
     ("x", "xp"), ("y", "yp"), ("x", "y"), ("x", "yp"), ("xp", "y"), ("xp", "yp"),
@@ -49,20 +55,38 @@ class SingleProjNet(nn.Module):
         return p
 
 
+def proj_condition_batch(
+    shape: torch.Tensor, centers_i: torch.Tensor, centers_j: torch.Tensor,
+    log_n_low: torch.Tensor,
+) -> torch.Tensor:
+    """批量 4 维条件：(σ_i, σ_j, ρ_ij, log₁₀N_low)（物理 bin 中心矩）。
+
+    shape (B, H, W)、centers_i (B, H)、centers_j (B, W)、log_n_low (B,) → (B, 4)。
+    全程张量运算：单次前向里 96 个逐样本子图（6 投影 × batch）若逐样本取 float()
+    会引入数百次设备同步，成本远超计算本身。
+    """
+    p = shape / shape.sum(dim=(1, 2), keepdim=True).clamp_min(1e-12)
+    pi = p.sum(dim=2)
+    pj = p.sum(dim=1)
+    mi = (pi * centers_i).sum(dim=1)
+    mj = (pj * centers_j).sum(dim=1)
+    di = centers_i - mi.unsqueeze(1)
+    dj = centers_j - mj.unsqueeze(1)
+    var_i = (pi * di ** 2).sum(dim=1)
+    var_j = (pj * dj ** 2).sum(dim=1)
+    rho = (p * di.unsqueeze(2) * dj.unsqueeze(1)).sum(dim=(1, 2))
+    return torch.stack([var_i, var_j, rho, log_n_low.to(shape.dtype)], dim=1)
+
+
 def proj_condition(
     shape_map: torch.Tensor, centers_i: torch.Tensor, centers_j: torch.Tensor,
     log_n_low: float,
 ) -> torch.Tensor:
-    """单投影 4 维条件：(σ_i, σ_j, ρ_ij, log₁₀N_low)（物理 bin 中心矩）。"""
-    p = shape_map.to(shape_map.dtype) / shape_map.sum().clamp_min(1e-12)
-    mi = float((p.sum(dim=1) * centers_i).sum())
-    mj = float((p.sum(dim=0) * centers_j).sum())
-    di = centers_i - mi
-    dj = centers_j - mj
-    var_i = float((p.sum(dim=1) * di**2).sum())
-    var_j = float((p.sum(dim=0) * dj**2).sum())
-    rho = float((p * di[:, None] * dj[None, :]).sum())
-    return torch.tensor([var_i, var_j, rho, log_n_low], dtype=shape_map.dtype)
+    """单图组 4 维条件（逐样本入口；供等价性核验与外部复用）。"""
+    log_n = torch.full((1,), float(log_n_low), dtype=shape_map.dtype, device=shape_map.device)
+    return proj_condition_batch(
+        shape_map.unsqueeze(0), centers_i.unsqueeze(0), centers_j.unsqueeze(0), log_n
+    )[0]
 
 
 class IndependentEnsemble(nn.Module):
@@ -93,26 +117,34 @@ class IndependentEnsemble(nn.Module):
     ) -> torch.Tensor:
         """shape_maps (B,6,H,W) 自归一形状图；edges (4,129) 或 (B,4,129)。
 
-        逐投影逐束：物理 bin 中心矩 → 4 维 κ → SingleProjNet → (B,1,H,W)，
-        六投影拼回 (B,6,H,W)。确定性。
+        逐投影整批：物理 bin 中心矩 → (B,4) κ → SingleProjNet → (B,1,H,W)，
+        六投影拼回 (B,6,H,W)。确定性；逐样本与整批等价（FiLM/GroupNorm/Softplus
+        与归一化均逐样本独立，见 tests/unit/test_line2_model.py 的等价性用例）。
         """
+        # 统一设备：所有输入与模型同设备（防 DDP/CuBLAS/单卡/多卡混合下的 device mismatch）
+        try:
+            device = next(self.parameters()).device
+        except StopIteration:
+            device = shape_maps.device
+        shape_maps = shape_maps.to(device)
+        edges = edges.to(device)
         b = shape_maps.shape[0]
+        if not torch.is_tensor(log_n_low):
+            log_n = torch.full((b,), float(log_n_low), dtype=shape_maps.dtype, device=device)
+        else:
+            log_n = log_n_low.to(device).reshape(-1).to(shape_maps.dtype)
+            if log_n.numel() == 1:
+                log_n = log_n.expand(b)
         if edges.dim() == 2:
             edges = edges.unsqueeze(0).expand(b, -1, -1)
-        if not torch.is_tensor(log_n_low):
-            log_n_low = torch.full((b,), float(log_n_low), dtype=shape_maps.dtype)
         axis_of = {"x": 0, "xp": 1, "y": 2, "yp": 3}
+        centers = 0.5 * (edges[:, :, :-1] + edges[:, :, 1:])  # (B, 4, 128)
         per_proj: list[torch.Tensor] = []
         for gi, (ai, aj) in enumerate(PROJ_PAIRS):
             ii, jj = axis_of[ai], axis_of[aj]
-            per_beam: list[torch.Tensor] = []
-            for bi in range(b):
-                centers_i = 0.5 * (edges[bi, ii][:-1] + edges[bi, ii][1:])
-                centers_j = 0.5 * (edges[bi, jj][:-1] + edges[bi, jj][1:])
-                kappa = proj_condition(
-                    shape_maps[bi, gi], centers_i, centers_j, float(log_n_low[bi])
-                ).to(shape_maps.dtype)
-                out_b = self.nets[gi](shape_maps[bi, gi].reshape(1, 1, N_BINS, N_BINS), kappa.reshape(1, -1))
-                per_beam.append(out_b[0, 0])  # (128, 128)
-            per_proj.append(torch.stack(per_beam, dim=0))  # (B, 128, 128)
+            kappa = proj_condition_batch(
+                shape_maps[:, gi], centers[:, ii], centers[:, jj], log_n
+            )
+            out = self.nets[gi](shape_maps[:, gi].unsqueeze(1), kappa)  # (B, 1, 128, 128)
+            per_proj.append(out[:, 0])
         return torch.stack(per_proj, dim=1)  # (B, 6, 128, 128)
