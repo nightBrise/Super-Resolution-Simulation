@@ -110,3 +110,5 @@
 | [S3] | fc40c23 | **L1 批次复审通过带偏差**（C4 束 0 例外——**D11 已裁决：接受偏差**，束 0 记已知例外，抖动束意图成立；另 D3 补实现记录：实算二分标定，薄透镜公式仅给初值/括号——良性细化非偏差） | review passed with deviation (D11 accepted) |
 | [S4] | 5c8e1f3 | **L1 批次复审通过**（4/4 Claim + 1 minor：图内轴向约定 docstring 已按复审要求在 L2 动工前修正） | review passed |
 | [S5] | 5c8e1f3 | **L1 批次复审通过**（5/5 Claim + 1 minor：[S5] C4 测试已补强为全文件 sha256） | review passed |
+| [S1]–[S5]（覆盖补强批） | a122ec5 → b2d320a | **评审 needs fixes → 已整改**（reviewer agent-20 2026-09-14：独立复算 twiss 全字段最大相对误差 1.7124e-14、自写闭式矩阵 + Ocelot twiss 两路独立复算 μ = 75.000000000000°、守卫在生产件上恒不触发（逐位重算 beam_0000/0001 × 两站 × target_full + 五档子样本全等）且无性能副作用、既有行为无回归；三项整改均属文档/治理层——D12 措辞与范围（B1/M1/M2）、断言收紧（m1/m2/m3），见 b2d320a） | review passed after fixes |
+| 覆盖补强内容 | a122ec5 | — | 契约实现 + 测试加强：`six_projections` 增截断守卫（[S4] C1 报错分支，生产路径恒不触发）；新增跨进程逐位一致、相位推进三路独立标定、通道序/轴对逐项比对、每站每 dataset 元数据取值断言、manifest 全字段契约、两站各自定标、全链重复生成逐位一致、twiss 全字段 1e-12；束 0 偏差改 imperative xfail（79 → 92 用例） |

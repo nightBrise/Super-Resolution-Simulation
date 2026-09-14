@@ -111,7 +111,7 @@
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | fb04ef5、21aaedb | L4 批次复审（2026-09-14） | implemented（train/eval/gates 编排） |
-| [S2] | — | L4 批次复审（2026-09-14） | 待 E3 |
-| [S3] | fb04ef5、21aaedb | L4 批次复审（2026-09-14） | implemented |
-| [S4] | — | L4 批次复审（2026-09-14） | 待报告 |
+| [S1] | fb04ef5、21aaedb | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | implemented（train/eval/gates 编排） |
+| [S2] | — | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | 待 E3 |
+| [S3] | fb04ef5、21aaedb | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | implemented |
+| [S4] | — | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | 待报告 |

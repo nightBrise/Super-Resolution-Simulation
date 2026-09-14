@@ -162,8 +162,8 @@
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | 807d949、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（Phase1Net：FiLM U-Net + Softplus 概率头；参数 ≤6e7；条件化防泄露） |
-| [S2] | 807d949、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（Poisson NLL 手算 + PSD 判别 + 率语义） |
-| [S3] | f3c45f5、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（C1/C2/C3/C5；**C4 未满足**——DDP 双卡缓期，见 D12）——冒烟+确定性 30 步 ×2 轨迹一致；max_steps=50000 预注册；混合站台逐样本 edges PSD |
-| [S4] | f3c45f5、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（独立版 6×SingleProjNet，4 维物理 κ；H3 对照臂就绪） |
-| [S5] | f3c45f5、fb04ef5、21aaedb | L3b/L4 批次复审（2026-09-14，结论见报告） | implemented（infer：确定性、率图逐投影和 = N_high、ckpt config 驱动重建） |
+| [S1] | 807d949、fb04ef5、21aaedb | **L3b/L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定，B1 属 40 层 H7；本 spec 侧 M3/M4/M5 与 m2/m4/m8/m9 于 3264ea4、H3 平局披露于 8896b95；整改后全量 423 → 434 passed） | implemented（Phase1Net：FiLM U-Net + Softplus 概率头；参数 ≤6e7；条件化防泄露） |
+| [S2] | 807d949、fb04ef5、21aaedb | **L3b/L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定，B1 属 40 层 H7；本 spec 侧 M3/M4/M5 与 m2/m4/m8/m9 于 3264ea4、H3 平局披露于 8896b95；整改后全量 423 → 434 passed） | implemented（Poisson NLL 手算 + PSD 判别 + 率语义） |
+| [S3] | f3c45f5、fb04ef5、21aaedb | **L3b/L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定，B1 属 40 层 H7；本 spec 侧 M3/M4/M5 与 m2/m4/m8/m9 于 3264ea4、H3 平局披露于 8896b95；整改后全量 423 → 434 passed） | implemented（C1/C2/C3/C5；**C4 未满足**——DDP 双卡缓期，见 D12）——冒烟+确定性 30 步 ×2 轨迹一致；max_steps=50000 预注册；混合站台逐样本 edges PSD |
+| [S4] | f3c45f5、fb04ef5、21aaedb | **L3b/L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定，B1 属 40 层 H7；本 spec 侧 M3/M4/M5 与 m2/m4/m8/m9 于 3264ea4、H3 平局披露于 8896b95；整改后全量 423 → 434 passed） | implemented（独立版 6×SingleProjNet，4 维物理 κ；H3 对照臂就绪） |
+| [S5] | f3c45f5、fb04ef5、21aaedb | **L3b/L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定，B1 属 40 层 H7；本 spec 侧 M3/M4/M5 与 m2/m4/m8/m9 于 3264ea4、H3 平局披露于 8896b95；整改后全量 423 → 434 passed） | implemented（infer：确定性、率图逐投影和 = N_high、ckpt config 驱动重建） |
