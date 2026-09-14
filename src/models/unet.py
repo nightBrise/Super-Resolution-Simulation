@@ -52,9 +52,12 @@ class FilmLayer(nn.Module):
         self.beta_gen = nn.Linear(z_dim, channels)
 
     def forward(self, x: torch.Tensor, z_c: torch.Tensor) -> torch.Tensor:
+        # 设备保险丝：z_c 传入可能是 CPU，但 γ/β 的 weight 在 GPU（model.to(device)）
+        device = self.gamma_gen.weight.device
+        z_c = z_c.to(device)
         gamma = self.gamma_gen(z_c).unsqueeze(-1).unsqueeze(-1)
         beta = self.beta_gen(z_c).unsqueeze(-1).unsqueeze(-1)
-        return gamma * x + beta
+        return gamma * x.to(device) + beta.to(device)
 
 
 class _EncoderLevel(nn.Module):
