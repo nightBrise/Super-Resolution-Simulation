@@ -214,6 +214,14 @@ def evaluate_run(
     结果落盘并原样返回（run_id = ckpt 父目录名）；默认落盘路径为
     ``<ckpt 父目录>/test_eval.json``。
 
+    ``per_beam`` 的两个 N_eff 口径（`20` [S2] 曲线口径 = 每（束, 站, 档）对子样本取
+    中位数后再映射）：
+    - ``n_eff``：**门禁口径**——先对子样本 err 取中位数、再映射 N_eff；与裸曲线
+      "档位中位数"同一聚合次序，出口门禁（`40` [S3] H1/H3/H8，含 H8 容差线最近档
+      映射）只消费本字段；
+    - ``n_eff_median``：先逐子样本映射、再取中位数，仅作快照/复核（N_eff 对 err 单调，
+      二者只在偶数子样本或触及报告域端点时可分辨），不进任何判定表达式。
+
     ``curve`` 接受 E0 dump 路径或已载入的 :class:`CurveResult`。E3 跨站评估复用同一
     ckpt（`40` [S2]），故站 1 的评估 SHALL 传 ``out`` 另起文件名——否则与站 0 产物
     同名相覆，出口门禁会失去站 0 输入。
@@ -265,9 +273,8 @@ def evaluate_run(
                     "n_eff": float(beam_n_eff),
                     "n_eff_flag": beam_flag,
                     "obs": [float(v) for v in obs_median],
-                    # 子样本级 N_eff 的中位数（先映射后取中位数，与 "n_eff" 的先中位数
-                    # 后映射互为快照；N_eff 对 err 单调，故二者仅在偶数子样本或触及
-                    # 报告域端点时可分辨）
+                    # 快照口径：先逐子样本映射 N_eff、再取中位数（与上方"先中位数后
+                    # 映射"的 n_eff 互为对照；门禁只消费 n_eff）
                     "n_eff_median": float(np.median(np.asarray(n_effs, dtype=np.float64))),
                 }
             )

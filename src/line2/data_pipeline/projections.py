@@ -2,7 +2,11 @@
 
 - 每站每轴 bin 边界 = 该站全量表 [min, max] 外扩 1%（零截断 ⇒ ∑counts = 粒子数）；
 - 六投影按 `00` [S1] 枚举顺序，输出 int32 (6, 128, 128)；
-- **图内轴向约定（不对称束数值探针实证，2026-09-14 复审钉死）**：经 `H.T` 存储后，img 的 **axis 0（行）= 投影对的前一坐标 bin，axis 1（列）= 后一坐标 bin**（如 (x,x′) 图：行 = x bin，列 = x′ bin）。全部消费方（`20` M4 Σ 重构/M5 椭圆/B-moment）均已按此约定实现并有数值互检。
+- **图内轴向约定（存储布局）**：`np.histogram2d(table[:, ai], table[:, aj], bins=[ei, ej])`
+  给出 `h[bin_ai, bin_aj]`，而落盘取 `h.T`，故 img 的 axis 0（行）= 投影对的**后一坐标**
+  bin、axis 1（列）= **前一坐标** bin（如 (x,x′) 图：行 = x′ bin，列 = x bin）。
+  按 (ai, aj) 语义消费的调用方（`20` 的 M4 Σ 重构/M5 椭圆/B-moment、`30` 的 Σ 摘要）
+  SHALL 自行先转置。
 - 坐标 ↔ [-1, 1] 归一化按 bin 边界线性映射，可逆。
 """
 
@@ -58,6 +62,7 @@ def six_projections(table: np.ndarray, edges: np.ndarray) -> np.ndarray:
 
     分箱范围（edges）由调用方以该站全量表定标并传入——覆盖一切子样本粒子，
     保证 ∑counts = 子样本粒子数（spec [S4] C1）。
+    输出为存储布局 [bin_aj, bin_ai]（见模块 docstring 的图内轴向约定）。
     """
     idx = {a: i for i, a in enumerate(AXES)}
     out = np.zeros((len(PROJECTION_ORDER), N_BINS, N_BINS), dtype=np.int32)
@@ -65,5 +70,5 @@ def six_projections(table: np.ndarray, edges: np.ndarray) -> np.ndarray:
         ei = edges[idx[ai]]
         ej = edges[idx[aj]]
         h, _, _ = np.histogram2d(table[:, idx[ai]], table[:, idx[aj]], bins=[ei, ej])
-        out[gi] = np.ascontiguousarray(h.T.astype(np.int32))  # img[bin_a, bin_b]
+        out[gi] = np.ascontiguousarray(h.T.astype(np.int32))  # 布局 [bin_aj, bin_ai]
     return out

@@ -18,6 +18,7 @@ import torch
 
 from src.line2.data_pipeline.dataset import build_dataset
 from src.line2.training.common import config_hash
+from src.line2.training.infer import infer, load_ckpt_payload
 from src.line2.training.infer import main as infer_main
 from src.line2.training.train import should_update_best, train
 
@@ -263,3 +264,106 @@ def test_infer_independent_ckpt(ind_run: dict, data_dir: pathlib.Path,
     _assert_group_n(first, ckpt, beam_id, sub=1)
     again = _run_infer(ckpt, data_dir, tmp_path / "infer_ind2", beam_id, sub=1)
     np.testing.assert_array_equal(again["prob"], first["prob"])
+
+
+# ------------------------------------------- [S1] C3：ckpt 载入的 config 哈希/种子校验
+def _group_counts(data_dir: pathlib.Path, beam_id: int, sub: int = 0
+                  ) -> tuple[np.ndarray, np.ndarray]:
+    """train.h5 站 0 的 1e4 档子样本图组（推理入口的最小输入）。"""
+    with h5py.File(data_dir / "train.h5", "r") as h5:
+        dset = h5[f"beam_{beam_id:04d}/station0/tier_010000_sub_{sub:02d}"]
+        return dset[...], np.asarray(dset.attrs["bin_edges"], dtype=np.float64)
+
+
+def _resave(ckpt: pathlib.Path, dst: pathlib.Path, mutate) -> pathlib.Path:
+    """把 ckpt 改一处后另存（篡改/残缺 ckpt 的构造入口，不改动原产物）。"""
+    payload = torch.load(ckpt, map_location="cpu", weights_only=True)
+    mutate(payload)
+    torch.save(payload, dst)
+    return dst
+
+
+def test_infer_validates_cfg_hash_and_master_seed(
+    joint_run: dict, data_dir: pathlib.Path,
+) -> None:
+    """[S1] C3：config 哈希恒被校验（内建）；期望值入口正确放行、错误抛 ValueError。"""
+    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
+    beam_id = int(manifest["splits"]["train"][0])
+    ckpt = joint_run["out_a"] / "best_val.ckpt"
+    counts, edges = _group_counts(data_dir, beam_id)
+    payload = _load_ckpt(joint_run["out_a"])
+    expected = config_hash(payload["config"])
+    assert payload["cfg_hash"] == expected  # 训练产物与重算哈希同源（前置条件）
+
+    prob, rate = infer(ckpt, counts, edges, 200_000.0, expected, SEED)
+    assert prob.shape == (6, 128, 128) and (prob > 0).all()
+    np.testing.assert_allclose(rate, prob * 200_000.0)
+
+    with pytest.raises(ValueError, match="config 哈希与期望值不符"):
+        infer(ckpt, counts, edges, 200_000.0, "0" * 16, SEED)
+    with pytest.raises(ValueError, match="master_seed 与期望值不符"):
+        infer(ckpt, counts, edges, 200_000.0, expected, SEED + 1)
+
+
+def test_infer_rejects_tampered_or_incomplete_ckpt(
+    joint_run: dict, data_dir: pathlib.Path, tmp_path: pathlib.Path,
+) -> None:
+    """[S1] C3：config 与 cfg_hash 必须同源——篡改任一侧、缺段落均拒绝加载。"""
+    ckpt = joint_run["out_a"] / "best_val.ckpt"
+    actual = str(_load_ckpt(joint_run["out_a"])["cfg_hash"])
+    counts, edges = _group_counts(
+        data_dir, int(json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
+                      ["splits"]["train"][0])
+    )
+
+    def bump_config(payload: dict) -> None:
+        payload["config"]["base"] = int(payload["config"]["base"]) + 1
+
+    def break_hash(payload: dict) -> None:
+        payload["cfg_hash"] = "1" * 16 if actual != "1" * 16 else "0" * 16
+
+    cases = (
+        (bump_config, "config 哈希不符"),
+        (break_hash, "config 哈希不符"),
+        (lambda p: p.pop("cfg_hash"), "缺 cfg_hash"),
+        (lambda p: p.pop("config"), "缺 config"),
+        (lambda p: p.pop("state_dict"), "state_dict"),
+    )
+    for index, (mutate, match) in enumerate(cases):
+        bad = _resave(ckpt, tmp_path / f"bad_{index}.ckpt", mutate)
+        with pytest.raises(ValueError, match=match):
+            load_ckpt_payload(bad)
+    # 推理入口同样拒绝（校验发生在建网与前向之前）
+    tampered = _resave(ckpt, tmp_path / "tampered.ckpt", bump_config)
+    with pytest.raises(ValueError, match="config 哈希不符"):
+        infer(tampered, counts, edges, 200_000.0)
+
+
+def test_infer_meta_separates_file_and_config_hashes(
+    joint_run: dict, data_dir: pathlib.Path, tmp_path: pathlib.Path,
+) -> None:
+    """[S5] C2 + [S1] C3：meta.json 分别记文件字节哈希与 ckpt 内 config 哈希，不再同名混用。"""
+    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
+    beam_id = int(manifest["splits"]["train"][0])
+    ckpt = joint_run["out_a"] / "best_val.ckpt"
+    out = tmp_path / "infer_meta"
+    _run_infer(ckpt, data_dir, out, beam_id)
+
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    payload = _load_ckpt(joint_run["out_a"])
+    assert meta["ckpt_sha256_16"] == hashlib.sha256(ckpt.read_bytes()).hexdigest()[:16]
+    assert meta["cfg_hash"] == payload["cfg_hash"] == config_hash(payload["config"])
+    assert meta["ckpt_md5"] == hashlib.md5(ckpt.read_bytes()).hexdigest()
+    assert meta["master_seed"] == SEED
+    assert meta["ckpt_sha256_16"] != meta["ckpt_md5"]  # 两种哈希口径互不替代
+
+    # CLI 期望值入口：不匹配时在推理前拒绝，不留半成品产物
+    bad_out = tmp_path / "infer_bad_seed"
+    with pytest.raises(ValueError, match="master_seed 与期望值不符"):
+        infer_main([
+            "--ckpt", str(ckpt), "--input", str(data_dir / "train.h5"),
+            "--beam-id", str(beam_id), "--station", "0", "--n-low", "10000",
+            "--sub", "0", "--n-high", "200000", "--out", str(bad_out),
+            "--expect-master-seed", str(SEED + 1),
+        ])
+    assert not bad_out.exists()

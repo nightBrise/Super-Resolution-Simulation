@@ -50,6 +50,9 @@ def batch_sigma_from_counts(counts: torch.Tensor, edges: torch.Tensor) -> torch.
 
     edges：共享 (4, 129) 或逐样本 (B, 4, 129)（混合束/站台 batch；抖动使各束
     bin 边界不同）。逐样本循环（batch ≤ 16，成本可忽略）。
+
+    图组按存储布局 [aj, ai] 给出（`10` [S4] 生产端 `h.T`，见 projections.py）：
+    每张投影图先转置回 [ai, aj]，再沿 dim 1 取 ai 边缘、dim 0 取 aj 边缘。
     """
     if edges.dim() == 2:
         edges = edges.unsqueeze(0).expand(counts.shape[0], -1, -1)
@@ -64,7 +67,7 @@ def batch_sigma_from_counts(counts: torch.Tensor, edges: torch.Tensor) -> torch.
             total = p.sum()
             if total <= 0:
                 continue
-            p = p / total
+            p = p.transpose(0, 1) / total
             ci, cj = centers[ai], centers[aj]
             pi = p.sum(dim=1)
             pj = p.sum(dim=0)

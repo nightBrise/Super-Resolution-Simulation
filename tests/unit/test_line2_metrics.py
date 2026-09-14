@@ -1,8 +1,10 @@
 """L2 [S1] 度量族验收测试（spec line2/20 [S1]）。
 
-M4 校验用已知 Σ 的 4D 高斯云投影重构（归一化坐标，分箱偏差 ~5% 容差）——该合成
-云各轴 σ/bin 宽比例相同，掩盖图内轴向配对错误，故 M4 与 `10` [S1] twiss.json 的
-真实锚点双实现互检另见 ``tests/integration/test_line2_metric_reconciliation.py``。
+M4 的主校验用已知 Σ 的 4D 高斯云投影重构（分箱偏差 ~5% 容差）：该合成云各轴
+同形状同尺度（均为高斯，σ/bin 宽比例相同），轴错配的伪值恰落在真值附近，故它只
+作量级护栏；**轴向配对**的鉴别力由各轴形状/量级互异的 copula 束承担（见 M4 段落
+末的测试），与 `10` [S1] twiss.json 的真实锚点双实现互检见
+``tests/integration/test_line2_metric_reconciliation.py``。
 """
 
 from __future__ import annotations
@@ -14,9 +16,16 @@ import numpy as np
 import pytest
 from scipy import stats as sps
 
-from src.line2.data_pipeline.projections import six_projections, station_edges
+from src.line2.data_pipeline.projections import (
+    AXES,
+    PROJECTION_ORDER,
+    axis_edges,
+    six_projections,
+    station_edges,
+)
 from src.line2.metrics.metrics import (
     BUCKET_EDGES,
+    HALO_NSIGMA,
     MetricUnderflow,
     _halo_fraction_per_projection,
     bucketed_rel_rmse,
@@ -194,6 +203,63 @@ def test_m4_independent_subsample_errors_bounded() -> None:
     assert e["eps4d_rel"] < 0.2
 
 
+#: 各轴 σ 相差 ~40× 的 copula 束相关阵（六对相关系数互异，防对称性盲区）。
+_ANISOTROPIC_CORR = np.array(
+    [
+        [1.00, 0.60, 0.30, -0.20],
+        [0.60, 1.00, 0.35, 0.10],
+        [0.30, 0.35, 1.00, -0.45],
+        [-0.20, 0.10, -0.45, 1.00],
+    ]
+)
+
+
+def _anisotropic_truth_table(n: int = 400_000) -> np.ndarray:
+    """四轴**量级与分布形状均互异**的合成束：(n, 4) 物理坐标表。
+
+    x/yp 取宽均匀、xp/y 取窄高斯（各轴 σ 相差 ~40×），由高斯 copula + 逐轴边缘变换
+    生成（相关性结构照 _ANISOTROPIC_CORR 落位）。形状差是鉴别力的来源：若各轴同为
+    高斯，生产端 `h.T` 的轴错配会把对角算成 Σ_jj·(h_i/h_j)²，而 h_i/h_j ≈ σ_i/σ_j
+    恰使伪值落在真值附近；换成"均匀 vs 高斯"后 range/σ 比不同，抵消不再成立。
+    """
+    rng = np.random.default_rng(derive_seed(30, 1))
+    z = rng.standard_normal((n, 4)) @ np.linalg.cholesky(_ANISOTROPIC_CORR).T
+    u = sps.norm.cdf(z)
+    x = -3.0e-4 + 6.0e-4 * u[:, 0]
+    xp = 1.5e-5 + 4.0e-6 * z[:, 1]
+    y = -1.2e-5 + 3.0e-6 * z[:, 2]
+    yp = -4.0e-4 + 8.0e-4 * u[:, 3]
+    return np.column_stack([x, xp, y, yp])
+
+
+def _scaled_rel_error(got: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """逐分量相对误差，分母取 √(Σ_ii·Σ_jj)（非对角近零时仍有界良定义）。"""
+    scale = np.sqrt(np.outer(np.diag(ref), np.diag(ref)))
+    return np.abs(got - ref) / scale
+
+
+def test_m4_image_sigma_recovers_anisotropic_particle_moments() -> None:
+    """[S1] C3/C1：各轴互异的束上，图路径 Σ 复现粒子表实测 Σ（含对角与相关分量）。
+
+    鉴别的是生产/消费两端的**图内轴向配对**：错配时对角被算成 Σ_jj^q·(h_i/h_j)²，
+    在各轴 range/σ 比互异的束上偏差达 10⁰ 量级（实测 −0.87/+7.0/+5.9/−0.86）；
+    配对一致时只剩 bin 量化偏差（Sheppard h²/12 ≤ 3×10⁻⁴ 相对），实测 ≤ 1×10⁻³。
+    """
+    table = _anisotropic_truth_table()
+    edges = station_edges(table)
+    sigma_img = reconstruct_sigma(six_projections(table, edges), edges)
+    sigma_ref = np.cov(table.T, ddof=0)
+
+    rel = _scaled_rel_error(sigma_img, sigma_ref)
+    diag_ref = np.diag(sigma_ref)
+    diag_rel = np.abs(np.diag(sigma_img) - diag_ref) / diag_ref
+    assert diag_rel.max() < 1e-2, f"Σ 对角偏离粒子表实测：{diag_rel}"
+    assert rel.max() < 1e-2, f"Σ 分量偏离粒子表实测（按 √(Σ_iiΣ_jj) 归一）：{rel.max()}"
+    # 非空洞守卫：真值对角互异且量级拉开 ⇒ 上面的比较不是常数对常数
+    assert sigma_ref[0, 0] / sigma_ref[3, 3] < 0.7
+    assert sigma_ref[1, 1] < 1e-3 * sigma_ref[0, 0]
+
+
 # ---------------------------------------------------------------- M5
 def test_m5_halo_gap() -> None:
     rng = np.random.default_rng(9)
@@ -279,6 +345,58 @@ def test_m5_region_is_not_translated_by_evaluated_group(halo_case: dict) -> None
     )
 
 
+def test_m5_region_axes_match_stored_group_layout() -> None:
+    """[S1] C4：M5 的椭圆按 (i,j) 与**存储布局**的图内轴配对（轴 0 = aj、轴 1 = ai）。
+
+    构造：解析 4D 高斯参照束 + 逐轴**不等倍数**网格（±8σ/±8σ/±12σ/±8σ）——各轴 σ/h
+    之比互异，故"轴 0 = aj"与"轴 0 = ai"两种读法不再互相抵消；被评图组 = 参照束沿
+    y′（轴 3）平移 1.5σ（λ ≈ 2.3–2.8，该量级对轴错配最敏感），区域仍由参照 Σ 定义
+    ⇒ 每投影的椭圆外占比有闭式解（非中心 χ²₂ 的尾概率，λ = 平移的 Mahalanobis 范数²；
+    不含 y′ 的三个投影 λ = 0），度量 = 六投影 |占比_被评 − 占比_参照| 的平均，
+    占比_参照 = e⁻⁸（4σ 椭圆外）。
+
+    实测：按存储布局 0.00651（解析 0.00637，偏差 2%——来自分箱 Σ 与离散化）；
+    按"轴 0 = ai"误读 0.01218（+91%）。网格取 ±8σ 以上而非站级 ±3.5σ：
+    4σ 椭圆的近轴外沿超出站级域，域外计数被丢弃会使闭式解失效。
+    """
+    sigma = np.array([1.0, 0.05, 0.6, 0.1])
+    multiplies = (8.0, 8.0, 12.0, 8.0)
+    edges = np.stack([axis_edges(-m * s, m * s) for m, s in zip(multiplies, sigma)])
+    corr = np.array(
+        [[1.00, 0.60, 0.30, -0.20], [0.60, 1.00, 0.35, 0.10],
+         [0.30, 0.35, 1.00, -0.45], [-0.20, 0.10, -0.45, 1.00]]
+    )
+    rng = np.random.default_rng(derive_seed(30, 3))
+    table = (rng.standard_normal((400_000, 4)) @ np.linalg.cholesky(corr).T) * sigma
+
+    axis, delta = 3, 1.5 * float(sigma[3])
+    shifted = table.copy()
+    shifted[:, axis] += delta
+    group_ref = six_projections(table, edges)
+    group_eval = six_projections(shifted, edges)
+
+    lam = []
+    for ai, aj in PROJECTION_ORDER:
+        i, j = AXES.index(ai), AXES.index(aj)
+        if axis in (i, j):
+            partner = j if i == axis else i
+            lam.append((delta / sigma[axis]) ** 2 / (1.0 - corr[axis, partner] ** 2))
+        else:
+            lam.append(0.0)
+    per_proj = [
+        abs(float(sps.ncx2.sf(HALO_NSIGMA**2, 2, lam_i)) - np.exp(-8.0)) for lam_i in lam
+    ]
+    expected = float(np.mean(per_proj))
+    assert sum(l > 0 for l in lam) == 3, f"平移轴未落到预期的三个投影：{lam}"
+    assert expected > 1e-3, "解析期望过小，探针退化"
+
+    sigma_ref = reconstruct_sigma(group_ref, edges)
+    gap = halo_fraction_gap(group_eval, group_ref, sigma_ref, edges)
+    assert abs(gap - expected) < 2.5e-3, (
+        f"M5 椭圆轴序与图组存储布局不符：gap={gap}、解析={expected}"
+    )
+
+
 def test_m5_evaluated_moments_have_no_entry_point() -> None:
     """[S1] C4 证据②（结构）：被评图组的矩在 M5 的区域定义中没有入口。
 
@@ -329,6 +447,29 @@ def test_evaluate_group_underflow_and_identity() -> None:
     zero = np.zeros_like(g)
     out_z = evaluate_group(zero, g, edges)
     assert out_z["underflow"] is True
+
+
+def test_evaluate_group_m1_is_six_projection_average() -> None:
+    """[S1] M1：图组级 M1 = 六投影**各自归一后**各算再平均（`20` [S1] M1 原文），
+    不是"整组一次性归一 + 整体 RMSE"。
+
+    两口径只在逐投影总计数成比例失衡时才分叉：把被评图组第 0 投影放大 3× 后，
+    逐投影归一使该投影仍是精确匹配（M1 降到浮点噪声级），整组归一则会留下非零残差。
+    故本断言对被消费的是哪一个口径具有唯一性（整组口径在此必为正值）。
+    """
+    table = _synthetic_table(5_000, seed=12)
+    edges = station_edges(table)
+    g_ref = six_projections(table, edges)
+    g_eval = g_ref.copy()
+    g_eval[0] = g_eval[0] * 3
+
+    out = evaluate_group(g_eval, g_ref, edges)
+    whole = rel_rmse(g_eval, g_ref)
+    assert whole > 0.0, "整组口径在此必须非零，否则本条无鉴别力"
+    assert out["M1"] == group_rel_rmse(g_eval, g_ref)
+    assert out["M1"] < 1e-9 * whole, (
+        f"图组 M1 = {out['M1']} 未按逐投影归一（整组口径给 {whole}）"
+    )
 
 
 # ---------------------------------------------------------------- [S1] C1

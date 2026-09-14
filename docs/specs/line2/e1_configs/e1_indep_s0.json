@@ -8,7 +8,7 @@
   "batch": 16,
   "lr": 0.0003,
   "base": 24,
-  "num_levels": 3,
+  "num_levels": 4,
   "blocks": 1,
   "w_psd": 0.1,
   "device": "cuda:0",

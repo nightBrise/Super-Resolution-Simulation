@@ -62,10 +62,16 @@ def proj_condition_batch(
     """批量 4 维条件：(σ_i, σ_j, ρ_ij, log₁₀N_low)（物理 bin 中心矩）。
 
     shape (B, H, W)、centers_i (B, H)、centers_j (B, W)、log_n_low (B,) → (B, 4)。
+
+    图组存储布局 = `[后一坐标 a_j, 前一坐标 a_i]`（生产端 `six_projections` 的
+    `h.T`，见 `10` [S4]）——此处先转置回 `[a_i, a_j]` 语义，下游 `sum(dim=2)`
+    才对应 `centers_i`、`outer(ui, uj)` 才与 `p` 轴序自洽（与
+    `metrics.reconstruct_sigma` 同口径，`20` [S1] M4）。
     全程张量运算：单次前向里 96 个逐样本子图（6 投影 × batch）若逐样本取 float()
     会引入数百次设备同步，成本远超计算本身。
     """
-    p = shape / shape.sum(dim=(1, 2), keepdim=True).clamp_min(1e-12)
+    p = shape.transpose(1, 2)
+    p = p / shape.sum(dim=(1, 2), keepdim=True).clamp_min(1e-12)
     pi = p.sum(dim=2)
     pj = p.sum(dim=1)
     mi = (pi * centers_i).sum(dim=1)

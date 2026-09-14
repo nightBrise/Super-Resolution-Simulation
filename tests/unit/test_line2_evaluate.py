@@ -541,13 +541,16 @@ def fake_results(tmp_path: pathlib.Path) -> pathlib.Path:
     joint_test = [40_000.0, 41_000.0, 39_000.0, 42_000.0, 38_000.0]
     indep_test = [30_000.0, 31_000.0, 29_000.0, 32_000.0, 28_000.0]
     for slot in range(5):
-        _write_run(results, f"e1_joint_s{slot}", "joint", slot, joint_test[slot], 5_000.0)
+        # 两臂同种子（`40` [S1] C3 的 E1 冻结配置：种子 {100..104} 两臂共用）——
+        # H3 的"同种子成对"按种子值字面配对
+        _write_run(results, f"e1_joint_s{slot}", "joint", 100 + slot, joint_test[slot], 5_000.0)
         _write_run(results, f"e1_indep_s{slot}", "independent", 100 + slot,
                    indep_test[slot], 20_000.0)
-    # E3：获胜变体（val 段裁定 = independent）与 joint 各一份站 1 评估
+    # E3：获胜变体（val 段裁定 = independent）与 joint 各一份站 1 评估（种子取两臂各自的
+    # E1 种子值，val 段同一 run 的 N_eff 保持一致）
     _write_run(results, "e3_indep_s0_st1", "independent", 100, 20_000.0, 20_000.0,
                station=1, eval_name="test_eval_station1.json")
-    _write_run(results, "e3_joint_s0_st1", "joint", 0, 12_000.0, 5_000.0,
+    _write_run(results, "e3_joint_s0_st1", "joint", 100, 12_000.0, 5_000.0,
                station=1, eval_name="test_eval_station1.json")
     return results
 
@@ -564,14 +567,15 @@ def test_evaluate_gates_from_disk_verdicts_and_two_segment_boundary(
     assert out["winner_variant"] == "independent"
     assert out["routing_basis"] == "val"
     assert out["val_segment"]["n_pairs"] == 5
-    assert out["val_segment"]["per_seed_n_eff"]["joint"]["0"] == 5_000.0
+    assert out["val_segment"]["per_seed_n_eff"]["joint"]["100"] == 5_000.0
     # H1 只吃获胜变体的 test 段（median 30000 ≥ 2×1e4 且 5/5 > 1e4）
     assert out["H1"]["verdict"] == "成立" and out["H1"]["variant"] == "independent"
     assert out["H1"]["median_n_eff"] == 30_000.0 and out["H1"]["n_seeds"] == 5
     assert set(out["H1"]["inputs"]) == {"100", "101", "102", "103", "104"}
-    # H3 = test 段同槽位成对 5/5 → 成立；配对表落盘可审计（两臂种子数值互不重叠）
+    # H3 = test 段同种子值成对 5/5 → 成立；配对表落盘可审计（pairs 即种子值本身）
     assert out["H3"]["verdict"] == "成立" and out["H3"]["joint_wins"] == 5
-    assert out["H3"]["pairing"]["pairs"] == [[s, 100 + s] for s in range(5)]
+    assert out["H3"]["pairing"]["basis"] == "seed_value"
+    assert out["H3"]["pairing"]["pairs"] == [[100 + s, 100 + s] for s in range(5)]
     # H7 = 获胜变体的站 1/站 0 比：20000/30000 → 成立（弱），衰减系数 = ρ
     assert out["H7"]["variant"] == "independent"
     assert out["H7"]["verdict"] == "成立" and out["H7"]["weak"] is True
@@ -618,7 +622,7 @@ def test_evaluate_gates_rejects_non_test_split(fake_results: pathlib.Path) -> No
 
 def test_evaluate_gates_rejects_duplicate_test_eval(fake_results: pathlib.Path) -> None:
     """同一（变体, 种子, 站 0, 1e4）出现两份 test 评估 → 报错（test 只评一次）。"""
-    _write_run(fake_results, "e1_joint_s0_dup", "joint", 0, 40_000.0, 5_000.0)
+    _write_run(fake_results, "e1_joint_s0_dup", "joint", 100, 40_000.0, 5_000.0)
     with pytest.raises(ValueError, match="test 只评一次"):
         evaluate_gates_from_disk(fake_results)
 
@@ -657,7 +661,36 @@ def test_evaluate_gates_partial_seeds_are_undecidable(fake_results: pathlib.Path
     assert out["winner_variant"] == "indeterminate" and out["routing_basis"] == "val_insufficient"
     assert out["H1"]["verdict"] == "不可判定" and out["H1"]["n_seeds"] == 0
     assert out["H3"]["verdict"] == "不可判定" and out["H3"]["n_pairs"] == 3
+    assert out["H3"]["reason_code"] == "pairs_insufficient"
     assert out["H8"]["verdict"] == "不可判定" and out["H8"]["reason_code"] == "no_runs"
+    for key in ("H1", "H3", "H7", "H8"):
+        assert out[key]["verdict"] in LEGAL_VERDICTS
+
+
+def test_evaluate_gates_seed_sets_differ_is_explicit_indeterminate(
+    fake_results: pathlib.Path,
+) -> None:
+    """`40` [S3] H3 + `30` [S4] C2：两臂种子集合不同 → 不可判定且两臂种子集显式落盘。
+
+    构造：把一份 independent run 的种子改成集合外取值（模拟两臂非同一种子派生链）。
+    门禁 SHALL NOT 按升序槽位静默配对（那会把不同种子当成一对），也不得报"5 对"——
+    pairs 为空、原因入 reason_code，变体路由同样降级为 indeterminate。
+    """
+    for path in (fake_results / "e1_indep_s4").glob("*.json"):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["seed"] = 999
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    out = evaluate_gates_from_disk(fake_results)
+    assert out["H3"]["verdict"] == "不可判定"
+    assert out["H3"]["n_pairs"] == 0 and out["H3"]["joint_wins"] is None
+    assert out["H3"]["reason_code"] == "seed_sets_differ"
+    assert out["H3"]["pairing"]["basis"] == "seed_value"
+    assert out["H3"]["pairing"]["pairs"] == []
+    assert out["H3"]["pairing"]["seed_sets"] == {
+        "joint": [100, 101, 102, 103, 104], "independent": [100, 101, 102, 103, 999]}
+    assert out["winner_variant"] == "indeterminate"
+    assert out["routing_basis"] == "val_seed_mismatch"
+    assert out["val_segment"]["seed_sets"]["independent"] == [100, 101, 102, 103, 999]
     for key in ("H1", "H3", "H7", "H8"):
         assert out[key]["verdict"] in LEGAL_VERDICTS
 
@@ -685,7 +718,7 @@ def test_evaluate_gates_variant_routing_all_branches(
     results.mkdir(parents=True)
     _write_curve_and_tolerance(results)
     for slot in range(5):
-        _write_run(results, f"e1_joint_s{slot}", "joint", slot, 40_000.0, joint_val[slot])
+        _write_run(results, f"e1_joint_s{slot}", "joint", 100 + slot, 40_000.0, joint_val[slot])
         _write_run(results, f"e1_indep_s{slot}", "independent", 100 + slot,
                    30_000.0, indep_val[slot])
     out = evaluate_gates_from_disk(results)
@@ -718,8 +751,8 @@ def test_gates_consume_real_evaluate_run_output(
             ("indep", "independent", INDEP_CFG, 20_000.0))
     for slot in range(5):
         for tag, variant, cfg, val in arms:
-            # 种子编号与 E1 冻结配置同构：joint 0–4 / independent 100–104（槽位配对）
-            seed = slot if variant == "joint" else 100 + slot
+            # 种子编号与 E1 冻结配置同构：两臂共用 {100..104}（H3 按种子值配对）
+            seed = 100 + slot
             run_dir = results / f"e1_{tag}_s{slot}"
             evaluate_run(_save_ckpt(run_dir, cfg, seed), data_dir, "test", 0, N_LOW,
                          [0, 1], curve_path)
@@ -731,7 +764,8 @@ def test_gates_consume_real_evaluate_run_output(
     out = evaluate_gates_from_disk(results)
     assert out["winner_variant"] == "independent"  # 路由只吃 val 段
     assert out["H1"]["n_seeds"] == 5 and out["H3"]["n_pairs"] == 5
-    assert out["H3"]["pairing"]["pairs"] == [[s, 100 + s] for s in range(5)]
+    assert out["H3"]["pairing"]["basis"] == "seed_value"
+    assert out["H3"]["pairing"]["pairs"] == [[100 + s, 100 + s] for s in range(5)]
     assert out["H8"]["n_beams"] == 1 and out["H8"]["n_seeds"] == 5
     assert out["H8"]["pass_rate"] is not None and 0.0 <= out["H8"]["pass_rate"] <= 1.0
     assert len(out["H8"]["per_observable"]) == N_OBSERVABLES

@@ -14,6 +14,7 @@ from src.line2.experiments.gates import (
     evaluate_e1_gates,
     evaluate_h1,
     evaluate_h3,
+    pair_by_seed,
     winner_variant,
 )
 from src.line2.experiments.map_report import (
@@ -126,6 +127,24 @@ def test_winner_variant_two_5_independent() -> None:
     j = [8000.0, 9000.0, 7000.0, 12000.0, 6000.0]
     i = [20000.0, 22000.0, 18000.0, 25000.0, 21000.0]
     assert winner_variant(j, i) == "independent"
+
+
+# ---------------------------------------------------------------- H3 配对口径
+def test_pair_by_seed_pairs_identical_seed_values() -> None:
+    """`40` [S3] 同种子成对 + `30` [S4] C2 同种子派生链：集合相同 → 按种子值字面配对。"""
+    joint = {100: 1.0, 101: 2.0, 102: 3.0, 103: 4.0, 104: 5.0}
+    indep = {104: 1.0, 100: 2.0, 102: 3.0, 101: 4.0, 103: 5.0}  # 插入序不影响配对
+    assert pair_by_seed(joint, indep) == [
+        (100, 100), (101, 101), (102, 102), (103, 103), (104, 104)
+    ]
+
+
+def test_pair_by_seed_rejects_mismatched_seed_sets() -> None:
+    """种子集合不同（不相交或部分重叠）→ 报错，不退化升序槽位配对。"""
+    with pytest.raises(ValueError, match="同种子配对不成立"):
+        pair_by_seed({0: 1.0, 1: 2.0}, {100: 1.0, 101: 2.0})
+    with pytest.raises(ValueError, match="同种子配对不成立"):
+        pair_by_seed({1: 1.0, 2: 2.0}, {2: 1.0, 3: 2.0})  # 槽位配对会错配 (1,2)/(2,3)
 
 
 # ---------------------------------------------------------------- 端到端
@@ -368,8 +387,8 @@ def _fake_gates() -> dict:
                "n_above_n_low": 1, "thresholds": {"n_low": 10000.0, "median_min": 20000.0},
                "inputs": {"0": 40000.0}, "reason_code": "winner_or_seeds_insufficient"},
         "H3": {"verdict": "不可判定", "n_pairs": 1, "joint_wins": 1,
-               "pairing": {"basis": "seed_slot_sorted", "pairs": [[0, 0]]},
-               "inputs": {"joint": {"0": 40000.0}, "independent": {}},
+               "pairing": {"basis": "seed_value", "pairs": [[100, 100]]},
+               "inputs": {"joint": {"100": 40000.0}, "independent": {"100": 30000.0}},
                "reason_code": "pairs_insufficient"},
         "H7": {"verdict": "不可判定", "rho": None, "weak": False, "decay": None,
                "variant": "joint", "n_seeds": 0, "aggregation": "seed_median_then_ratio",
@@ -500,7 +519,7 @@ def test_report_carries_gate_snapshots_and_why_chapter(fake_products: Path, tmp_
                     "### 5.3 H7（跨站泛化）", "### 5.4 H8（细结构可恢复性）"):
         assert heading in text
     for row in ("| median_n_eff | 40000 |", "| n_above_n_low | 1 |",
-                "| joint_wins | 1 |", "| pairing.basis | seed_slot_sorted |",
+                "| joint_wins | 1 |", "| pairing.basis | seed_value |",
                 "| rho | — |", "| aggregation | seed_median_then_ratio |",
                 "| pass_rate | — |", "| tolerance | — |"):
         assert row in text

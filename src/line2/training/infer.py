@@ -1,4 +1,9 @@
-"""L3b [S5] 推理：ckpt + 输入图组 → 组N（npz：概率图 + 率图 + 元数据）。"""
+"""L3b [S5] 推理：ckpt + 输入图组 → 组N（npz：概率图 + 率图 + 元数据）。
+
+载入端校验（`30` [S1] C3 后半）见 :func:`load_ckpt_payload`：ckpt 内 ``cfg_hash``
+与由 ckpt 内 ``config`` 重算的哈希（``common.config_hash``，训练侧同一函数）必须一致，
+并可另传期望值比对 config 哈希与 master_seed。
+"""
 
 from __future__ import annotations
 
@@ -11,28 +16,73 @@ import h5py
 import numpy as np
 import torch
 
+from .common import config_hash
 from .train import build_model
 from .unet import condition_vector, normalize_input_group
+
+__all__ = ["infer", "load_ckpt_payload", "main"]
 
 
 def _sha_of(path: Path) -> str:
     return hashlib.md5(path.read_bytes()).hexdigest()
 
 
-def infer(
-    ckpt: Path,
-    counts: np.ndarray,
-    edges: np.ndarray,
-    n_high: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """单图组推理（确定性，eval 模式）。返回 (概率图, 率图)。
+def _sha256_16_of(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
-    网络拓扑由 ckpt 的 ``config`` 经 ``train.build_model`` 重建：联合版与独立版
-    共用本入口（`40` [S2] E3 对获胜变体 ckpt 直接推理，不重训练）。前向分支与
-    ``train._forward_variant`` 同构。
+
+def load_ckpt_payload(
+    ckpt: Path,
+    expect_cfg_hash: str | None = None,
+    expect_master_seed: int | None = None,
+) -> dict:
+    """ckpt 载入校验（`30` [S1] C3）并返回 payload。
+
+    - 内建校验：ckpt 的 ``cfg_hash`` SHALL 等于由 ckpt 内 ``config`` 重算的
+      :func:`~src.line2.training.common.config_hash`——两者不同源即视为篡改/错配，
+      抛 ``ValueError``（config 与哈希任一侧被改动都会命中）；
+    - 期望值比对（可选）：``expect_cfg_hash`` 对 config 哈希、``expect_master_seed``
+      对 ckpt 的 ``master_seed``（实验矩阵侧据此钉死"跑的是哪份 config、哪个种子"），
+      不一致抛 ``ValueError``。
     """
+    ckpt = Path(ckpt)
     payload = torch.load(ckpt, map_location="cpu", weights_only=True)
-    cfg = payload.get("config", {})
+    if "state_dict" not in payload:
+        raise ValueError(f"{ckpt}：缺 state_dict，不是本线训练产出的 checkpoint")
+    cfg = payload.get("config")
+    if not isinstance(cfg, dict):
+        raise ValueError(f"{ckpt}：缺 config 段，无法校验 config 哈希（`30` [S1] C3）")
+    actual = config_hash(cfg)
+    stored = payload.get("cfg_hash")
+    if stored is None:
+        raise ValueError(
+            f"{ckpt}：缺 cfg_hash 段（`30` [S3] 要求 checkpoint 含 config 哈希）"
+        )
+    if str(stored) != actual:
+        raise ValueError(
+            f"{ckpt}：config 哈希不符——ckpt 内 cfg_hash={stored} ≠ 重算 {actual}"
+            "（config 或 cfg_hash 被改动，`30` [S1] C3）"
+        )
+    if expect_cfg_hash is not None and str(expect_cfg_hash) != actual:
+        raise ValueError(
+            f"{ckpt}：config 哈希与期望值不符——期望 {expect_cfg_hash} ≠ 实际 {actual}"
+        )
+    if expect_master_seed is not None:
+        seed = payload.get("master_seed")
+        if seed is None:
+            raise ValueError(f"{ckpt}：缺 master_seed 段（`30` [S3]）")
+        if int(seed) != int(expect_master_seed):
+            raise ValueError(
+                f"{ckpt}：master_seed 与期望值不符——期望 {int(expect_master_seed)} ≠ 实际 {int(seed)}"
+            )
+    return payload
+
+
+def _forward(
+    payload: dict, counts: np.ndarray, edges: np.ndarray, n_high: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """已校验 payload 的确定性前向：返回 (概率图, 率图)。"""
+    cfg = payload["config"]
     variant = str(cfg.get("variant", "joint"))
     net = build_model(cfg)
     net.load_state_dict(payload["state_dict"])
@@ -55,6 +105,25 @@ def infer(
     return prob, rate
 
 
+def infer(
+    ckpt: Path,
+    counts: np.ndarray,
+    edges: np.ndarray,
+    n_high: float,
+    expect_cfg_hash: str | None = None,
+    expect_master_seed: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """单图组推理（确定性，eval 模式）。返回 (概率图, 率图)。
+
+    网络拓扑由 ckpt 的 ``config`` 经 ``train.build_model`` 重建：联合版与独立版
+    共用本入口（`40` [S2] E3 对获胜变体 ckpt 直接推理，不重训练）。前向分支与
+    ``train._forward_variant`` 同构。载入走 :func:`load_ckpt_payload`——config 哈希
+    恒被校验，``expect_*`` 为可选的期望值比对入口（`30` [S1] C3）。
+    """
+    payload = load_ckpt_payload(ckpt, expect_cfg_hash, expect_master_seed)
+    return _forward(payload, counts, edges, n_high)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="line2 Phase 1 推理（spec 30 [S5]）")
     parser.add_argument("--ckpt", type=Path, required=True)
@@ -65,15 +134,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sub", type=int, default=0)
     parser.add_argument("--n-high", type=float, default=200_000.0)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--expect-cfg-hash", default=None,
+                        help="期望的 config 哈希（`30` [S1] C3；不匹配则拒绝推理）")
+    parser.add_argument("--expect-master-seed", type=int, default=None,
+                        help="期望的 master_seed（`30` [S1] C3；不匹配则拒绝推理）")
     args = parser.parse_args(argv)
 
-    cfg_hash = hashlib.sha256(args.ckpt.read_bytes()).hexdigest()[:16]
+    payload = load_ckpt_payload(args.ckpt, args.expect_cfg_hash, args.expect_master_seed)
     with h5py.File(args.input, "r") as h5:
         stg = h5[f"beam_{args.beam_id:04d}/station{args.station}"]
         counts = stg[f"tier_{args.n_low:06d}_sub_{args.sub:02d}"][...]
         edges = stg[f"tier_{args.n_low:06d}_sub_{args.sub:02d}"].attrs["bin_edges"]
 
-    prob, rate = infer(args.ckpt, counts, edges, args.n_high)
+    prob, rate = _forward(payload, counts, edges, args.n_high)
     args.out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         args.out / "group_n.npz",
@@ -90,7 +163,10 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "ckpt": str(args.ckpt),
                 "ckpt_md5": _sha_of(args.ckpt),
-                "cfg_hash": cfg_hash,
+                # 两个同名前缀的哈希指代不同对象：文件字节 vs ckpt 内 config（防对账歧义）
+                "ckpt_sha256_16": _sha256_16_of(args.ckpt),
+                "cfg_hash": payload["cfg_hash"],
+                "master_seed": payload.get("master_seed"),
                 "beam_id": args.beam_id,
                 "station": args.station,
                 "n_low": args.n_low,

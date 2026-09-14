@@ -6,10 +6,11 @@
 2. **粒子表 → bin 中心量化 → ddof=0 矩**（分箱量化的理论值，无 2D 直方图参与）；
 3. **粒子表 → 六投影计数图 → reconstruct_sigma**（M4 的实际路径）。
 
-路径 1↔2 的差 = 分箱量化偏差（对角 ≈ h²/12，实测 5×10⁻⁴–8×10⁻⁴ 相对）与
+路径 1↔2 的差 = 分箱量化偏差（对角 ≈ h²/12，实测 5.3×10⁻⁴–7.8×10⁻⁴ 相对）与
 ddof=1↔0 因子（5×10⁻⁶）——这是 `20` [S1] C3 字面 1×10⁻¹² 口径在**图路径**上
-物理不可达的原因（128 bin 直方图矩不含 bin 内分布信息）。路径 2↔3 的差则应为
-纯实现一致性，可达 1×10⁻¹² 量级；该断言当前 xfail（见 test 内 reason）。
+物理不可达的原因（128 bin 直方图矩不含 bin 内分布信息）。路径 2↔3 的差则为
+纯实现一致性：实测 ≤ 7×10⁻¹⁵（图内轴序修复后），故 1×10⁻¹² 的字面口径在这一层
+成立并由 :func:`test_m4_image_sigma_matches_quantized_particle_moments` 断言。
 """
 
 from __future__ import annotations
@@ -157,26 +158,13 @@ def test_binning_sets_the_reachable_floor(anchor: dict) -> None:
     assert 1e-4 < abs(eps_q - eps_t) / eps_t < 2e-2, "ε_4D 分箱地板异常"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "`20` [S1] C3 的 1e-12 口径在图路径上当前不成立（缺陷，非分箱所致）："
-        "six_projections 以 h.T 存储（projections.py:68 → img axis0 = 投影对的后一坐标），"
-        "而 reconstruct_sigma 按 axis0 = 前一坐标配对 bin 中心（metrics.py:113-117），"
-        "producer/consumer 轴向口径不一致。后果：Σ 的 12 个非对角元与量化矩逐位相符"
-        "（<1e-12），4 个对角元被错配为 Σ_ii = Σ_jj^q·(h_i/h_j)²（j = 首现该元的投影的"
-        "另一轴），真实锚点上偏差 −7.0%/+7.7%/−13.2%/+15.3%（最大相对差 0.1525）。"
-        "按 axis0 = 后一坐标配对后本断言可达 6×10⁻¹⁵。修复轴向配对后本用例将 XPASS 并因"
-        " strict=True 报错，届时删除本标记。"
-    ),
-)
 def test_m4_image_sigma_matches_quantized_particle_moments(anchor: dict) -> None:
     """[S1] C3（图路径·实现一致性）：计数图重构的 Σ == 同表同 bin 的量化矩。
 
     这条把 C3 的 1e-12 口径落在**可实现**的一对实现上：2D 直方图的 bin 中心加权矩与
-    逐粒子量化矩在数学上恒等，故容差只受浮点求和顺序影响（实测可达 6×10⁻¹⁵）。
-    它把「分箱量化偏差」（上一条，物理必然、~10⁻⁴ 量级）与「图路径实现错误」
-    （本条，可修复）分离开——C3 字面要求的 twiss.json 对拍由
+    逐粒子量化矩在数学上恒等，故容差只受浮点求和顺序影响（实测最大相对偏差
+    6.8×10⁻¹⁵）。它把「分箱量化偏差」（上一条，物理必然、~10⁻⁴ 量级）与「图路径
+    实现错误」分离开——C3 字面要求的 twiss.json 对拍由
     :func:`test_m4_image_sigma_vs_twiss_binning_band` 按分箱量级容差承接。
     """
     sigma_img = reconstruct_sigma(anchor["group"], anchor["edges"])
@@ -190,13 +178,13 @@ def test_m4_image_sigma_vs_twiss_binning_band(anchor: dict) -> None:
     """[S1] C3（图路径·落盘对拍）：M4 的 Σ/ε_4D 对 twiss.json 落在分箱量级容差内。
 
     容差按 20_metrics_spec.decisions.md **D13** 的验收语义设定（字面 1e-12 在图路径
-    物理不可达，放宽为分箱量化级），不是 spec 原文口径。真实锚点实测：
-    Σ 对角相对误差 −7.0%/+7.7%/−13.2%/+15.3%、max|Δρ| = 9.0×10⁻⁴、ε_4D 相对误差
-    4.7×10⁻³。其中 max|Δρ| 与 ε_4D 已在分箱地板上（分别 5.9×10⁻⁴、4.8×10⁻³，见
-    :func:`test_binning_sets_the_reachable_floor`）；对角超出地板（~7×10⁻⁴）的部分
-    归因于轴向配对缺陷（Σ_ii 被算成 Σ_jj^q·(h_i/h_j)²，见 xfail 用例）。
-    因此本条只作**量级**回归护栏（抓单位错、整轴错配、转置、ddof 混用），
-    缺陷清零后的紧口径（1e-12）由 xfail 用例承载。
+    物理不可达，放宽为分箱量化级），不是 spec 原文口径。真实锚点实测：Σ 对角相对
+    误差 7.8×10⁻⁴/5.3×10⁻⁴/6.9×10⁻⁴/5.9×10⁻⁴、max|Δρ| = 5.9×10⁻⁴、ε_4D 相对误差
+    4.8×10⁻³——三者均与量化矩对的同一指标逐位相同（见
+    :func:`test_binning_sets_the_reachable_floor` 及上一条），即偏差已全部落在分箱
+    地板内、不含实现贡献。因此本条只作**量级**回归护栏（抓单位错、整轴错配、转置、
+    ddof 混用），紧口径（1e-12）由 :func:`test_m4_image_sigma_matches_quantized_
+    particle_moments` 在可实现的那一对实现上承载。
     """
     sigma_img = reconstruct_sigma(anchor["group"], anchor["edges"])
     sigma_twiss = anchor["sigma_twiss"]

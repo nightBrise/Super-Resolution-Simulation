@@ -16,7 +16,11 @@ __all__ = ["moment_matching_baseline"]
 def moment_matching_baseline(
     input_group: np.ndarray, ref_group: np.ndarray, edges: np.ndarray
 ) -> np.ndarray:
-    """输入六图 → Σ̂ → 渲染六张 2D 高斯期望计数图（和 = 参照逐投影总计数）。"""
+    """输入六图 → Σ̂ → 渲染六张 2D 高斯期望计数图（和 = 参照逐投影总计数）。
+
+    图组按存储布局 [aj, ai] 给出（见 metrics.py 模块 docstring）：输入图先转置回
+    [ai, aj] 取投影均值、渲染后转回存储布局，否则渲染与数据集图组的轴序不一致。
+    """
     sigma = reconstruct_sigma(input_group, edges)
     out = np.zeros_like(input_group, dtype=np.float64)
     pairs = (("x", "xp"), ("y", "yp"), ("x", "y"), ("x", "yp"), ("xp", "y"), ("xp", "yp"))
@@ -33,7 +37,7 @@ def moment_matching_baseline(
         ui = 0.5 * (edges[i][:-1] + edges[i][1:])
         uj = 0.5 * (edges[j][:-1] + edges[j][1:])
         # 投影均值：由输入图组的边缘分布估计（比 0 假设更贴近真实束心）
-        img_in = input_group[gi].astype(np.float64)
+        img_in = input_group[gi].astype(np.float64).T
         tot_in = max(img_in.sum(), 1.0)
         mean_i = float((img_in.sum(axis=1) * ui).sum() / tot_in)
         mean_j = float((img_in.sum(axis=0) * uj).sum() / tot_in)
@@ -47,5 +51,5 @@ def moment_matching_baseline(
         w = np.exp(-0.5 * quad)
         n_high = ref_group[gi].sum()  # 渲染总计数 = 参照（N_high 语义）
         rate = w / w.sum() * n_high
-        out[gi] = rate
+        out[gi] = rate.T
     return out

@@ -4,7 +4,8 @@
   - 成立：5/5 种子 N_eff > 1e4 且中位数 ≥ 2×1e4
   - 不成立：中位数 ≤ 1e4
   - 不可判定：其它情况
-- H3（联合优于独立）：同种子成对比较（5 对）
+- H3（联合优于独立）：同种子值成对比较（5 对）；两臂种子集合不同则判不可判定
+  （``reason_code="seed_sets_differ"``），不得退化为槽位配对
   - 成立：5/5 对联合 N_eff ≥ 独立
   - 方向成立（弱）：4/5
   - 不成立：≤ 2/5
@@ -24,7 +25,7 @@ import argparse
 import json
 import math
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +40,7 @@ __all__ = [
     "evaluate_h3",
     "evaluate_e1_gates",
     "winner_variant",
+    "pair_by_seed",
     "EVAL_FN",
     "VERDICT_PASS",
     "VERDICT_FAIL",
@@ -363,18 +365,45 @@ def _beam_records(run: dict) -> dict[int, dict]:
     return {int(b["beam_id"]): b for b in run["per_beam"]}
 
 
-def _pair_slots(joint: dict[int, float], independent: dict[int, float]) -> list[tuple[int, int]]:
-    """成对比较的配对表 = 两臂种子升序后的**槽位**配对（[S3]"同种子成对"的操作化）。
+def pair_by_seed(
+    joint: Mapping[int, float], independent: Mapping[int, float]
+) -> list[tuple[int, int]]:
+    """H3 成对比较的配对表 = 两臂**同种子值**字面配对（[S3]"同种子成对比较（5 对）"）。
 
-    E1 冻结配置给两臂分配了互不重叠的种子数值（joint 0–4 / independent 100–104），
-    字面同值配对会得到 0 对；槽位配对在两臂共用种子值时与字面配对逐对相同，
-    故取槽位配对为唯一实现（确定性，[S3] C1）。配对表写入产物 ``pairing`` 供审计。
+    两臂种子集合不同时抛 ``ValueError``（不返回空表、不退化为升序槽位配对）：`30` [S4] C2
+    要求两臂共享同一种子派生链，集合不同意味着两份 run 不可配对，槽位配对会把不同种子
+    当成一对。调用方须显式降级为不可判定（见 :func:`evaluate_gates_from_disk`），
+    配对口径不得静默改变。
     """
-    return list(zip(sorted(joint), sorted(independent)))
+    joint_seeds, indep_seeds = set(joint), set(independent)
+    if joint_seeds != indep_seeds:
+        raise ValueError(
+            f"H3 同种子配对不成立：joint 种子 {sorted(joint_seeds)} "
+            f"≠ independent 种子 {sorted(indep_seeds)}"
+        )
+    return [(seed, seed) for seed in sorted(joint_seeds)]
 
 
-def _pairing_record(pairs: Sequence[tuple[int, int]]) -> dict:
-    return {"basis": "seed_slot_sorted", "pairs": [[int(a), int(b)] for a, b in pairs]}
+def _pairing_record(
+    pairs: Sequence[tuple[int, int]], seed_sets: Mapping[str, Sequence[int]] | None = None
+) -> dict:
+    """配对表落盘供审计：``basis="seed_value"`` + 成对的种子值（含每对的 seed）。"""
+    record = {"basis": "seed_value", "pairs": [[int(a), int(b)] for a, b in pairs]}
+    if seed_sets is not None:
+        record["seed_sets"] = {arm: [int(s) for s in seeds] for arm, seeds in seed_sets.items()}
+    return record
+
+
+def _pairs_by_seed_or_reason(
+    joint: Mapping[int, float], independent: Mapping[int, float]
+) -> tuple[list[tuple[int, int]], str | None, dict[str, list[int]]]:
+    """(pairs, reason_code, 两臂种子集)——种子集合不同时 pairs 为空并给出显式原因。"""
+    seed_sets = {"joint": sorted(joint), "independent": sorted(independent)}
+    try:
+        return pair_by_seed(joint, independent), None, seed_sets
+    except ValueError as exc:
+        print(f"[gates] {exc}", file=sys.stderr)
+        return [], "seed_sets_differ", seed_sets
 
 
 def _h8_from_disk(
@@ -434,8 +463,10 @@ def evaluate_gates_from_disk(
     - `tolerance.json`（可选）——`20` [S4] 容差线，缺失则 H8 判不可判定。
 
     聚合维度按 [S3] 预注册：站 0、N_low = 1e4、每变体 5 种子；不满足则相应门禁判
-    不可判定并记录 ``n_seeds``/``n_pairs``。每条结论附判定表达式的输入数值快照
-    （`40` [S4] C2）。同输入两次调用输出逐位一致。
+    不可判定并记录 ``n_seeds``/``n_pairs``。H3 与变体路由的配对口径 = **同种子值字面
+    配对**（``pairing.basis="seed_value"``）；两臂种子集合不同时判不可判定并显式记
+    ``reason_code="seed_sets_differ"`` / ``routing_basis="val_seed_mismatch"``。
+    每条结论附判定表达式的输入数值快照（`40` [S4] C2）。同输入两次调用输出逐位一致。
     """
     results_dir = Path(results_dir)
     if not results_dir.is_dir():
@@ -474,9 +505,12 @@ def evaluate_gates_from_disk(
     # val 段：路由（5 对成对计数，[S3] 获胜变体路由全分支由 winner_variant 承担）
     val_n_eff = _load_val_n_eff(results_dir, sorted({str(p["run_id"]) for p in evals}))
     val_joint, val_indep = val_n_eff.get("joint", {}), val_n_eff.get("independent", {})
-    val_pairs = _pair_slots(val_joint, val_indep)
+    val_pairs, val_reason, val_seed_sets = _pairs_by_seed_or_reason(val_joint, val_indep)
     routing_basis = "val"
-    if len(val_pairs) == E1_SEEDS:
+    if val_reason is not None:
+        winner = "indeterminate"
+        routing_basis = "val_seed_mismatch"
+    elif len(val_pairs) == E1_SEEDS:
         winner = winner_variant(
             [val_joint[a] for a, _ in val_pairs], [val_indep[b] for _, b in val_pairs]
         )
@@ -484,12 +518,12 @@ def evaluate_gates_from_disk(
         winner = "indeterminate"
         routing_basis = "val_insufficient"
 
-    # test 段：H3（同种子成对 5 对）
+    # test 段：H3（同种子值成对 5 对）
     joint_test = {s: by_variant["joint"][s]["n_eff"] for s in sorted(by_variant.get("joint", {}))}
     indep_test = {
         s: by_variant["independent"][s]["n_eff"] for s in sorted(by_variant.get("independent", {}))
     }
-    test_pairs = _pair_slots(joint_test, indep_test)
+    test_pairs, test_reason, test_seed_sets = _pairs_by_seed_or_reason(joint_test, indep_test)
     if len(test_pairs) == E1_SEEDS:
         h3: dict = {
             "verdict": evaluate_h3(
@@ -508,10 +542,10 @@ def evaluate_gates_from_disk(
     else:
         h3 = {
             "verdict": VERDICT_INDETERMINATE, "n_pairs": len(test_pairs), "joint_wins": None,
-            "pairing": _pairing_record(test_pairs),
+            "pairing": _pairing_record(test_pairs, test_seed_sets if test_reason else None),
             "inputs": {"joint": {str(k): v for k, v in joint_test.items()},
                        "independent": {str(k): v for k, v in indep_test.items()}},
-            "reason_code": "pairs_insufficient",
+            "reason_code": test_reason or "pairs_insufficient",
         }
 
     # test 段：H1（获胜变体 5 种子分布）
@@ -612,6 +646,8 @@ def evaluate_gates_from_disk(
             "source": f"{SUMMARY_FILENAME}:best_val_n_eff",
             "consumed_by": "variant_routing",
             "n_pairs": len(val_pairs),
+            "pairing_basis": "seed_value",
+            "seed_sets": val_seed_sets,
             "per_seed_n_eff": {
                 v: {str(s): val_n_eff[v][s] for s in sorted(val_n_eff[v])} for v in sorted(val_n_eff)
             },

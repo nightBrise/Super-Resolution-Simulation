@@ -8,7 +8,13 @@ import numpy as np
 import pytest
 
 from src.line2.data_pipeline.dataset import build_dataset
-from src.line2.data_pipeline.projections import N_BINS, six_projections, station_edges
+from src.line2.data_pipeline.projections import (
+    AXES,
+    N_BINS,
+    PROJECTION_ORDER,
+    six_projections,
+    station_edges,
+)
 from src.line2.metrics.baseline import moment_matching_baseline
 from src.line2.metrics.metrics import reconstruct_sigma
 from src.line2.metrics.n_eff import error_n_curve
@@ -18,6 +24,7 @@ from src.line2.metrics.tolerance import (
     observable_vector,
     tolerance_for,
 )
+from tests.conftest import derive_seed
 
 pytestmark = pytest.mark.unit
 
@@ -87,3 +94,65 @@ def test_moment_matching_baseline(tmp_path: pathlib.Path) -> None:
     d_base = np.sqrt(np.diag(s_base))
     rho_in, rho_base = s_in / np.outer(d_in, d_in), s_base / np.outer(d_base, d_base)
     assert np.abs(rho_in - rho_base).max() < 0.05  # 相关结构保持
+
+
+def _index_moments(img: np.ndarray) -> tuple[float, float]:
+    """图内索引空间的二阶中心矩 (v_axis0, v_axis1)（单位：bin²）。"""
+    p = img.astype(np.float64) / img.sum()
+    k = np.arange(img.shape[0], dtype=np.float64)
+    m0 = float((p.sum(axis=1) * k).sum())
+    m1 = float((p.sum(axis=0) * k).sum())
+    v0 = float((p.sum(axis=1) * (k - m0) ** 2).sum())
+    v1 = float((p.sum(axis=0) * (k - m1) ** 2).sum())
+    return v0, v1
+
+
+def test_moment_matching_baseline_axes_match_group_layout() -> None:
+    """[S5] C2（+ `20` [S1] C3）：B-moment 渲染落在与图组相同的 (i,j) 轴序上。
+
+    自洽性断言（渲染与输入互测）在上下游同错时会自抵消，故本条以 Σ 与站级网格为锚：
+    存储布局 axis0 = aj（间距 h_j）、axis1 = ai（间距 h_i）⇒ 渲染图的索引空间二阶矩
+    应为 v0 = Σ_jj/h_j²、v1 = Σ_ii/h_i²，且与输入图组自身的同轴矩一致（渲染是同一束的
+    高斯拟合）。束取"核心高斯 + 6 个位于 +9σ_x 的远端粒子"：晕粒子把 x 的站级网格拉宽，
+    使各轴 σ/h 之比互异（10.2 vs 18.3），从而"轴 0 = aj"与"轴 0 = ai"两种读法可分辨。
+
+    实测（按存储布局 / 按"轴 0 = ai"误读）：与 Σ 期望的最大相对偏差 1×10⁻⁴ / 1.03
+    （误读把 x 轴的宽度错放到另一存储轴上）；与输入图组的最大相对偏差 4×10⁻⁴ / 1.03。
+    """
+    table = _gaussian_core_with_far_halo()
+    edges = station_edges(table)
+    group = six_projections(table, edges)
+    sigma = reconstruct_sigma(group, edges)
+    render = moment_matching_baseline(group, group, edges)
+
+    for gi, (ai, aj) in enumerate(PROJECTION_ORDER):
+        i, j = AXES.index(ai), AXES.index(aj)
+        hi, hj = float(np.diff(edges[i])[0]), float(np.diff(edges[j])[0])
+        expected = (sigma[j, j] / hj**2, sigma[i, i] / hi**2)  # 存储轴 0 = aj、轴 1 = ai
+        got = _index_moments(render[gi])
+        reference = _index_moments(group[gi])
+        for axis_name, g, e, r in (("axis0", got[0], expected[0], reference[0]),
+                                   ("axis1", got[1], expected[1], reference[1])):
+            assert abs(g / e - 1.0) < 0.05, (
+                f"投影 {gi} {PROJECTION_ORDER[gi]} 的 {axis_name} 索引矩 {g} 偏离 Σ 期望 {e}"
+            )
+            assert abs(g / r - 1.0) < 0.05, (
+                f"投影 {gi} {PROJECTION_ORDER[gi]} 的 {axis_name} 索引矩 {g} 偏离输入图组 {r}"
+            )
+
+
+def _gaussian_core_with_far_halo(n: int = 200_000) -> np.ndarray:
+    """核心 4D 高斯束 + 6 个 +9σ_x 远端粒子：使 x 的站级网格显著宽于其它轴。
+
+    各轴 σ/h 之比互异是鉴别力的来源：若各轴 σ/h 相同，把渲染的高斯宽窄放到另一轴上
+    会与 Σ 的互换恰好抵消（旧实现在 (x,x′) 与 (y,y′) 两投影上正是如此）。
+    """
+    corr = np.array(
+        [[1.00, 0.60, 0.30, -0.20], [0.60, 1.00, 0.35, 0.10],
+         [0.30, 0.35, 1.00, -0.45], [-0.20, 0.10, -0.45, 1.00]]
+    )
+    scales = np.array([3.3e-4, 4.0e-5, 2.2e-4, 5.0e-5])
+    rng = np.random.default_rng(derive_seed(30, 4))
+    table = (rng.standard_normal((n, 4)) @ np.linalg.cholesky(corr).T) * scales
+    table[:6, 0] = 9.0 * scales[0]
+    return table

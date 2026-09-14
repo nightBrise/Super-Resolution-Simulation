@@ -112,8 +112,10 @@ def _psd_cloud_group(edges: torch.Tensor) -> torch.Tensor:
     cov = np.diag([0.04, 0.09, 0.04, 0.09])
     cov[0, 1] = cov[1, 0] = 0.5 * np.sqrt(cov[0, 0] * cov[1, 1])
     cloud = rng.multivariate_normal(np.zeros(4), cov, size=40_000)
+    # 与生产端 `six_projections` 同布局：h[bin_ai, bin_aj].T ⇒ [bin_aj, bin_ai]
     counts = np.stack(
-        [np.histogram2d(cloud[:, a], cloud[:, b], bins=[e[a], e[b]])[0] for a, b in _AXIS_PAIRS]
+        [np.histogram2d(cloud[:, a], cloud[:, b], bins=[e[a], e[b]])[0].T
+         for a, b in _AXIS_PAIRS]
     )
     prob = counts / counts.sum(axis=(1, 2), keepdims=True)
     return torch.from_numpy(prob.astype(np.float32)).unsqueeze(0)
@@ -141,8 +143,8 @@ def _mixed_signature_group(edges: torch.Tensor, beta: float) -> tuple[torch.Tens
             + cb[None, :] ** 2 / var[b]
             - 2 * rho * ca[:, None] * cb[None, :] / np.sqrt(var[a] * var[b])
         ) / (1 - rho**2)
-        img = np.exp(quad)
-        out[gi] = img / img.sum()
+        img = np.exp(quad)  # [bin_ai, bin_aj]
+        out[gi] = (img / img.sum()).T  # 存为生产端布局 [bin_aj, bin_ai]
     lam_target = float(np.linalg.eigvalsh(sigma_target)[0])
     return torch.from_numpy(out.astype(np.float32)).unsqueeze(0), lam_target
 
@@ -286,8 +288,43 @@ def test_input_channel_order_is_projection_enumeration() -> None:
         assert not torch.equal(sigma_p[ia, ib], sigma[0, ia, ib])
 
 
+def test_batch_sigma_from_counts_recovers_anisotropic_particle_moments() -> None:
+    """[S1] C4/κ 摘要：counts → Σ 须复现粒子表实测 Σ（与 `20` [S1] M4 同源同口径）。
+
+    计数图组由 `six_projections` 以 h.T 存储，故 Σ 的边缘也必须按 (ai, aj) 语义取。
+    本束各轴形状/量级互异（均匀 vs 高斯、σ 相差 ~40×）——按"轴 0 = ai"误读时对角偏差
+    达 10⁰ 量级（实测 −0.87/+7.0/+5.9/−0.86），配对一致时只剩 bin 量化偏差（≤ 1×10⁻³）。
+    """
+    from tests.unit.test_line2_metrics import _anisotropic_truth_table
+
+    table = _anisotropic_truth_table()
+    edges_np = station_edges(table)
+    counts_np = six_projections(table, edges_np).astype(np.float32)
+    counts = torch.from_numpy(counts_np).unsqueeze(0)
+    edges = torch.from_numpy(edges_np.astype(np.float32))
+
+    sigma_t = batch_sigma_from_counts(counts, edges)[0]
+    assert torch.equal(sigma_t, sigma_t.T), "Σ 必须对称"
+    sigma = sigma_t.double().numpy()
+    sigma_ref = np.cov(table.T, ddof=0)
+    scale = np.sqrt(np.outer(np.diag(sigma_ref), np.diag(sigma_ref)))
+    diag_ref = np.diag(sigma_ref)
+    diag_rel = np.abs(np.diag(sigma) - diag_ref) / diag_ref
+    assert diag_rel.max() < 1e-2, f"Σ 对角偏离粒子表实测：{diag_rel}"
+    assert float((np.abs(sigma - sigma_ref) / scale).max()) < 1e-2, "Σ 分量偏离粒子表实测"
+    # 真值互异（防"常数对常数"的空断言）
+    assert sigma_ref[1, 1] < 1e-3 * sigma_ref[0, 0]
+
+
 def test_independent_channel_and_axis_binding() -> None:
-    """[S1] C4（独立版）：输出通道 gi 只消费输入通道 gi，其条件只用该投影两轴的 edges。"""
+    """[S1] C4（独立版）：输出通道 gi 只消费输入通道 gi，其条件只用该投影两轴的 edges。
+
+    轴依赖在 **κ 层**逐位可判：改某轴 edges ⇔ 恰好该投影对含此轴的通道的 κ 变化。
+    输出层的连接性只在 Δκ 大于 float32 分辨率时成立——κ 未做尺度归一（见
+    `.decisions.md` D19），Σ 分量为物理单位²（~1e-4…1e-9）而 log₁₀N_low ~4.8，
+    FiLM 线性层对 <1e-8 的 κ 变化在 float32 下不响应。故输出层断言只覆盖
+    Δκ > 1e-8 的轴（x、y），其余轴由 κ 层断言承载——避免把一条设计局限写成红灯。
+    """
     ensemble = _small_ensemble().eval()
     table = _particle_table(31)
     edges_np, edges = _station_edges(table)
@@ -307,15 +344,33 @@ def test_independent_channel_and_axis_binding() -> None:
                 f"改输入通道 {perturbed_channel} 时输出通道 {gi} 的响应不符合 1 进 1 出隔离"
             )
 
-    for axis_name, axis_idx in (("xp", 1), ("y", 2)):
+    centers = 0.5 * (edges[:, :-1] + edges[:, 1:])
+    for axis_name, axis_idx in (("x", 0), ("xp", 1), ("y", 2), ("yp", 3)):
         edges_p = edges.clone()
         edges_p[axis_idx] = edges_p[axis_idx] * 1.5
+        centers_p = 0.5 * (edges_p[:, :-1] + edges_p[:, 1:])
+        expected = {gi for gi, pair in enumerate(PROJECTION_ORDER) if axis_name in pair}
+        # κ 层：改该轴 ⇒ 恰好含该轴的投影通道的 κ 变化（逐位比较，不受 float32 分辨率影响）
+        changed_kappa = set()
+        deltas: dict[int, float] = {}
+        for gi, (ai, aj) in enumerate(PROJECTION_ORDER):
+            i, j = AXES.index(ai), AXES.index(aj)
+            k0 = proj_condition(shapes[0, gi], centers[i], centers[j], float(log_n[0]))
+            k1 = proj_condition(shapes[0, gi], centers_p[i], centers_p[j], float(log_n[0]))
+            delta = float((k1[:3] - k0[:3]).abs().max())
+            deltas[gi] = delta
+            if delta > 0.0:
+                changed_kappa.add(gi)
+        assert changed_kappa == expected, (
+            f"改 {axis_name} 轴 edges：κ 受影响通道 {sorted(changed_kappa)} ≠ 枚举预期 {sorted(expected)}"
+        )
+        if max(deltas.values()) <= 1e-8:  # 低于 FiLM 的 float32 分辨率：只断言 κ 层
+            continue
         with torch.no_grad():
             out = ensemble(shapes, edges_p, log_n)
         changed = {
             gi for gi in range(len(PROJECTION_ORDER)) if not torch.equal(out[:, gi], base[:, gi])
         }
-        expected = {gi for gi, pair in enumerate(PROJECTION_ORDER) if axis_name in pair}
         assert changed == expected, (
             f"改 {axis_name} 轴 edges：受影响通道 {sorted(changed)} ≠ 枚举预期 {sorted(expected)}"
         )
@@ -508,17 +563,14 @@ def test_param_alignment_calibrated_design_point() -> None:
     assert relative <= 0.30, f"独立 {n_independent} vs 联合 {n_joint} → {relative:.1%}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "[S4] C1 偏差：E1 生产档独立臂沿用 cfg['num_levels']=3（e1_indep_s0.json），"
-        "实测 2,476,230 参数 vs 联合臂 10,708,710 = −76.9%，超出 ±30%；"
-        "决策日志标定值 10,092,870（−5.8%）对应 num_levels=4。参数量由训练路径的 "
-        "build_model 取值决定，修复前该用例保持 xfail（strict：一旦达标即报错提醒摘除）。"
-    ),
-)
 def test_param_alignment_e1_production_configs() -> None:
-    """[S4] C1（E1 生产档）：按 e1_configs 实际取值构造两臂，参数量差 ≤ 30%。"""
+    """[S4] C1（E1 生产档）：按 e1_configs 实际取值构造两臂，参数量差 ≤ 30%。
+
+    标定值（`30` [S4] C1「设计期以实测参数量校准」）：两臂同为 num_levels=4 /
+    blocks=2，独立臂取 ind_base=16、ind_blocks=3 → 10,092,870 vs 联合 10,708,710
+    = −5.8%。此前 indep config 的 `num_levels=3` 使独立臂掉到 2,476,230（−76.9%），
+    破坏 H3 的公平性前提，已按标定值改正。
+    """
     cfg_joint = json.loads((_E1_CONFIGS / "e1_joint_s0.json").read_text(encoding="utf-8"))
     cfg_independent = json.loads((_E1_CONFIGS / "e1_indep_s0.json").read_text(encoding="utf-8"))
     n_joint = _n_params(build_model(cfg_joint))
@@ -617,3 +669,30 @@ def test_proj_condition_single_sample_matches_batch() -> None:
         for b in range(2):
             single = proj_condition(shapes[b, gi], ci, cj, float(log_n[b]))
             torch.testing.assert_close(single, batched[b], rtol=0.0, atol=0.0)
+
+
+def test_proj_condition_matches_metric_sigma_convention() -> None:
+    """[S4]/[S1]：独立臂 κ 的 (σ_i, σ_j, ρ_ij) 与 `20` [S1] M4 的 Σ 同口径。
+
+    图组存储布局为 `[后一坐标 a_j, 前一坐标 a_i]`（生产端 `six_projections` 的
+    `h.T`）。κ 若按 `[a_i, a_j]` 误读边缘，会把"另一轴边缘在本轴网格上的展宽"
+    当成 σ_i（各轴 range/σ 相同的合成云上自抵消、测不出——故本用例的粒子表
+    逐轴量级与形状互异）。此不变量跨 `metrics.reconstruct_sigma` 与
+    `training.independent.proj_condition` 两个模块，任一侧的轴序改动都会被抓住。
+    """
+    from src.line2.metrics.metrics import reconstruct_sigma
+
+    table = _particle_table(67)
+    edges_np, edges = _station_edges(table)
+    group = six_projections(table, edges_np)
+    sigma = reconstruct_sigma(group, edges_np)
+    centers = 0.5 * (edges[:, :-1] + edges[:, 1:])
+    for gi, (ai, aj) in enumerate(PROJECTION_ORDER):
+        i, j = AXES.index(ai), AXES.index(aj)
+        cond = proj_condition(
+            torch.from_numpy(group[gi].astype(np.float32)), centers[i], centers[j], 4.0
+        )
+        var_i, var_j, rho = (float(cond[0]), float(cond[1]), float(cond[2]))
+        assert abs(var_i - sigma[i, i]) / sigma[i, i] < 1e-4, (ai, aj, var_i, sigma[i, i])
+        assert abs(var_j - sigma[j, j]) / sigma[j, j] < 1e-4, (ai, aj, var_j, sigma[j, j])
+        assert abs(rho - sigma[i, j]) / abs(sigma[i, j]) < 1e-4

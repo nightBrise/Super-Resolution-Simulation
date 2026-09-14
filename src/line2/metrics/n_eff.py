@@ -3,7 +3,7 @@
 - 曲线消费 `10` [S5] 数据集（五档 × k=20 子样本，目标 = 2e5 全量）；
 - 门禁曲线跨 **val/test 束** 中位数/IQR（train 束曲线仅诊断，不进门禁）；
 - 互差地板 = 同档两两独立子样本 M1 差的中位数；参照噪声地板 = 1e5 档
-  两两配对 M1 差中位数 / √2（dist(H_1e5, ρ) 的估计，`20` [S2]）；
+  两两配对 M1 差中位数 / √2（dist(H_1e5, ρ) 的估计，`20` [S2]；tiers 缺该档 → nan）；
 - N_eff：log-N 线性插值，报告域 [1e3, 1e5]，上/下溢显式标记（[S3] C2）。
 """
 
@@ -24,6 +24,8 @@ __all__ = ["CurvePoint", "CurveResult", "error_n_curve", "reference_noise_floor"
 
 _CURVE_TIERS = (1_000, 3_000, 10_000, 30_000, 100_000)
 _DOMAIN = (1_000.0, 100_000.0)
+#: 参照噪声地板的唯一导出档（`20` [S2] C3：只由 1e5 档子样本配对待出）
+_REFERENCE_TIER = 100_000
 
 
 @dataclass
@@ -79,6 +81,10 @@ def error_n_curve(
 ) -> CurveResult:
     """[S2] 裸误差–N 曲线（默认门禁口径 = val+test 束；train 束诊断曲线另行传 beam_ids）。
 
+    ``tiers`` 不含 1e5 档时 ``reference_noise_floor`` 无定义——`20` [S2] C3 规定该
+    地板只由 1e5 档子样本配对导出——此时取 ``nan`` 而非报错，供调用方判断该曲线
+    能否作门禁尺；``mutual_floor`` 与 ``raw_samples`` 仍覆盖传入的各档。
+
     ``progress_every`` 每处理 N 束向 stderr 打一行进度（长时跑的可观测性；
     默认 None = 静默，不影响返回值）。
     """
@@ -118,7 +124,8 @@ def error_n_curve(
         med = float(np.median(vals))
         q_lo, q_hi = np.percentile(vals, [25, 75])
         points.append(CurvePoint(tier, med, float(q_lo), float(q_hi), len(vals)))
-    noise_floor = float(np.median(pair_m1[100_000]) / np.sqrt(2.0)) if pair_m1[100_000] else float("nan")
+    ref_pairs = pair_m1.get(_REFERENCE_TIER) or []
+    noise_floor = float(np.median(ref_pairs) / np.sqrt(2.0)) if ref_pairs else float("nan")
     curve_result = CurveResult(
         points, {t: float(np.median(v)) for t, v in pair_m1.items()}, noise_floor, samples
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 
 import h5py
@@ -11,7 +12,7 @@ import pytest
 
 from src.line2.data_pipeline.dataset import build_dataset
 from src.line2.metrics.metrics import group_rel_rmse
-from src.line2.metrics.n_eff import error_n_curve, n_eff
+from src.line2.metrics.n_eff import error_n_curve, n_eff, reference_noise_floor
 
 pytestmark = pytest.mark.unit
 
@@ -117,6 +118,42 @@ def test_floor_definitions_match_manual_recompute(small_dataset: pathlib.Path, c
         assert p.median == float(np.median(vals))
         lo, hi = np.percentile(vals, [25, 75])
         assert (p.iqr_lo, p.iqr_hi) == (float(lo), float(hi))
+
+
+def test_curve_without_reference_tier_marks_floor_nan(
+    small_dataset: pathlib.Path, curve, tmp_path: pathlib.Path
+) -> None:
+    """[S2] C3：tiers 不含 1e5 档 → 参照噪声地板取 nan（不抛 KeyError）；含该档时口径不变。
+
+    两者只在"有无 1e5 档"上不同（同束、同站、同 k），故共享档的曲线点与互差地板必须
+    逐位一致——把缺档的影响限定在参照噪声地板这一个字段上，而非静默换一种估计方式。
+    """
+    beam_ids = list(range(4))
+    shared = (1_000, 3_000, 10_000)
+    partial = error_n_curve(
+        small_dataset, beam_ids=beam_ids, stations=(0,), tiers=shared, k=2
+    )
+    assert [p.n_low for p in partial.points] == list(shared)
+    assert set(partial.mutual_floor) == set(shared)
+    assert math.isnan(partial.reference_noise_floor)
+    assert math.isnan(reference_noise_floor(partial))          # 字段与访问器同源
+
+    full = error_n_curve(
+        small_dataset, beam_ids=beam_ids, stations=(0,), tiers=(*shared, 100_000), k=2
+    )
+    for p in partial.points:
+        assert p.median == full.median_at(p.n_low)
+        assert partial.mutual_floor[p.n_low] == full.mutual_floor[p.n_low]
+    assert not math.isnan(full.reference_noise_floor)
+    assert full.reference_noise_floor == full.mutual_floor[100_000] / math.sqrt(2.0)
+
+    # dump 路径同样不因缺档而中断
+    dump = tmp_path / "partial_curve.json"
+    error_n_curve(
+        small_dataset, beam_ids=beam_ids, stations=(0,), tiers=shared, k=2, dump=dump
+    )
+    payload = json.loads(dump.read_text(encoding="utf-8"))
+    assert math.isnan(payload["reference_noise_floor"])
 
 
 def test_error_n_curve_repeat_call_identical(small_dataset: pathlib.Path, curve) -> None:

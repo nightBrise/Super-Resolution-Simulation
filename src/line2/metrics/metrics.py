@@ -6,7 +6,9 @@
   调用方无归一入口；M6 为比值型，不需归一。
 - 参照 r = 同束同站 2e5 全量直方图。
 - 图组：int/float (6, 128, 128)，通道顺序 = `00` [S1] 六投影枚举；
-  **图内轴向（实测约定，2026-09-14 复审钉死）**：axis 0 = 投影对**前一坐标** bin，axis 1 = 后一坐标 bin（projections.py 同步；M4/M5/B-moment 均按此实现，无转置）。
+  **图内轴向（存储布局，`10` [S4] 生产端的既成事实）**：axis 0（行）= 投影对**后一坐标** bin、
+  axis 1（列）= 前一坐标 bin（`six_projections` 以 `h.T` 落盘，见 projections.py）。
+  消费方按 (ai, aj) 语义取边缘/配对矩前 SHALL 先转置（本模块 M4/M5 与 baseline.py 均已转置）。
 """
 
 from __future__ import annotations
@@ -95,7 +97,11 @@ def poisson_deviance(x: np.ndarray, r: np.ndarray) -> float:
 
 
 def reconstruct_sigma(group: np.ndarray, edges: np.ndarray) -> np.ndarray:
-    """由 (6,128,128) 图组重构 4×4 Σ（归一化坐标；首现占位规则，确定性）。"""
+    """由 (6,128,128) 图组重构 4×4 Σ（归一化坐标；首现占位规则，确定性）。
+
+    图组按存储布局 [aj, ai] 给出（见模块 docstring），此处逐通道转置回 [ai, aj]
+    后再取边缘与配对矩；不转置会把对角算成另一轴的方差按 bin 宽比换算的值。
+    """
     centers = [0.5 * (edges[k][:-1] + edges[k][1:]) for k in range(4)]
     axis_of = {a: i for i, a in enumerate(("x", "xp", "y", "yp"))}
     sigma = np.zeros((4, 4))
@@ -108,7 +114,7 @@ def reconstruct_sigma(group: np.ndarray, edges: np.ndarray) -> np.ndarray:
         total = img.sum()
         if total <= 0:
             continue
-        p = img / total
+        p = img.T / total
         ui, uj = centers[i], centers[j]
         mi = float((p.sum(axis=1) * ui).sum())
         mj = float((p.sum(axis=0) * uj).sum())
@@ -156,6 +162,7 @@ def sigma_errors(sigma_eval: np.ndarray, sigma_ref: np.ndarray) -> dict:
 def _halo_fraction_per_projection(
     img: np.ndarray, sigma2d: np.ndarray, mean2d: np.ndarray, centers0: np.ndarray, centers1: np.ndarray
 ) -> float:
+    """单投影椭圆外计数占比（``img`` 的 axis 0/1 = ``centers0``/``centers1`` 所对应轴）。"""
     p = img.astype(np.float64)
     total = p.sum()
     if total <= 0:
@@ -178,7 +185,11 @@ def _halo_fraction_per_projection(
 def halo_fraction_gap(
     group: np.ndarray, group_ref: np.ndarray, sigma_ref: np.ndarray, edges: np.ndarray
 ) -> float:
-    """M5：六投影晕占比差的平均（椭圆由参照 Σ 子块 + 参照投影均值定义，D3/D9）。"""
+    """M5：六投影晕占比差的平均（椭圆由参照 Σ 子块 + 参照投影均值定义，D3/D9）。
+
+    图组按存储布局 [aj, ai] 给出（见模块 docstring）：参照边缘与两侧计数图都先转置回
+    [ai, aj]，再与 2×2 子块/均值按 (i, j) 语义配对；不转置会把被评质量与错配的椭圆比。
+    """
     pairs = (("x", "xp"), ("y", "yp"), ("x", "y"), ("x", "yp"), ("xp", "y"), ("xp", "yp"))
     axis_of = {a: i for i, a in enumerate(("x", "xp", "y", "yp"))}
     gaps = []
@@ -189,12 +200,13 @@ def halo_fraction_gap(
         img_r = group_ref[gi].astype(np.float64)
         ui = 0.5 * (edges[i][:-1] + edges[i][1:])
         uj = 0.5 * (edges[j][:-1] + edges[j][1:])
-        pr = img_r / img_r.sum()
+        pr = img_r.T / img_r.sum()
         mean_i = float((pr.sum(axis=1) * ui).sum())
         mean_j = float((pr.sum(axis=0) * uj).sum())
+        means = np.array([mean_i, mean_j])
         gaps.append(
-            _halo_fraction_per_projection(group[gi], s, np.array([mean_i, mean_j]), ui, uj)
-            - _halo_fraction_per_projection(img_r, s, np.array([mean_i, mean_j]), ui, uj)
+            _halo_fraction_per_projection(group[gi].T, s, means, ui, uj)
+            - _halo_fraction_per_projection(img_r.T, s, means, ui, uj)
         )
     return float(np.mean(np.abs(gaps)))
 
@@ -218,6 +230,7 @@ def evaluate_group(
 
     返回 dict：{"underflow": bool, "M1": float, "M2": dict, "M3": float,
     "M4": dict, "M5": float, "M6": float}；underflow=True 时其余键缺省。
+    M1 取 `20` [S1] M1 原文口径（六投影各自归一后各算再平均 = :func:`group_rel_rmse`）。
     """
     try:
         if float(group.sum()) <= 0:
@@ -228,7 +241,7 @@ def evaluate_group(
     sigma_ref = reconstruct_sigma(group_ref, edges)
     return {
         "underflow": False,
-        "M1": rel_rmse(group, group_ref),
+        "M1": group_rel_rmse(group, group_ref),
         "M2": bucketed_rel_rmse(group, group_ref),
         "M3": poisson_deviance(group, group_ref),
         "M4": sigma_errors(sigma_eval, sigma_ref),
