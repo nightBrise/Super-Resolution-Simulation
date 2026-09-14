@@ -32,43 +32,59 @@ def normalize_input_group(counts: torch.Tensor) -> tuple[torch.Tensor, torch.Ten
 def condition_vector(
     counts: torch.Tensor, edges: torch.Tensor, log_n_low: torch.Tensor | None = None
 ) -> torch.Tensor:
-    """F8(b) 条件向量 κ ∈ ℝ¹¹：输入图组 10 维 Σ 摘要 + log₁₀N_low。
+    """F8(b) 条件向量 κ ∈ ℝ¹¹：输入图组 10 维 Σ 摘要（对角 4 + 上三角 6）+ log₁₀N_low。
 
-    SHALL 仅由输入派生（`30` [S1] C5 防泄露）。edges: (4, 129)。
+    SHALL 仅由输入派生（`30` [S1] C5 防泄露）。edges: (4, 129) 或 (B, 4, 129)。
     """
-    centers = 0.5 * (edges[:, :-1] + edges[:, 1:])  # (4, 128)
     sigma = batch_sigma_from_counts(counts, edges)
-    n_low = counts.sum(dim=(1, 2, 3)).clamp_min(1.0)
-    log_n = torch.log10(n_low.float()) if log_n_low is None else log_n_low
-    return torch.cat([sigma.flatten(1), log_n.unsqueeze(1)], dim=1)
+    i_idx, j_idx = torch.triu_indices(4, 4)  # 10 个唯一分量（含对角）
+    comp = sigma[:, i_idx, j_idx]  # (B, 10)
+    if log_n_low is None:
+        n_low = counts.sum(dim=(1, 2, 3)).clamp_min(1.0)
+        log_n_low = torch.log10(n_low.float()).unsqueeze(1)  # (B, 1)
+    return torch.cat([comp, log_n_low.to(comp.dtype)], dim=1)
 
 
 def batch_sigma_from_counts(counts: torch.Tensor, edges: torch.Tensor) -> torch.Tensor:
-    """由计数图组计算每样本 4×4 Σ（归一化坐标；首现占位，与 `20` 一致）。"""
-    centers = 0.5 * (edges[:, :-1] + edges[:, 1:])  # (4, 128)
-    b = counts.shape[0]
-    sigma = torch.zeros(b, 4, 4, dtype=counts.dtype, device=counts.device)
-    filled = torch.zeros(b, 4, 4, dtype=torch.bool, device=counts.device)
+    """由计数图组计算每样本 4×4 Σ（归一化坐标；首现占位，与 `20` 一致）。
+
+    edges：共享 (4, 129) 或逐样本 (B, 4, 129)（混合束/站台 batch；抖动使各束
+    bin 边界不同）。逐样本循环（batch ≤ 16，成本可忽略）。
+    """
+    if edges.dim() == 2:
+        edges = edges.unsqueeze(0).expand(counts.shape[0], -1, -1)
+    b_dim = counts.shape[0]
+    sigma = torch.zeros(b_dim, 4, 4, dtype=counts.dtype, device=counts.device)
+    filled = torch.zeros(b_dim, 4, 4, dtype=torch.bool, device=counts.device)
     pairs = ((0, 1), (2, 3), (0, 2), (0, 3), (1, 2), (1, 3))
-    for gi, (ai, aj) in enumerate(pairs):
-        p = counts[:, gi].to(counts.dtype)
-        p = p / p.sum(dim=(1, 2), keepdim=True).clamp_min(1e-12)
-        ci, cj = centers[ai], centers[aj]
-        pi = p.sum(dim=2)
-        pj = p.sum(dim=1)
-        mi = (pi * ci).sum(dim=1)
-        mj = (pj * cj).sum(dim=1)
-        di = ci.unsqueeze(0) - mi.unsqueeze(1)
-        dj = cj.unsqueeze(0) - mj.unsqueeze(1)
-        s_ii = (pi * di**2).sum(dim=1)
-        s_jj = (pj * dj**2).sum(dim=1)
-        s_ij = (p * di.unsqueeze(2) * dj.unsqueeze(1)).sum(dim=(1, 2))
-        for a, b_, val in ((ai, ai, s_ii), (aj, aj, s_jj), (ai, aj, s_ij), (aj, ai, s_ij)):
-            sel = ~filled[:, a, b_]
-            sigma[:, a, b_] = torch.where(sel, val, sigma[:, a, b_])
-            sigma[:, b_, a] = torch.where(sel, val, sigma[:, b_, a])
-            filled[:, a, b_] |= sel
-            filled[:, b_, a] |= sel
+    for b in range(b_dim):
+        centers = 0.5 * (edges[b][:, :-1] + edges[b][:, 1:])  # (4, 128)
+        for gi, (ai, aj) in enumerate(pairs):
+            p = counts[b, gi].to(counts.dtype)
+            total = p.sum()
+            if total <= 0:
+                continue
+            p = p / total
+            ci, cj = centers[ai], centers[aj]
+            pi = p.sum(dim=1)
+            pj = p.sum(dim=0)
+            mi = (pi * ci).sum()
+            mj = (pj * cj).sum()
+            di = ci - mi
+            dj = cj - mj
+            s_ii = (pi * di**2).sum()
+            s_jj = (pj * dj**2).sum()
+            s_ij = (p * di[:, None] * dj[None, :]).sum()
+            if not filled[b, ai, aj]:
+                sigma[b, ai, aj] = s_ij
+                sigma[b, aj, ai] = s_ij
+                filled[b, ai, aj] = filled[b, aj, ai] = True
+            if not filled[b, ai, ai]:
+                sigma[b, ai, ai] = s_ii
+                filled[b, ai, ai] = True
+            if not filled[b, aj, aj]:
+                sigma[b, aj, aj] = s_jj
+                filled[b, aj, aj] = True
     return sigma
 
 
