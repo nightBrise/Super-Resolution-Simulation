@@ -148,9 +148,9 @@ def train(cfg: dict) -> dict:
         nlls: list[float] = []
         for i in range(len(val_set)):
             item = val_set[i]
-            counts = item["counts"].unsqueeze(0)
-            edges = item["edges"].unsqueeze(0)
-            target = item["target"].unsqueeze(0)
+            counts = item["counts"].unsqueeze(0).to(device)  # (1, 6, 128, 128)
+            edges = item["edges"].unsqueeze(0).to(device)     # (1, 4, 129)
+            target = item["target"].unsqueeze(0).to(device)   # (1, 6, 128, 128)
             shapes, _totals = normalize_input_group(counts)
             n_low_vec = counts.sum(dim=(1, 2, 3)).clamp_min(1.0)
             log_n = torch.log10(n_low_vec)
@@ -159,7 +159,7 @@ def train(cfg: dict) -> dict:
                 prob = net(shapes, kappa)
             else:
                 prob = net(shapes, edges, log_n)
-            n_effs.append(n_eff(prob[0].numpy(), target.numpy()[0], curve)[0])
+            n_effs.append(n_eff(prob[0].cpu().numpy(), target[0].cpu().numpy(), curve)[0])
             nlls.append(float(poisson_nll(prob, target, n_high)))
         net.train()
         return float(np.median(n_effs)), float(np.mean(nlls))
