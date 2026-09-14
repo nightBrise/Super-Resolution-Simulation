@@ -75,7 +75,7 @@ def test_train_smoke_and_determinism(data_dir: pathlib.Path, train_out: pathlib.
         for line in (out_a / "train_log.jsonl").read_text(encoding="utf-8").splitlines()
     ]
     assert len(entries) == 3  # eval_every=10 × 30 步
-    assert all("val_n_eff" in e and "nll" in e for e in entries)
+    assert all("val_n_eff" in e and "train_nll" in e for e in entries)
 
 
 def test_infer_roundtrip(data_dir: pathlib.Path, train_out: pathlib.Path, tmp_path: pathlib.Path) -> None:
