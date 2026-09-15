@@ -215,6 +215,14 @@ def test_e1_configs_differ_only_in_variant_and_seed() -> None:
     for sub in by_variant.values():
         for key in E1_VARIANT_KEYS:
             assert len({json.dumps(cfg.get(key), sort_keys=True) for cfg in sub}) == 1, key
+    # 死键：`train.build_model` 对 joint 只读 `base`/`blocks`、对 independent 只读
+    # `ind_base`/`ind_blocks`。另一臂的拓扑键留在 config 里会让 diff 显示一个**不生效的**
+    # 拓扑差异（读者会以为独立臂还有一层 base/blocks 结构）。
+    dead_keys = {"joint": ("ind_base", "ind_blocks"), "independent": ("base", "blocks")}
+    for variant, keys in dead_keys.items():
+        for cfg in by_variant[variant]:
+            present = [k for k in keys if k in cfg]
+            assert not present, f"{variant} 臂 config 携带对该臂无效的拓扑键（死键）：{present}"
     # 每 run 独立目录（`40` [S1] C2）：out_dir 基名与 config 文件名一一对应
     assert {Path(cfg["out_dir"]).name for cfg in configs.values()} == set(configs)
 
@@ -232,10 +240,11 @@ def _write_fake_run(results: Path, run_id: str, n_low: int, *, with_meta: bool =
     return run_dir
 
 
-def _eval_namespace(results: Path, data_dir: Path, n_low: int | None = None) -> argparse.Namespace:
+def _eval_namespace(results: Path, data_dir: Path, n_low: int | None = None,
+                    force: bool = False) -> argparse.Namespace:
     return argparse.Namespace(
         results_dir=results, data_dir=data_dir, runs=None, split="test", station=0,
-        n_low=n_low, subs="0-1", device="cpu",
+        n_low=n_low, subs="0-1", device="cpu", force=force,
     )
 
 
@@ -288,6 +297,60 @@ def test_cmd_eval_explicit_n_low_wins_and_missing_meta_is_skipped(
     captured.clear()
     assert run_e1.cmd_eval(_eval_namespace(results, tmp_path / "data", n_low=50000)) == 0
     assert captured[0][captured[0].index("--n-low") + 1] == "50000"
+
+
+# ----------------------------------- `00` GC3：test 只评一次（派发端强制 + 留痕）
+def _history(run_dir: Path) -> list[dict]:
+    path = run_dir / run_e1.EVAL_HISTORY_FILENAME
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+def test_cmd_eval_skips_existing_target_and_force_overwrites(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """目标 `test_eval.json` 已存在 ⇒ 默认跳过（GC3 只评一次）；`--force` 才覆盖并留痕。
+
+    鉴别力：旧实现无条件覆盖写——重复派发会静默用当次代码覆盖交付件，首次产物的版本
+    不可查（审查 M2 的实证：同一 (run, 站, 档) 被派发 2–3 次）。
+    """
+    results = tmp_path / "results"
+    results.mkdir(parents=True)
+    run_dir = _write_fake_run(results, "e1_joint_s0", 10000)
+    target = run_dir / "test_eval.json"
+    target.write_text('{"stale": true}', encoding="utf-8")
+
+    dispatched: list[list[str]] = []
+    monkeypatch.setattr(evaluate, "main", lambda argv: dispatched.append(list(argv)) or 0)
+
+    assert run_e1.cmd_eval(_eval_namespace(results, tmp_path / "data")) == 0
+    assert dispatched == []                                   # 默认不派发评估
+    assert target.read_text(encoding="utf-8") == '{"stale": true}'   # 既有产物原样保留
+    out = capsys.readouterr().out
+    assert "跳过 e1_joint_s0（test_eval.json）" in out and "test 只评一次" in out
+    skipped = _history(run_dir)
+    assert len(skipped) == 1 and skipped[0]["skipped"] is True
+    assert skipped[0]["overwrote_existing"] is False and skipped[0]["n_low"] == 10000
+
+    assert run_e1.cmd_eval(_eval_namespace(results, tmp_path / "data", force=True)) == 0
+    assert len(dispatched) == 1 and dispatched[0][dispatched[0].index("--out") + 1] == str(target)
+    forced = _history(run_dir)
+    assert len(forced) == 2 and forced[-1]["skipped"] is False
+    assert forced[-1]["overwrote_existing"] is True and forced[-1]["force"] is True
+
+
+def test_cmd_eval_records_history_for_fresh_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """产物不存在 ⇒ 正常评估，历史记 `overwrote_existing=False`（无覆盖事实）。"""
+    results = tmp_path / "results"
+    results.mkdir(parents=True)
+    run_dir = _write_fake_run(results, "e1_joint_s0", 10000)
+    monkeypatch.setattr(evaluate, "main", lambda argv: 0)
+
+    assert run_e1.cmd_eval(_eval_namespace(results, tmp_path / "data")) == 0
+    entry = _history(run_dir)[0]
+    assert entry["skipped"] is False and entry["overwrote_existing"] is False
+    assert entry["out"] == "test_eval.json" and entry["subs"] == "0-1"
 
 
 # --------------------------------------------- `40` [S1] C5：尺子先行的顺序约束
@@ -488,7 +551,19 @@ def _fake_gates() -> dict:
                "pass_rate": None, "per_observable": [], "n_beams": 0, "beam_ids": [],
                "tolerance_tier_per_beam": {}, "tolerance_tier_counts": {},
                "tolerance_tier_mode": None,
-               "variant": "joint", "reason_code": "tolerance_missing"},
+               "variant": "joint", "reason_code": "tolerance_missing",
+               "dark_bucket_m2": {
+                   "aggregation": "per_beam_seed_median_then_beam_median",
+                   "n_runs": 1, "n_beams_total": 0, "runs_without_m2": ["e1_joint_s0"],
+                   "B0": {"bare_median": 0.0, "model_median": 0.4,
+                          "relative_improvement": None, "n_beams": 3},
+                   "B1": {"bare_median": 4.6, "model_median": 2.3,
+                          "relative_improvement": 0.5, "n_beams": 3},
+                   "B0B1_combined": {"bare_median": 2.3, "model_median": 1.35,
+                                     "relative_improvement": 0.41304347826086957,
+                                     "n_beams": 3},
+                   "note": "（假产物）暗桶口径说明。",
+               }},
         "beam_n_eff_snapshot": {"joint": [{"beam_id": 1, "n_eff_median": 40000.0,
                                            "n_eff_per_seed": {"0": 40000.0},
                                            "flag_per_seed": {"0": None}}]},
@@ -686,6 +761,36 @@ def test_report_discloses_h8_tolerance_tier_mapping(fake_products: Path, tmp_pat
     assert absolute not in text          # 本机绝对路径不进报告
     # 逐束映射明细（每束一条）留在门禁产物里，不挤进"项/值"两列
     assert "tolerance_tier_per_beam" not in text
+
+
+def test_report_discloses_h8_dark_bucket_m2(fake_products: Path, tmp_path: Path) -> None:
+    """`40` [S3] H8：暗桶（B0/B1）M2 单独报告——与达标率**分开**成段渲染。
+
+    鉴别力：冻结文本要求暗桶报告与达标率并列；旧实现完全没有这一段（报告里
+    `暗桶`/`B0B1` 命中 0），读者无法判断 13 项的失败里有多少来自幻觉性暗桶。
+    裸输入为 0 的桶（B0 的结构性质）渲染为"无定义"而不是伪造一个比值。
+    """
+    text = generate(fake_products, out_dir=tmp_path / "out",
+                    reports_dir=tmp_path / "reports")["report"].read_text(encoding="utf-8")
+    assert "**暗桶（B0/B1）M2 相对改进**（`40` [S3] H8 明文要求**单独报告、不并入上面的达标率**）" in text
+    assert "| B0 | 0 | 0.4 | —（无定义：裸输入为 0） | 3 |" in text
+    assert "| B1 | 4.6 | 2.3 | 0.5 | 3 |" in text
+    assert "| B0+B1（等权） | 2.3 | 1.35 | 0.413043 | 3 |" in text
+    assert "口径：（假产物）暗桶口径说明。" in text
+    assert "覆盖：1 个 run × 0 束，聚合次序 per_beam_seed_median_then_beam_median" in text
+    assert "**缺暗桶数据的 run**（1 个）：e1_joint_s0" in text
+    # 达标率一节照旧独立渲染（两段并列，不互相吞并）
+    assert "| pass_rate | — |" in text
+
+
+def test_report_requires_dark_bucket_section(fake_products: Path, tmp_path: Path) -> None:
+    """门禁产物缺 `dark_bucket_m2` ⇒ 报告生成报错，不静默省略（`40` [S3] H8 的交付面）。"""
+    path = fake_products / "e1_gates.json"
+    gates = json.loads(path.read_text(encoding="utf-8"))
+    del gates["H8"]["dark_bucket_m2"]
+    path.write_text(json.dumps(gates), encoding="utf-8")
+    with pytest.raises(ValueError, match="dark_bucket_m2"):
+        generate(fake_products, out_dir=tmp_path / "out", reports_dir=tmp_path / "reports")
 
 
 def test_report_title_and_anchors_follow_actual_products(fake_products: Path, tmp_path: Path

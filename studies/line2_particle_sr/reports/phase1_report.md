@@ -3,7 +3,7 @@
 > Spec：`docs/specs/line2/40_experiment_spec.md`（Frozen v1.0）[S4] 产出物；判据与 N_eff 见 `20`，模型与训练见 `30`，总纲与全局约束见 `00`。
 > 生成方式：`python -m src.line2.experiments.map_report --results-dir <dir>`（只读；同输入逐位一致，[S4] C1）。
 > 输入产物：`e0_curve.json`、`e1_gates.json`、25 份 `*/test_eval*.json`、20 份 `*/run_meta.json`。
-> 门禁产物 code_version：306d3964f60a03bc3fd3cc57eef4bbdd2b289c56（产生 `e1_gates.json` 的判定代码版本；`00` GC7 要求的每个 run 的三元组见 §1.2）｜数据版本：line2_ds_v1｜spec 版本：line2-spec-v1.0
+> 门禁产物 code_version：b758e579a69fea823fb9d596a4655fe2c2c913ad（产生 `e1_gates.json` 的判定代码版本；`00` GC7 要求的每个 run 的三元组见 §1.2）｜数据版本：line2_ds_v1｜spec 版本：line2-spec-v1.0
 > 配套产出物：地图 `studies/line2_particle_sr/reports/figure_avail_domain.png`、N_eff 表 `studies/line2_particle_sr/results/n_eff_table.csv`。
 
 ## 1. 数据
@@ -341,6 +341,17 @@
 | 10 | eps4d_rel | 150 | 150 | 1 |
 | 11 | m5_halo_fraction_gap | 0 | 150 | 0 |
 | 12 | m6_hf_energy_ratio_gap | 0 | 150 | 0 |
+
+**暗桶（B0/B1）M2 相对改进**（`40` [S3] H8 明文要求**单独报告、不并入上面的达标率**）：
+
+| 桶 | 裸输入 M2 中位数 | 模型 M2 中位数 | 相对改进 | 束数 |
+|---|---|---|---|---|
+| B0 | 0 | 0.306068 | —（无定义：裸输入为 0） | 150 |
+| B1 | 4.35363 | 0.817476 | 0.812231 | 150 |
+| B0+B1（等权） | 2.17681 | 0.561037 | 0.742267 | 150 |
+
+- 口径：`40` [S3] H8 明文要求「暗桶（B0/B1）的 M2 相对改进单独报告（不并入达标率）」（机制依据 `20` D11：H8 主战场恰在暗桶）；聚合 = 逐束先对种子取中位数、再对 test 束取中位数；相对改进 = （裸输入 M2 中位 − 模型 M2 中位）/ 裸输入 M2 中位。B0 的裸输入恒为 0（子样本是全量粒子集的子集 ⇒ 参照的零格在子样本中亦为零），其相对改进无定义，只报两侧绝对值。B0B1 合并值 = 两暗桶逐束等权平均后再取束中位数。本段不参与 H8 的达标率与结论。
+- 覆盖：5 个 run × 150 束，聚合次序 per_beam_seed_median_then_beam_median
 
 ### 5.5 束级 N_eff 快照（门禁产物的中间量）
 

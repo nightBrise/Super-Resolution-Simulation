@@ -7,7 +7,10 @@
   edges + log₁₀N），κ 的 log₁₀N 分量由 counts 派生（`30` [S1] C5 防泄露）；
 - 确定性（`40` [S3] C1）：eval 模式 + no_grad + 无随机算子，同输入逐位一致；
 - N_eff = `20` [S3] 的 log-N 插值，报告域 [1e3, 1e5]，上/下溢携带显式标记；
-- 聚合次序 = 先对子样本取中位数（err / 13 维观测量各自取中位数），再映射 N_eff。
+- 聚合次序 = 先对子样本取中位数（err / 13 维观测量 / M2 分桶各自取中位数），再映射 N_eff；
+- M2 分桶（`20` [S1]）逐（束, 子样本）算两次——被评 = 网络输出概率图、裸输入 = 该子样本
+  图组本身——按参照 r 分桶，产 `per_beam[].m2_buckets` 供 H8 的暗桶单独报告消费（门禁
+  判定表达式不消费该字段，`40` [S3] H8「暗桶（B0/B1）的 M2 相对改进单独报告（不并入达标率）」）。
 
 用法：
     python -m src.line2.experiments.evaluate --ckpt <run_dir>/best_val.ckpt \
@@ -29,7 +32,7 @@ import torch
 from torch import nn
 
 from src.line2.data_pipeline.dataset import git_head
-from src.line2.metrics.metrics import group_rel_rmse
+from src.line2.metrics.metrics import bucketed_rel_rmse, group_rel_rmse
 from src.line2.metrics.n_eff import CurvePoint, CurveResult, n_eff_from_err
 from src.line2.metrics.tolerance import observable_vector
 from src.line2.training.train import build_model
@@ -43,10 +46,17 @@ __all__ = [
     "evaluate_run",
     "parse_subs",
     "EVAL_FILENAME",
+    "M2_BUCKET_NAMES",
+    "DARK_BUCKET_NAMES",
     "main",
 ]
 
 EVAL_FILENAME = "test_eval.json"
+
+#: M2 分桶名（桶界取自 `20` [S1] 的 ``BUCKET_EDGES`` 冻结值 {0.5, 2, 10}）
+M2_BUCKET_NAMES = ("B0", "B1", "B2", "B3")
+#: 暗桶（`20` D11「H8 主战场恰在暗桶」）：近不可见区的两个低计数桶
+DARK_BUCKET_NAMES = ("B0", "B1")
 
 
 @dataclass
@@ -177,6 +187,55 @@ def predict_group(
     return np.ascontiguousarray(out, dtype=np.float64)
 
 
+def _median_or_none(values: Sequence[float | None]) -> float | None:
+    finite = [float(v) for v in values if v is not None]
+    return float(np.median(np.asarray(finite, dtype=np.float64))) if finite else None
+
+
+def _relative_improvement(
+    model: float | None, bare: float | None
+) -> tuple[float | None, str | None]:
+    """M2 相对改进 = （裸输入 − 模型）/ 裸输入；裸输入为 0 时无定义（不可作分母）。"""
+    if model is None or bare is None:
+        return None, "insufficient"
+    if bare == 0.0:
+        return None, "bare_zero"
+    return (bare - model) / bare, None
+
+
+def m2_buckets_summary(model_buckets: Sequence[dict], bare_buckets: Sequence[dict]) -> dict:
+    """单（束, 站）的 M2 分桶摘要：逐桶先对子样本取中位数，再给裸输入/模型对照。
+
+    两侧输入都是逐子样本的 :func:`~src.line2.metrics.metrics.bucketed_rel_rmse` 输出
+    ——**被评** = 网络输出概率图，**裸输入** = 该子样本图组本身；分桶掩膜由同一参照 r
+    决定，故 ``n_cells`` 逐子样本恒等。聚合次序与 ``err``/``obs`` 一致（先对子样本取
+    中位数，`20` [S4]）。桶内格子 < 100（``insufficient``）时桶值显式记 ``null``；
+    裸输入为 0 时相对改进不可算，记 ``null`` 并在 ``improvement_null_reason`` 说明。
+    """
+    if not model_buckets or not bare_buckets:
+        raise ValueError("m2_buckets_summary：被评/裸输入的子样本桶值不得为空")
+    out: dict = {}
+    improvements: dict = {}
+    for name in M2_BUCKET_NAMES:
+        insufficient = any(b[name]["insufficient"] for b in (*model_buckets, *bare_buckets))
+        entry: dict = {"n_cells": int(model_buckets[0][name]["n_cells"]), "insufficient": insufficient}
+        if insufficient:
+            entry.update(model_median=None, bare_median=None, relative_improvement=None)
+        else:
+            model_median = _median_or_none([b[name]["rel_rmse"] for b in model_buckets])
+            bare_median = _median_or_none([b[name]["rel_rmse"] for b in bare_buckets])
+            improvement, reason = _relative_improvement(model_median, bare_median)
+            entry.update(model_median=model_median, bare_median=bare_median,
+                         relative_improvement=improvement)
+            if reason is not None:
+                entry["improvement_null_reason"] = reason
+        out[name] = entry
+        if name in DARK_BUCKET_NAMES:
+            improvements[name] = entry["relative_improvement"]
+    out["improvement"] = improvements
+    return out
+
+
 def parse_subs(spec: str | int | Sequence[int] | None) -> list[int]:
     """子样本选择：``"a-b"`` 闭区间 / ``"a,b,c"`` 枚举 / 整数或整数序列 / None = 全 20 个。"""
     if spec is None:
@@ -209,10 +268,10 @@ def evaluate_run(
 ) -> dict:
     """该 split 全部束 × 指定站 × 指定子样本的 test 端一次性评估（`40` [S3] test 段）。
 
-    每束：逐子样本推理 → M1（`group_rel_rmse`）与 13 维观测量（`observable_vector`）
-    → 各自对子样本取中位数 → 由中位数 err 映射 N_eff（`20` [S3]，含上/下溢标记）。
-    结果落盘并原样返回（run_id = ckpt 父目录名）；默认落盘路径为
-    ``<ckpt 父目录>/test_eval.json``。
+    每束：逐子样本推理 → M1（`group_rel_rmse`）、13 维观测量（`observable_vector`）与
+    M2 分桶（模型/裸输入各一次，`m2_buckets_summary`）→ 各自对子样本取中位数 → 由中位数
+    err 映射 N_eff（`20` [S3]，含上/下溢标记）。结果落盘并原样返回（run_id = ckpt
+    父目录名）；默认落盘路径为 ``<ckpt 父目录>/test_eval.json``。
 
     ``per_beam`` 的两个 N_eff 口径（`20` [S2] 曲线口径 = 每（束, 站, 档）对子样本取
     中位数后再映射）：
@@ -251,6 +310,8 @@ def evaluate_run(
             errs: list[float] = []
             n_effs: list[float] = []
             obs_rows: list[np.ndarray] = []
+            m2_model_rows: list[dict] = []
+            m2_bare_rows: list[dict] = []
             for sub_idx in sub_list:
                 name = f"tier_{n_low:06d}_sub_{sub_idx:02d}"
                 if name not in stg:
@@ -263,6 +324,10 @@ def evaluate_run(
                 errs.append(err)
                 n_effs.append(n_eff_from_err(err, curve_obj)[0])
                 obs_rows.append(observable_vector(prob, ref, edges))
+                # M2 分桶（`40` [S3] H8 的暗桶单独报告）：被评与裸输入各算一次，
+                # 两者共用同一参照 r 的分桶掩膜
+                m2_model_rows.append(bucketed_rel_rmse(prob, ref))
+                m2_bare_rows.append(bucketed_rel_rmse(counts, ref))
             err_median = float(np.median(np.asarray(errs, dtype=np.float64)))
             beam_n_eff, beam_flag = n_eff_from_err(err_median, curve_obj)
             obs_median = np.median(np.stack(obs_rows), axis=0)
@@ -276,6 +341,8 @@ def evaluate_run(
                     # 快照口径：先逐子样本映射 N_eff、再取中位数（与上方"先中位数后
                     # 映射"的 n_eff 互为对照；门禁只消费 n_eff）
                     "n_eff_median": float(np.median(np.asarray(n_effs, dtype=np.float64))),
+                    # M2 分桶的裸/模型对照（暗桶 B0/B1 是 H8 的主战场，`20` D11）
+                    "m2_buckets": m2_buckets_summary(m2_model_rows, m2_bare_rows),
                 }
             )
 

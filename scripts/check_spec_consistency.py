@@ -17,6 +17,35 @@ from pathlib import Path
 SPECS_DIR = Path('docs/specs')
 SPEC_PATTERN = re.compile(r'^(\d{2})_([a-z_]+)\.md$')
 
+
+def spec_files() -> list:
+    """全部 spec 文件：递归扫描子目录（如 ``docs/specs/line2/``），排除决策日志。
+
+    ``*.decisions.md`` 是决策日志、不是 spec：名字本就不匹配 ``SPEC_PATTERN``，此处
+    再显式排除一次以免将来改名后被误抽。
+    """
+    return sorted(
+        p for p in SPECS_DIR.rglob('*.md')
+        if SPEC_PATTERN.match(p.name) and not p.name.endswith('.decisions.md')
+    )
+
+
+def doc_key(spec_path: Path) -> str:
+    """文档键：仓库根级 spec = ``NN``；子目录 spec = ``<子目录>/NN``。
+
+    各目录的编号空间相互独立（根级 ``20_physics_generator_spec.md`` 与 line2 的
+    ``20_metrics_spec.md`` 都叫 ``20``），故索引用目录前缀消歧；引用解析也在同一前缀内。
+    """
+    rel = spec_path.resolve().relative_to(SPECS_DIR.resolve())
+    prefix = rel.parts[:-1]
+    return '/'.join((*prefix, SPEC_PATTERN.match(spec_path.name).group(1)))
+
+
+def _namespace(key: str) -> tuple:
+    """文档键 → (目录前缀, 两位编号)。"""
+    head, _, tail = key.rpartition('/')
+    return (head, tail) if head else ('', key)
+
 # claim 正则：'- C1: text...' 或 '- C12: text...'
 CLAIM_PATTERN = re.compile(r'- C(\d+):\s*(.+?)(?:\s*\|$|$)', re.MULTILINE)
 
@@ -26,9 +55,9 @@ REF_PATTERN = re.compile(r'`(\d{2})\s*\[S(\d+)\](?:\s*(C\d+|R\d+|D\d+|C\d+))?`')
 
 
 def parse_claims(spec_path: Path) -> list:
-    """解析 spec 中的 Claims 章节，返回 [(section, claim_id, text), ...]。"""
+    """解析 spec 中的 Claims 章节，返回 [(doc_key, section, claim_id, text), ...]。"""
     content = spec_path.read_text(encoding='utf-8')
-    spec_id = SPEC_PATTERN.match(spec_path.name).group(1)
+    spec_id = doc_key(spec_path)
     claims = []
     # 找每个 [Sn] 章节下的 Claims
     for sec_match in re.finditer(r'##\s*\[S(\d+)\]', content):
@@ -46,9 +75,15 @@ def parse_claims(spec_path: Path) -> list:
 
 
 def check_refs(spec_path: Path, claim_index: dict) -> list:
-    """检查跨文档引用，返回 broken refs 列表。"""
+    """检查跨文档引用，返回 broken refs 列表。
+
+    引用解析限定在**同一目录的编号空间**内：line2 spec 里的 ``40 [S3] H8`` 指
+    ``docs/specs/line2/40_experiment_spec.md``，根级 spec 里的 ``40`` 指根级 40。
+    跨目录引用（如 line2 引根级 ``docs/specs/00_master_spec.md``）按项目惯例写全路径，
+    不落在本正则的口径内，故不在此校验。
+    """
     content = spec_path.read_text(encoding='utf-8')
-    spec_id = SPEC_PATTERN.match(spec_path.name).group(1)
+    ns, spec_id = _namespace(doc_key(spec_path))
     broken = []
     for ref_match in REF_PATTERN.finditer(content):
         target_spec = ref_match.group(1)
@@ -56,7 +91,7 @@ def check_refs(spec_path: Path, claim_index: dict) -> list:
         target_claim = ref_match.group(3)
         # 跨 spec 引用不检查（spec 之间互引常见）
         if target_spec == spec_id and target_claim:
-            key = (target_spec, target_sec, target_claim[1:])
+            key = (f'{ns}/{target_spec}' if ns else target_spec, target_sec, target_claim[1:])
             if key not in claim_index:
                 broken.append(f'{spec_path.name}:{ref_match.group(0)}')
     return broken
@@ -69,11 +104,9 @@ def main() -> int:
     args = parser.parse_args()
 
     # 1. 解析所有 claims
-    claim_index = {}  # (spec, section, claim_num) -> text
+    claim_index = {}  # (doc_key, section, claim_num) -> text
     all_claims = []
-    for spec_path in sorted(SPECS_DIR.glob('*.md')):
-        if not SPEC_PATTERN.match(spec_path.name):
-            continue
+    for spec_path in spec_files():
         claims = parse_claims(spec_path)
         all_claims.extend(claims)
         for spec_id, section, c_num, c_text in claims:
@@ -81,9 +114,7 @@ def main() -> int:
 
     # 2. 跨文档引用检查
     broken = []
-    for spec_path in sorted(SPECS_DIR.glob('*.md')):
-        if not SPEC_PATTERN.match(spec_path.name):
-            continue
+    for spec_path in spec_files():
         broken.extend(check_refs(spec_path, claim_index))
 
     # 3. 输出索引

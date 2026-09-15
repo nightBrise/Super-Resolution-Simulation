@@ -3,7 +3,7 @@
 > 由 `scripts/check_spec_consistency.py` 自动生成。
 > 维护：每次 spec 修改后重新跑此脚本刷新本文件。
 
-总计 565 个 Claim。
+总计 646 个 Claim。
 
 | Claim ID | 文档 | 章节 | 简述（前 80 字）|
 |---|---|---|---|
@@ -572,3 +572,84 @@
 | 99.S5.C4 | 99 | [S5] | 未在 `99_change_log.md` 中记录变更日志的 Spec 修改 SHALL NOT 发生。 |
 | 99.S6.C1 | 99 | [S6] | `00_master_spec.md` SHALL 只保留当前有效的全局规则与文档索引；`99_change_log.md` SHALL 保留所有历史的修改记录... |
 | 99.S6.C2 | 99 | [S6] | 当 `99` 的更新规则与 `00` [S9] 的变更规则冲突时，SHALL 以 `00` 为准。 |
+| line2/00.S1.C1 | line2/00 | [S1] | 10/20/30/40 中出现的跨 spec 术语（锚点、束、站、子样本、图组、N_low、N_high、收敛密度、N_eff、六投影）SHALL 均以本 [S... |
+| line2/00.S1.C2 | line2/00 | [S1] | WHEN 任何数据文件或代码需要标注投影顺序 THEN SHALL 使用 [S1] 的六投影枚举顺序，且该顺序 SHALL 由测试断言（投影轴对与约定元数据逐项... |
+| line2/00.S1.C3 | line2/00 | [S1] | 束群构造 SHALL 可由锚点 + 种子链端到端重现（`10` [S3]），且任一束的抖动参数 SHALL 可由 (beam_id, master_seed) ... |
+| line2/00.S2.C4 | line2/00 | [S2] | WHEN 按 [S2] 布局执行数据管线 THEN 全部产物 SHALL 落于 `studies/line2_particle_sr/` 下对应目录（测试断言路... |
+| line2/00.S2.C5 | line2/00 | [S2] | `python -c "import ocelot, sdds"` SHALL 在 `sr-sim` 环境成功（check_env 校验项）。 |
+| line2/00.S3.C6 | line2/00 | [S3] | 每条 Phase 门禁 SHALL 恰好对应 `40` 中一个可执行判定表达式（脚本消费落盘 summary，无人工干预）。 |
+| line2/00.S3.C7 | line2/00 | [S3] | Phase 1 交付物清单（三条门禁枚举结论 + 方法可用域地图主曲线 + 报告）SHALL 可由文件存在性检查验证。 |
+| line2/00.S4.C8 | line2/00 | [S4] | 本目录 SHALL 存在 00/10/20/30/40 五份 spec 与 `99_change_log.md`，且 [S4] 索引与实际文件一一对应。 |
+| line2/00.S4.C9 | line2/00 | [S4] | WHEN 修改任何 line2 spec THEN `99_change_log.md` SHALL 先于该修改包含对应记录（审计项：人工/脚本核对，非自动化断... |
+| line2/10.S1.C1 | line2/10 | [S1] | WHEN 执行入库脚本 THEN `studies/line2_particle_sr/data/anchor/injector.sdds` SHALL 存在、... |
+| line2/10.S1.C2 | line2/10 | [S1] | `anchor/twiss.json` SHALL 含以下字段且与独立重算一致：Σ(4×4，按 (x,x′,y,y′) 顺序)、α_x/β_x/α_y/β_y、... |
+| line2/10.S1.C3 | line2/10 | [S1] | `anchor/manifest.json` SHALL 为合法 JSON 且含：source_path、md5（= C1 值）、units_p = "beta... |
+| line2/10.S1.C4 | line2/10 | [S1] | `git check-ignore studies/line2_particle_sr/data/anchor/injector.sdds` SHALL 返回非... |
+| line2/10.S2.C1 | line2/10 | [S2] | WHEN 解析 `anchor/injector.sdds` THEN SHALL 得到 6 列 float64 数组（200,001×6，列序 x/xp/y/... |
+| line2/10.S2.C2 | line2/10 | [S2] | 每个子样本 SHALL 满足：(a) 大小恰为该档 N；(b) 无放回（索引去重后长度不变）；(c) 索引升序后逐行指向全量表唯一源行（A ⊂ B 可验证）。 |
+| line2/10.S2.C3 | line2/10 | [S2] | WHEN 同 master_seed 重跑子采样 THEN 全部索引 SHALL 逐位一致（单进程与多进程一致，`00` GC2）。 |
+| line2/10.S2.C4 | line2/10 | [S2] | 同档任意两个子样本的索引集合 SHALL 两两不等（互异性；2e5 全量表除外——它唯一且即参照）。 |
+| line2/10.S3.C1 | line2/10 | [S3] | WHEN lattice 构建完成 THEN Ocelot 实算每 cell 相位推进与目标 μ = 75° 的偏差 SHALL < 1°。 |
+| line2/10.S3.C2 | line2/10 | [S3] | 每束两站快照的粒子数 SHALL 均等于 200,001（无丢失或增补）。 |
+| line2/10.S3.C3 | line2/10 | [S3] | WHEN 同 (beam_id, master_seed) 重跑该束全链（导入→抖动→FODO）THEN 两站粒子表 SHALL 逐位一致（确定性；`00` C... |
+| line2/10.S3.C4 | line2/10 | [S3] | 站 1 与站 0 的 corr(x,x′) 差的绝对值 SHALL ≥ 0.3（推导：150° 相位旋转下 corr′ = 0.855·cos 150° ≈ −... |
+| line2/10.S3.C5 | line2/10 | [S3] | 束间多样性不变量：跨束的站 0 corr(x,x′) 样本标准差 SHALL > 0.01（抖动机制的可验证效果；基准束 0.855，抖动 δ=5% 量级下相关... |
+| line2/10.S4.C1 | line2/10 | [S4] | 每张投影的计数总和 SHALL 精确等于其来源粒子表行数——分箱范围取该站全量表各轴 [min, max] 外扩 1%，零截断；若发生截断 SHALL 报错而非... |
+| line2/10.S4.C2 | line2/10 | [S4] | 图组通道顺序 SHALL 为 `00` [S1] 六投影枚举，存储 dtype int32（值域上限 2³¹−1，本任务最大计数 ~10³ 远低于上限）、值 ≥... |
+| line2/10.S4.C3 | line2/10 | [S4] | 坐标归一化 SHALL 以该站 bin 边界线性映射至 [−1, 1]，用存档 bin_edges 反归一化的往返误差 SHALL < 1×10⁻¹⁰。 |
+| line2/10.S4.C4 | line2/10 | [S4] | 两站各自独立定标 bin 边界；同站同 (beam, N, sub_idx) 的重复生成 SHALL 逐位一致。 |
+| line2/10.S5.C1 | line2/10 | [S5] | 三切分互斥且并集 = 全部 1000 个 `beam_id`；train/val/test 束数 SHALL 为 700/150/150。 |
+| line2/10.S5.C2 | line2/10 | [S5] | 落盘结构 SHALL 为：group = beam_id → 子 group = station → datasets = {tier_N_low_sub_XX... |
+| line2/10.S5.C3 | line2/10 | [S5] | manifest SHALL 含 `00` GC7 三元组、切分表、档位/k/FODO/抖动参数、锚点 MD5，且为合法 JSON。 |
+| line2/10.S5.C4 | line2/10 | [S5] | WHEN 同 master_seed 全流程重跑（含束群重建）THEN 数据集文件 SHALL 逐位一致（端到端确定性，`00` C3）。 |
+| line2/10.S5.C5 | line2/10 | [S5] | 数据集中任一样本 SHALL 能经 (beam_id, station, N_low, sub_idx) 四元组唯一定位（可追溯性）。 |
+| line2/20.S1.C1 | line2/20 | [S1] | 每个度量 SHALL 为 `src/line2/metrics/` 中的单一函数，同输入（含参照与被评图组）两次调用结果逐位一致（确定性）；总计数归一 SHAL... |
+| line2/20.S1.C2 | line2/20 | [S1] | M2 的桶边界 SHALL 恰为 {0.5, 2, 10} 且分桶归属由参照 r 唯一决定（与被评图组无关）。 |
+| line2/20.S1.C3 | line2/20 | [S1] | M4 的 Σ、ε_4D SHALL 与 `10` [S1] twiss.json 的独立实现互检：对同一全量粒子表两条路径计算，Σ 分量相对误差 < 1×10⁻... |
+| line2/20.S1.C4 | line2/20 | [S1] | M5 的椭圆 SHALL 仅由参照 Σ_ij 与参照投影均值定义；被评图组的矩 SHALL NOT 出现在区域定义中（测试：篡改被评图组二阶矩而保持逐格计数不变... |
+| line2/20.S1.C5 | line2/20 | [S1] | 总计数归一的边界：WHEN 被评图组全零 THEN M1/M2/M3/M5 SHALL 返回显式下溢标记而非数值（`20` [S3] C4 消费）。 |
+| line2/20.S2.C1 | line2/20 | [S2] | 曲线计算 SHALL 由单一脚本从数据集（`10` [S5] 五档 × k=20 落盘）一键重现（同种子逐位一致），原始逐样本值 SHALL 落盘（JSON/C... |
+| line2/20.S2.C2 | line2/20 | [S2] | 地板线 SHALL 定义为同 N 两两独立子样本 M1 差值分布的中位数，且计算 SHALL 只消费数据集内子样本（不引入外部随机性）。 |
+| line2/20.S2.C3 | line2/20 | [S2] | 参照噪声地板 SHALL 由数据集中 1e5 档子样本的两两配对按上式计算（同种子逐位一致）。 |
+| line2/20.S3.C1 | line2/20 | [S3] | N_eff 计算 SHALL 确定性：同（裸曲线, O）输入两次计算结果逐位一致。 |
+| line2/20.S3.C2 | line2/20 | [S3] | N_eff SHALL 落于 [1e3, 1e5] 区间内，或携带显式上/下溢标记（二选一，不得无标记越界；上溢标记即 10× 可验证上限的达成声明）。 |
+| line2/20.S3.C3 | line2/20 | [S3] | **恒等测试**：以裸曲线中 N′ = 1e4 档某子样本图组本身作为"输出"代入，解得 N_eff SHALL ∈ [3e3, 3e4]（其相邻两插值节点覆盖... |
+| line2/20.S3.C4 | line2/20 | [S3] | WHEN 输入 O 全零（Σx = 0）THEN SHALL 输出下溢标记（[S1] C5 的消费端测试）。 |
+| line2/20.S4.C1 | line2/20 | [S4] | 13 项观测量每项 SHALL 在 spec 内可指到唯一计算式（M4/M5/M6 见 [S1]），无现场新定义入口。 |
+| line2/20.S4.C2 | line2/20 | [S4] | 容差线 SHALL 由 [S2] 的裸曲线子样本数据计算、按最近档映射，并可复算（同种子逐位一致）。 |
+| line2/20.S5.C1 | line2/20 | [S5] | B-moment GIVEN 同一输入图组 SHALL 确定性产出同一渲染（逐位一致）。 |
+| line2/20.S5.C2 | line2/20 | [S5] | 全部基线输出 SHALL 为六通道 128×128 计数图（与图组同构），可直接进入 [S1] 度量族与 [S3] N_eff 协议（总计数归一在度量内统一执行... |
+| line2/30.S1.C1 | line2/30 | [S1] | WHEN 前向输入 (B, 6, 128, 128) 形状图 + (B, 11) 条件向量 THEN 输出 SHALL 为 (B, 6, 128, 128) 的... |
+| line2/30.S1.C2 | line2/30 | [S1] | 通道基 C ∈ {24, 48, 96} 与深度 d ∈ {3, 4, 5} SHALL 为 config 参数；默认 C=48、d=4；参数量 SHALL 记... |
+| line2/30.S1.C3 | line2/30 | [S1] | checkpoint 保存后重新加载，同输入的输出 SHALL 逐位一致；ckpt SHALL 校验 config 哈希与 master_seed。 |
+| line2/30.S1.C4 | line2/30 | [S1] | 输入通道顺序 SHALL 为 `00` [S1] 六投影枚举（与 `10` [S4] 图组一致），并由测试断言。 |
+| line2/30.S1.C5 | line2/30 | [S1] | **条件化防泄露**：κ SHALL 只由输入图组与 N_low 派生；WHEN 目标图组改变而输入图组不变 THEN κ 与网络输出 SHALL 均不变（测试... |
+| line2/30.S1.C6 | line2/30 | [S1] | 输入预处理可逆性：s_i 与 Σx_i（元数据）SHALL 以相对误差 < 1×10⁻⁶ 还原 x_i（float32 存储的容差断言）。 |
+| line2/30.S2.C1 | line2/30 | [S2] | GIVEN 固定样例（手选 c 矩阵与 p 矩阵）THEN 损失函数输出 SHALL 与按公式手算值一致（绝对误差 < 1×10⁻⁶），测试样例固化在单元测试中... |
+| line2/30.S2.C2 | line2/30 | [S2] | WHEN Σ̂ 半正定（λ_min ≥ 0）THEN P_PSD SHALL 恰为 0；WHEN 构造 λ_min < 0 的输出 THEN P_PSD SHA... |
+| line2/30.S2.C3 | line2/30 | [S2] | 输出概率图 SHALL 逐投影 Σp = 1（Softplus+归一化后，测试断言到 1×10⁻⁶）。 |
+| line2/30.S2.C4 | line2/30 | [S2] | 独立版与联合版 SHALL 调用同一 NLL 实现（单一函数，静态检查）。 |
+| line2/30.S3.C1 | line2/30 | [S3] | WHEN 同 master_seed 同 config 同执行模式重训 THEN val N_eff 轨迹 SHALL 逐位一致（GPU 确定性模式启用）；存在... |
+| line2/30.S3.C2 | line2/30 | [S3] | best_val.ckpt SHALL 对应 val N_eff 最优的评估周期（测试：构造人工退化序列验证选择逻辑）。 |
+| line2/30.S3.C3 | line2/30 | [S3] | 训练日志 SHALL 逐评估周期记录：step、train NLL、val NLL、val N_eff、学习率、梯度范数（落盘可解析）。 |
+| line2/30.S3.C4 | line2/30 | [S3] | DDP 双卡与单卡 fallback 两条路径 SHALL 均能完成训练（冒烟级；跨执行模式的浮点逐位一致不要求，须记录模式）。 |
+| line2/30.S3.C5 | line2/30 | [S3] | 训练全程 SHALL NOT 读取 test 束（数据管线按束切分，训练代码物理上不接收 test 路径——GC3）。 |
+| line2/30.S4.C1 | line2/30 | [S4] | 独立版 6 模型参数量之和与联合版参数量之差 SHALL ≤ 30%（设计期以实测值校准 C_ind 达成，实测值记录于 config 与决策日志）。 |
+| line2/30.S4.C2 | line2/30 | [S4] | 两版 SHALL 消费完全相同的 train/val 束集合、相同步数预算（max_steps=50000）与相同种子派生链（差异仅在网络拓扑与损失罚项——GC... |
+| line2/30.S5.C1 | line2/30 | [S5] | 推理 SHALL 确定性：同 ckpt 同输入（eval 模式）多次运行逐位一致。 |
+| line2/30.S5.C2 | line2/30 | [S5] | 输出 SHALL 形状 (6,128,128)、含概率与率双套数组、逐元素 > 0，元数据含输入来源四元组（beam_id, station, N_low, s... |
+| line2/30.S5.C3 | line2/30 | [S5] | rate 图 SHALL 逐投影总和 = N_high（`20` M1 总计数归一对其为恒等——比较语义闭合）。 |
+| line2/40.S1.C1 | line2/40 | [S1] | 实验矩阵 SHALL 覆盖 `20` [S2] 尺的全部 N 档（E0 五档 + E1/E2 消费 1e4/3e3/1e5）与两站。 |
+| line2/40.S1.C2 | line2/40 | [S1] | 每 run SHALL 有独立 run 目录：`results/<run_id>/`（config.yaml、训练日志、ckpt、summary.json），且... |
+| line2/40.S1.C3 | line2/40 | [S1] | E1 的 10 runs SHALL 仅在（变体, 种子）二维上不同——数据集、切分、max_steps=50000、物理档完全一致（GC4，由 config ... |
+| line2/40.S1.C4 | line2/40 | [S1] | E2 的获胜变体 SHALL 由 E1 的 val 阶段结论按 [S3] 路由规则唯一决定（脚本读取，不人工指定）。 |
+| line2/40.S1.C5 | line2/40 | [S1] | E0 的完成时间戳 SHALL 早于 E1 任一训练 run 的启动时间戳（尺子先行的可验证顺序约束）。 |
+| line2/40.S2.C1 | line2/40 | [S2] | 检验 SHALL 仅使用 test 束（训练与调参全程未见的束）。 |
+| line2/40.S2.C2 | line2/40 | [S2] | 三分类结论 SHALL 由 ρ 与预注册边界 {1.0, 0.5} 唯一决定（脚本化，无人工裁量）。 |
+| line2/40.S2.C3 | line2/40 | [S2] | 站 1 的输入图组 SHALL 来自站 1 的 bin 边界与子采样（`10` [S4]）——不得用站 0 边界跨站套用。 |
+| line2/40.S3.C1 | line2/40 | [S3] | 每条门禁 SHALL 有唯一脚本实现，GIVEN 同一批 summary.json THEN 输出逐位一致（可复算）。 |
+| line2/40.S3.C2 | line2/40 | [S3] | 门禁脚本 SHALL 仅消费落盘 summary 与数据集清单（不训练、不重推理、不读取训练期中间状态）；val 与 test 的消费边界 SHALL 由脚本内... |
+| line2/40.S3.C3 | line2/40 | [S3] | 全部门禁输出 SHALL 为合法枚举值（含 H3 的"方向成立"），不得输出自由文本。 |
+| line2/40.S3.C4 | line2/40 | [S3] | 变体路由 SHALL 覆盖 H3 的全部四种计数分支（含 3/5 的 val 裁定），无悬空分支（测试：构造四种 summary 验证路由）。 |
+| line2/40.S4.C1 | line2/40 | [S4] | 三类产出物 SHALL 由一键脚本从 run 目录生成（同输入逐位一致）；方法可用域地图 SHALL 含 E0 参考线与参照噪声地板线（`20` [S2] C3... |
+| line2/40.S4.C2 | line2/40 | [S4] | 报告 SHALL 含设计理由章，且每条门禁结论 SHALL 附其判定表达式的输入数值快照。 |

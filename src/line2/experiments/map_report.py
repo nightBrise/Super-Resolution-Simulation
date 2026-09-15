@@ -149,7 +149,7 @@ _GATE_SNAPSHOT_KEYS = {
     # （容差线缺失 / 无 run 时为空映射与 None），报告据此渲染"容差档映射"一行
     "H8": ("verdict", "pass_rate", "n_beams", "beam_ids", "seeds", "n_seeds", "tolerance",
            "tolerance_tier_per_beam", "tolerance_tier_counts", "tolerance_tier_mode",
-           "per_observable"),
+           "per_observable", "dark_bucket_m2"),
 }
 #: 条件落盘的快照键（判定不可达时产出不写；缺失以 reason_code 显式解释，不静默）
 _GATE_OPTIONAL_KEYS = {
@@ -751,6 +751,54 @@ def _tolerance_tier_row(gate: Mapping) -> str:
     return f"{_fmt_tier(mode)}（每束 N_eff 中位数最近档，`20` [S4]{tail}）"
 
 
+def _dark_bucket_lines(report: Mapping) -> list[str]:
+    """H8 的暗桶（B0/B1）M2 报告段——与达标率**分开**渲染（`40` [S3] 明文要求单独报告）。
+
+    三行 = 两个暗桶 + 其合并值；每行给裸输入/模型的 M2 中位数与相对改进。裸输入为 0
+    （B0 的结构性质）时相对改进无定义，渲染为 ``—（原因）`` 而不是伪造一个比值。
+    """
+    lines = [
+        "",
+        "**暗桶（B0/B1）M2 相对改进**（`40` [S3] H8 明文要求**单独报告、不并入上面的达标率**）：",
+        "",
+    ]
+    rows: list[list[object]] = []
+    for label, key in (("B0", "B0"), ("B1", "B1"), ("B0+B1（等权）", "B0B1_combined")):
+        entry = report.get(key) or {}
+        improvement = entry.get("relative_improvement")
+        if improvement is not None:
+            cell: str = _fmt(improvement)
+        elif not entry.get("n_beams"):
+            cell = "—（无可报束）"
+        elif entry.get("bare_median") == 0:
+            cell = "—（无定义：裸输入为 0）"
+        elif entry.get("improvement_null_reason"):
+            cell = f"—（原因 {entry['improvement_null_reason']}）"
+        else:
+            cell = "—"
+        rows.append([
+            label,
+            "—" if entry.get("bare_median") is None else _fmt(entry["bare_median"]),
+            "—" if entry.get("model_median") is None else _fmt(entry["model_median"]),
+            cell,
+            entry.get("n_beams"),
+        ])
+    lines += _md_table(["桶", "裸输入 M2 中位数", "模型 M2 中位数", "相对改进", "束数"], rows)
+    lines += [
+        "",
+        f"- 口径：{report.get('note')}",
+        f"- 覆盖：{report.get('n_runs')} 个 run × {report.get('n_beams_total')} 束，"
+        f"聚合次序 {report.get('aggregation')}",
+    ]
+    missing = report.get("runs_without_m2") or []
+    if missing:
+        lines.append(
+            f"- **缺暗桶数据的 run**（{len(missing)} 个）：{', '.join(missing)}——"
+            "产物无 `per_beam[].m2_buckets` 的 run 整束排除，不猜值。"
+        )
+    return lines
+
+
 def _gate_lines(name: str, gate: Mapping) -> list[str]:
     """单条门禁的报告块：结论 + 冻结判定表达式 + 输入数值快照（`40` [S4] C2）。"""
     source = f"e1_gates.json:{name}"
@@ -767,7 +815,7 @@ def _gate_lines(name: str, gate: Mapping) -> list[str]:
     skip = {
         "H7": ("per_seed", "flagged_seeds"),
         "H8": ("per_observable", "tolerance_tier_per_beam", "tolerance_tier_counts",
-               "tolerance_tier_mode"),
+               "tolerance_tier_mode", "dark_bucket_m2"),
     }.get(name, ())
     # H7 聚合条目的中位数比值以 `rho_median` 落盘（与冻结快照键 `rho` 同值）：同一数字只渲染
     # 一行，取聚合语义名；标记清单另在下方逐种子小节披露。聚合的降级原因（如
@@ -838,6 +886,7 @@ def _gate_lines(name: str, gate: Mapping) -> list[str]:
             if per_observable else
             ["- 无：`per_observable` 为空（达标率未计算，降级原因见上表 `reason_code`）。"]
         )
+        lines += _dark_bucket_lines(gate["dark_bucket_m2"])
     lines.append("")
     return lines
 

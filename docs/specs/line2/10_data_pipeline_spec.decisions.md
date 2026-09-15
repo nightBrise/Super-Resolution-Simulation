@@ -20,7 +20,7 @@
 
 ## D3: 四极强度由目标相位推进反解
 **Phase:** write-spec
-**Chosen:** config 给 n_cells、目标 μ、半 cell 漂移 L_d，四极强度按薄透镜公式 cos μ = 1 − L_d²/(2f²) 反解，构建后以 Ocelot 实算校验偏差 < 1°
+**Chosen:** config 给 n_cells、目标 μ、半 cell 漂移 L_d；四极强度按**二分实算**标定（以 Ocelot 实算相位推进迭代求根），薄透镜闭式 cos μ = 1 − L_d²/(2f²) **仅作初值/括号**——该闭式在本几何下给 μ = 77.354740°（超 C1 的 1° 界），实算二分得 f = 2.107902 m、μ = 75.000000000000°（构建后实算偏差 ~1×10⁻¹³°）。
 **Rationale:** 手调 K1 不可复现也不可审计；参数化后 lattice 是 config 的确定函数。
 **Rejected:** 直接给定 K1 手调 ——μ 落在哪个值无契约保证，跨 run 不可比。
 **Spec section:** [S3] C1
@@ -98,8 +98,14 @@
 **鉴别力留痕:** `tests/unit/test_line2_dataset.py::test_dataset_explicit_identity_metadata` 用 **imperative `pytest.xfail()`** 显式记录该缺口——字段补齐后该分支不再触发、用例直接 PASS（**不会**产生 XPASS；离开 xfail 清单即销账）。替代契约由 `tests/unit/test_line2_dataset.py::test_build_dataset_deterministic_and_traceable`（`[S5]` C4/C5：两次独立构建数据级全量一致 + 四元组唯一定位）承载；该用例目前只覆盖一个示例路径，属偏弱但真实的证据，已列为后续补强项。
 **Spec section:** [S5] C2
 **Status:** live（待验收闸口裁决）
-**Spec section:** [S5] C2
-**Status:** live（待验收闸口裁决）
+
+## D13: [S2] 种子读法——`spawn(beam_idx + 1)[beam_idx]`
+**Phase:** implementation
+**Chosen:** 束级派生的实际读法为 `SeedSequence(20260913).spawn(beam_idx + 1)[beam_idx]`（`src/line2/data_pipeline/seeds.py`，后续分支同式 `spawn(b + 1)[b]`）。
+**Rationale:** `10` [S2] 的字面写法 `SeedSequence(seed).spawn(beam_idx)` 对 beam 0 不可实现（`spawn(0)` 返回空表）。这不是空操作——numpy 的子序列依赖 `n`，实测 `spawn(3)[2] != spawn(1000)[2]`，故 `+1` 是**实质选择**而非等价变形；其确定性已由复算验证：`beam_splits(1000)` 与生产 `manifest.json` 的切分逐元素一致，切分/子采样/抖动分支互不共用。
+**Rejected:** 字面 `spawn(beam_idx)` —— beam 0 无对应子序列，不可实现；改用 `spawn(L)[beam_idx]`（L = 1000）—— 与已落盘数据集的派生链不符，会作废全部产物。
+**Spec section:** [S2]
+**Status:** live
 
 ## Progress
 

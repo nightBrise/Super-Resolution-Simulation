@@ -8,6 +8,7 @@ num_levels=3、blocks=1），全程 CPU。本文件不训练——ckpt 由 `buil
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 
 import h5py
@@ -20,6 +21,7 @@ from src.line2.experiments.evaluate import (
     curve_from_json,
     evaluate_run,
     load_model,
+    m2_buckets_summary,
     main as evaluate_main,
     parse_subs,
     predict_group,
@@ -34,6 +36,7 @@ from src.line2.experiments.gates import (
     h8_deviation_matrix,
 )
 from src.line2.metrics.n_eff import error_n_curve, n_eff_from_err
+from src.line2.metrics.metrics import bucketed_rel_rmse
 from src.line2.metrics.tolerance import N_OBSERVABLES
 from src.line2.training.train import _forward_variant, build_model
 from tests.conftest import derive_seed
@@ -215,11 +218,42 @@ def test_evaluate_run_payload_schema_and_determinism(
     assert payload["curve"]["reference_noise_floor"] == curve_dump["reference_noise_floor"]
 
     beam = payload["per_beam"][0]
-    assert set(beam) == {"beam_id", "err", "n_eff", "n_eff_flag", "obs", "n_eff_median"}
+    assert set(beam) == {"beam_id", "err", "n_eff", "n_eff_flag", "obs", "n_eff_median",
+                         "m2_buckets"}
     assert beam["beam_id"] == test_beam
     assert len(beam["obs"]) == N_OBSERVABLES and np.isfinite(beam["obs"]).all()
     assert beam["n_eff_flag"] in (None, "underflow", "overflow")
     assert 1e3 <= beam["n_eff"] <= 1e5 and 1e3 <= beam["n_eff_median"] <= 1e5
+
+    # M2 分桶（`40` [S3] H8 的暗桶单独报告）：B0–B3 四桶 + 暗桶改进；由 h5 的
+    # counts/参照独立复算（被评 = 模型概率图、裸输入 = 该子样本图组本身），
+    # 并按同样的"先对子样本取中位数"次序汇总后逐位比对
+    buckets = beam["m2_buckets"]
+    assert set(buckets) == {"B0", "B1", "B2", "B3", "improvement"}
+    assert set(buckets["improvement"]) == {"B0", "B1"}
+    model, model_cfg = load_model(ckpt)
+    model_rows, bare_rows = [], []
+    for sub_idx in subs:
+        with h5py.File(data_dir / "test.h5", "r") as h5:
+            dset = h5[f"beam_{test_beam:04d}/station0/tier_{N_LOW:06d}_sub_{sub_idx:02d}"]
+            counts = dset[...]
+            edges = np.asarray(dset.attrs["bin_edges"], dtype=np.float64)
+            ref = h5[f"beam_{test_beam:04d}/station0/target_full"][...].astype(np.float64)
+        model_rows.append(
+            bucketed_rel_rmse(predict_group(model, model_cfg, counts, edges, N_LOW, "cpu"), ref)
+        )
+        bare_rows.append(bucketed_rel_rmse(counts, ref))
+    for name in ("B0", "B1", "B2", "B3"):
+        assert buckets[name]["n_cells"] == model_rows[0][name]["n_cells"]
+        assert buckets[name]["insufficient"] == model_rows[0][name]["insufficient"]
+        if buckets[name]["insufficient"]:
+            assert buckets[name]["model_median"] is None
+            assert buckets[name]["bare_median"] is None
+        else:
+            for side, rows in (("model_median", model_rows), ("bare_median", bare_rows)):
+                assert buckets[name][side] == float(np.median(
+                    [row[name]["rel_rmse"] for row in rows]
+                ))
 
     # N_eff 由 err 唯一决定（`20` [S3]）；run 级 = 束级 err 的中位数再映射
     errs = np.asarray([b["err"] for b in payload["per_beam"]], dtype=np.float64)
@@ -300,6 +334,94 @@ def test_parse_subs_forms() -> None:
     assert parse_subs([2, 0]) == [2, 0]
     with pytest.raises(ValueError):
         parse_subs("5-3")
+
+
+# --------------------------------------------------- M2 分桶（暗桶单独报告的输入端）
+def _known_bucket_pair() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """已知桶分布的参照/裸输入/模型三张图（各桶误差手算可验证）。
+
+    800 格，按参照值分四桶（各 200 格）：0（B0）/ 1（B1）/ 5（B2）/ 20（B3）。三张图的
+    总计数**相等** ⇒ `_normalized` 的缩放因子恰为 1，桶内数值可直接手算：
+
+    | 桶 | 参照 | 裸输入 | 模型 |
+    |---|---|---|---|
+    | B0 | 0 | 全 0 | 20 格取 1、其余 0 → sqrt(20/200)=0.31622776601683794 |
+    | B1 | 1 | 100 格取 2、100 格取 0 → Σe²=200，RMS=1 | 100 格取 1.5、100 格取 0.5 → Σe²=50，RMS=0.5 |
+    | B2 | 5 | 全 5 → 0 | 全 5 → 0 |
+    | B3 | 20 | 全 20 → 0 | 20 格取 19 → RMS=sqrt(0.1)/20 |
+    """
+    ref = np.concatenate([np.zeros(200), np.ones(200), np.full(200, 5.0), np.full(200, 20.0)])
+    bare = np.concatenate([np.zeros(200), np.tile([2.0, 0.0], 100),
+                           np.full(200, 5.0), np.full(200, 20.0)])
+    model = np.concatenate([np.concatenate([np.ones(20), np.zeros(180)]),
+                            np.tile([1.5, 0.5], 100),
+                            np.full(200, 5.0),
+                            np.concatenate([np.full(20, 19.0), np.full(180, 20.0)])])
+    assert ref.sum() == bare.sum() == model.sum()  # 归一因子恰为 1（手算前提）
+    return ref, bare, model
+
+
+def test_m2_buckets_summary_hand_computed() -> None:
+    """`40` [S3] H8：暗桶 M2 的桶值/相对改进与手算值逐位相符；B0 裸输入为 0 ⇒ 改进无定义。
+
+    鉴别力：相对改进的分母是**裸输入**（不是参照、也不是模型）；B0 的裸输入在真实数据里
+    恒为 0（子样本 ⊂ 全量 ⇒ 参照零格在子样本中亦为零），若实现把 0 当分母会得到 inf/nan。
+    """
+    ref, bare, model = _known_bucket_pair()
+    summary = m2_buckets_summary([bucketed_rel_rmse(model, ref)], [bucketed_rel_rmse(bare, ref)])
+
+    assert [summary[b]["n_cells"] for b in ("B0", "B1", "B2", "B3")] == [200] * 4
+    assert summary["B0"]["model_median"] == pytest.approx(0.31622776601683794)
+    assert summary["B0"]["bare_median"] == 0.0
+    assert summary["B0"]["relative_improvement"] is None
+    assert summary["B0"]["improvement_null_reason"] == "bare_zero"
+    # B1：裸 1.0 → 模型 0.5 ⇒ 相对改进恰 +50%
+    assert summary["B1"]["bare_median"] == pytest.approx(1.0)
+    assert summary["B1"]["model_median"] == pytest.approx(0.5)
+    assert summary["B1"]["relative_improvement"] == pytest.approx(0.5)
+    assert summary["B2"]["model_median"] == 0.0 and summary["B2"]["bare_median"] == 0.0
+    assert summary["B3"]["model_median"] == pytest.approx(math.sqrt(0.1) / 20)
+    assert summary["improvement"] == {"B0": None, "B1": pytest.approx(0.5)}
+
+
+def test_m2_buckets_summary_insufficient_bucket_is_null() -> None:
+    """桶内格子 < 100（`20` [S1] M2 的守卫）时显式记 null + `insufficient`，不报错。"""
+    ref = np.concatenate([np.zeros(50), np.ones(200), np.full(200, 5.0), np.full(200, 20.0)])
+    bare = np.concatenate([np.zeros(50), np.tile([2.0, 0.0], 100),
+                           np.full(200, 5.0), np.full(200, 20.0)])
+    model = bare.copy()
+    summary = m2_buckets_summary([bucketed_rel_rmse(model, ref)], [bucketed_rel_rmse(bare, ref)])
+    assert summary["B0"] == {"n_cells": 50, "insufficient": True, "model_median": None,
+                             "bare_median": None, "relative_improvement": None}
+    assert summary["improvement"]["B0"] is None
+    # 桶内格子足够的桶照常计算（B1：逐格 |e|=1 ⇒ 桶值 1.0；模型 = 裸输入 ⇒ 改进 0）
+    assert summary["B1"]["insufficient"] is False
+    assert summary["B1"]["bare_median"] == 1.0 and summary["B1"]["model_median"] == 1.0
+    assert summary["B1"]["relative_improvement"] == 0.0
+
+
+def test_m2_buckets_summary_medians_over_subsamples() -> None:
+    """聚合次序：桶值先对子样本取中位数（不是平均、不是池化）。
+
+    三条子样本的模型 B1 桶值取 {0.5, 5.0, 0.2}：中位数 0.5、均值 1.9 —— 只有中位数通过。
+    B1 的手算依据：三张图总计数都等于参照（归一因子恰为 1），桶内逐格 |x−r| 即桶误差。
+    """
+    ref, bare, model = _known_bucket_pair()          # B1 桶值 0.5
+    hi = model.copy()                                # B1 桶值 5.0（e=+5）
+    hi[200:400] = 6.0
+    hi[620:670] = 0.0                                # 抵消 +1000 的总计数偏移（保持 Σx=Σr）
+    lo = model.copy()                                # B1 桶值 0.2（e=±0.2）
+    lo[200:300], lo[300:400] = 1.2, 0.8
+    for img in (hi, lo):
+        assert img.sum() == ref.sum()
+    summary = m2_buckets_summary(
+        [bucketed_rel_rmse(model, ref), bucketed_rel_rmse(hi, ref),
+         bucketed_rel_rmse(lo, ref)],
+        [bucketed_rel_rmse(bare, ref)] * 3,
+    )
+    assert summary["B1"]["model_median"] == pytest.approx(0.5)   # 而非均值 1.9
+    assert summary["B1"]["bare_median"] == pytest.approx(1.0)
+    assert summary["B1"]["relative_improvement"] == pytest.approx(0.5)
 
 
 # ------------------------------------------------------------------ curve 往返
@@ -553,15 +675,20 @@ def _write_run(results_dir: pathlib.Path, run_id: str, variant: str, seed: int,
                n_eff: float, val_n_eff: float, station: int = 0, n_low: int = N_LOW,
                split: str = "test", obs: float = 0.4,
                beam_ids: tuple[int, ...] = (1, 2, 3), eval_name: str = "test_eval.json",
-               flag: str | None = None) -> None:
-    """假 run 目录（`40` [S1] C2）。``flag`` 非 None 时按 `20` [S3] C2 的端点语义写标记。"""
+               flag: str | None = None, m2: dict[int, dict] | None = None) -> None:
+    """假 run 目录（`40` [S1] C2）。``flag`` 非 None 时按 `20` [S3] C2 的端点语义写标记。
+
+    ``m2`` 按 beam_id 给 ``per_beam[].m2_buckets``（缺省不写该字段，模拟旧产物）。
+    """
     run_dir = results_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    per_beam = [
-        {"beam_id": b, "err": 1.0, "n_eff": n_eff, "n_eff_flag": flag,
-         "obs": [obs] * N_OBSERVABLES, "n_eff_median": n_eff}
-        for b in beam_ids
-    ]
+    per_beam = []
+    for b in beam_ids:
+        beam = {"beam_id": b, "err": 1.0, "n_eff": n_eff, "n_eff_flag": flag,
+                "obs": [obs] * N_OBSERVABLES, "n_eff_median": n_eff}
+        if m2 is not None and b in m2:
+            beam["m2_buckets"] = m2[b]
+        per_beam.append(beam)
     payload = {
         "run_id": run_id, "variant": variant, "seed": seed, "split": split, "station": station,
         "n_low": n_low, "subs": [0, 1],
@@ -945,6 +1072,134 @@ def test_h8_conclusion_is_sensitive_to_mapped_tier(tmp_path: pathlib.Path) -> No
     assert baseline["tolerance_tier_mode"] == 10_000
     assert ceiling["pass_rate"] == 0.0 and ceiling["verdict"] == "不成立"
     assert baseline["pass_rate"] == 1.0 and baseline["verdict"] == "成立"
+
+
+# ------------------------------------------------- 暗桶（B0/B1）M2 单独报告（`40` [S3] H8）
+def _m2_buckets(b1_model: float, b1_bare: float, *, b0_model: float = 0.25,
+                b0_insufficient: bool = False) -> dict:
+    """`per_beam[].m2_buckets` 的最小形状：暗桶给实际值，B2/B3 记零误差。
+
+    相对改进按实现口径手写 =（裸 − 模型）/ 裸；裸为 0 时记 null。
+    """
+    def entry(model: float, bare: float) -> dict:
+        return {"n_cells": 500, "insufficient": False, "model_median": model,
+                "bare_median": bare,
+                "relative_improvement": None if bare == 0 else (bare - model) / bare}
+
+    b0 = {"n_cells": 50, "insufficient": True, "model_median": None, "bare_median": None,
+          "relative_improvement": None} if b0_insufficient else entry(b0_model, 0.0)
+    b1 = entry(b1_model, b1_bare)
+    return {"B0": b0, "B1": b1, "B2": entry(0.0, 0.0), "B3": entry(0.0, 0.0),
+            "improvement": {"B0": b0["relative_improvement"],
+                            "B1": b1["relative_improvement"]}}
+
+
+def _dark_bucket_results(results: pathlib.Path, *, joint_m2, beam_ids: tuple[int, ...] = (1, 2, 3),
+                         tier_tolerance: dict[int, float] | None = None) -> pathlib.Path:
+    """暗桶用例的最小 results：两臂各 5 种子站 0（val 段判 joint 获胜），joint 侧带 m2。"""
+    results.mkdir(parents=True, exist_ok=True)
+    _write_curve_and_tolerance(results, tier_tolerance=tier_tolerance)
+    for slot in range(5):
+        seed = 100 + slot
+        _write_run(results, f"e1_joint_s{slot}", "joint", seed, 40_000.0, 50_000.0,
+                   beam_ids=beam_ids, m2=None if joint_m2 is None else joint_m2(seed))
+        _write_run(results, f"e1_indep_s{slot}", "independent", seed, 30_000.0, 10_000.0,
+                   beam_ids=beam_ids)
+    return results
+
+
+def test_h8_dark_bucket_report_hand_computed(tmp_path: pathlib.Path) -> None:
+    """`40` [S3] H8：暗桶 M2 的聚合值与手算相符，且**先对 5 种子取中位数**（不是均值）。
+
+    三束的种子值恒等 ⇒ 束级 = 该值；束级 B1 裸 = (10, 20, 90)、模型 = (1, 2, 9)：
+    束中位数 20 / 2（均值分别是 40 / 4），相对改进 (20−2)/20 = 0.9。
+    B0B1 合并 = 两暗桶逐束等权平均后再取束中位数：(5,10,45) → 10、(0.625,1.125,4.625)
+    → 1.125 ⇒ 相对改进 (10−1.125)/10 = 0.8875。
+    """
+    results = _dark_bucket_results(
+        tmp_path / "results",
+        joint_m2=lambda _seed: {1: _m2_buckets(1.0, 10.0), 2: _m2_buckets(2.0, 20.0),
+                                3: _m2_buckets(9.0, 90.0)},
+    )
+    dark = evaluate_gates_from_disk(results)["H8"]["dark_bucket_m2"]
+    assert dark["aggregation"] == "per_beam_seed_median_then_beam_median"
+    assert dark["n_runs"] == 5 and dark["n_beams_total"] == 3 and dark["runs_without_m2"] == []
+    assert dark["B1"] == {"bare_median": 20.0, "model_median": 2.0,
+                          "relative_improvement": 0.9, "n_beams": 3}
+    # B0 的裸输入为 0 ⇒ 相对改进无定义（不是 inf/nan）
+    assert dark["B0"]["bare_median"] == 0.0 and dark["B0"]["model_median"] == 0.25
+    assert dark["B0"]["relative_improvement"] is None and dark["B0"]["n_beams"] == 3
+    assert dark["B0B1_combined"] == {"bare_median": 10.0, "model_median": 1.125,
+                                     "relative_improvement": 0.8875, "n_beams": 3}
+    assert "不参与 H8 的达标率与结论" in dark["note"]
+
+
+def test_h8_dark_bucket_seed_median_precedes_beam_median(tmp_path: pathlib.Path) -> None:
+    """聚合次序：束级值 = **种子中位数**，汇总裁束中位数——先平均种子会得到不同结论。
+
+    束 2 的模型种子值 = (2,2,2,2,200)：种子中位数 2、种子均值 41.6。正确聚合 = 束中位数
+    (1, 2) → 1.5；若实现先对种子取均值，束 2 会是 41.6 ⇒ 1 与 41.6 的中位数 21.3
+    （裸输入同理：15 vs 15——故本用例只由模型侧区分）。
+    """
+    results = _dark_bucket_results(
+        tmp_path / "results", beam_ids=(1, 2),
+        joint_m2=lambda seed: {
+            1: _m2_buckets(1.0, 10.0),
+            2: _m2_buckets(200.0 if seed == 104 else 2.0, 20.0),
+        },
+    )
+    dark = evaluate_gates_from_disk(results)["H8"]["dark_bucket_m2"]
+    assert dark["B1"]["model_median"] == 1.5      # 而非 21.3（种子先平均）
+    assert dark["B1"]["bare_median"] == 15.0
+    assert dark["B1"]["relative_improvement"] == 0.9
+    assert dark["B1"]["n_beams"] == 2
+
+
+def test_h8_dark_bucket_null_when_insufficient_or_missing(tmp_path: pathlib.Path) -> None:
+    """桶内格子不足 / 产物无 `m2_buckets` ⇒ 显式 null 与空计数，不抛错、不猜值。"""
+    insufficient = _dark_bucket_results(
+        tmp_path / "insufficient",
+        joint_m2=lambda _seed: {b: _m2_buckets(1.0, 10.0, b0_insufficient=True)
+                                for b in (1, 2, 3)},
+    )
+    dark = evaluate_gates_from_disk(insufficient)["H8"]["dark_bucket_m2"]
+    assert dark["B0"] == {"bare_median": None, "model_median": None,
+                          "relative_improvement": None, "n_beams": 0}
+    assert dark["B0B1_combined"]["n_beams"] == 0           # B0 不可用 ⇒ 合并值也不可用
+    assert dark["B0B1_combined"]["bare_median"] is None
+    assert dark["B1"]["n_beams"] == 3                      # 另一桶不受影响
+
+    legacy = _dark_bucket_results(tmp_path / "legacy", joint_m2=None)
+    dark = evaluate_gates_from_disk(legacy)["H8"]["dark_bucket_m2"]
+    assert dark["n_beams_total"] == 3 and dark["B0"]["bare_median"] is None
+    assert dark["runs_without_m2"] == [f"e1_joint_s{i}" for i in range(5)]
+
+
+def test_h8_dark_bucket_report_does_not_enter_pass_rate(tmp_path: pathlib.Path) -> None:
+    """`40` [S3] H8：暗桶报告与达标率并列——改暗桶数值不改 `pass_rate`/`verdict`。
+
+    鉴别力：若实现把 M2 分桶混进 13 项观测量的判定矩阵，本用例的 pass_rate 会随之变化
+    （把模型的暗桶误差放大到 1e3 量级即是这种混淆的极端情形）。
+    """
+    results = _dark_bucket_results(
+        tmp_path / "results", tier_tolerance=TIER_TOLERANCE,
+        joint_m2=lambda _seed: {b: _m2_buckets(1.0, 10.0) for b in (1, 2, 3)},
+    )
+    before = evaluate_gates_from_disk(results)["H8"]
+    assert before["pass_rate"] == 1.0 and before["verdict"] == "成立"
+
+    for slot in range(5):
+        path = results / f"e1_joint_s{slot}" / "test_eval.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for beam in payload["per_beam"]:
+            beam["m2_buckets"] = _m2_buckets(1000.0, 1.0, b0_model=500.0)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+    after = evaluate_gates_from_disk(results)["H8"]
+    assert after["pass_rate"] == before["pass_rate"] and after["verdict"] == before["verdict"]
+    assert after["per_observable"] == before["per_observable"]
+    assert after["dark_bucket_m2"]["B1"]["model_median"] == 1000.0     # 暗桶报告确实变了
+    assert before["dark_bucket_m2"]["B1"]["model_median"] == 1.0
 
 
 def test_h8_tier_fields_keep_shape_without_tolerance(tmp_path: pathlib.Path) -> None:

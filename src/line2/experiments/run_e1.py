@@ -10,10 +10,12 @@
 - **run 目录契约**（`40` [S1] C2 + GC7）：`results/<run_id>/` 内含
   `run_meta.json`（启动/结束时间戳 + code/data/spec 三元组 + 变体/种子/档位/GPU
   + `tree_dirty` 工作树脏标记）与训练产出的 `train_log.jsonl`/`best_val.ckpt`/`summary.json`。
+- **test 只评一次**（`00` GC3）：`eval` 子命令在目标 `test_eval*.json` 已存在时默认跳过
+  （`--force` 才覆盖），每次派发（含跳过）追加一行 `eval_history.jsonl` 留痕。
 
 子命令：
     python -m src.line2.experiments.run_e1 train [--runs ...] [--gpus 0 1]
-    python -m src.line2.experiments.run_e1 eval  [--runs ...] [--station 0] [--n-low <档位>]
+    python -m src.line2.experiments.run_e1 eval  [--runs ...] [--station 0] [--n-low <档位>] [--force]
     python -m src.line2.experiments.run_e1 gates [--out <json>]
 """
 
@@ -34,8 +36,12 @@ DEFAULT_CONFIGS = REPO / "docs/specs/line2/e1_configs"
 DEFAULT_RESULTS = REPO / "studies/line2_particle_sr/results"
 DEFAULT_DATA = REPO / "studies/line2_particle_sr/data/line2_ds_v1"
 
+#: 逐次评估派发的留痕文件（run 目录内，逐行 JSON）：覆盖既有产物的事实可审计
+EVAL_HISTORY_FILENAME = "eval_history.jsonl"
+
 __all__ = [
     "main", "run_meta_path", "check_e0_precedes", "gpu_free_mib", "plan_queue", "tree_dirty",
+    "EVAL_HISTORY_FILENAME",
 ]
 
 
@@ -252,8 +258,21 @@ def cmd_train(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _append_eval_history(path: Path, entry: dict) -> None:
+    """逐次派发追加一行评估历史（含跳过），供"test 只评一次"审计（`00` GC3）。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
 def cmd_eval(args: argparse.Namespace) -> int:
-    """对每个 run 的 best_val.ckpt 产出 `results/<run_id>/test_eval.json`。"""
+    """对每个 run 的 best_val.ckpt 产出 `results/<run_id>/test_eval.json`。
+
+    目标产物已存在时**默认跳过**（`00` GC3 / `40` Global Constraints 的"test 只评一次"
+    在派发端的强制：重复派发会静默覆盖交付件，使门禁输入无法由 run 记录唯一确定）；
+    覆盖须显式 ``--force``。每次派发——含跳过——追加一行 `eval_history.jsonl`
+    （``overwrote_existing`` 记录本次是否覆盖了既有产物），使覆盖事实可审计。
+    """
     from src.line2.experiments import evaluate
 
     runs = args.runs or sorted(
@@ -278,6 +297,17 @@ def cmd_eval(args: argparse.Namespace) -> int:
         # ——门禁按 `evaluate.EVAL_FILENAME` + `test_eval*.json` 的 glob 消费（`40` [S2]）。
         name = evaluate.EVAL_FILENAME if args.station == 0 else f"test_eval_station{args.station}.json"
         out = args.results_dir / run_id / name
+        history = args.results_dir / run_id / EVAL_HISTORY_FILENAME
+        if out.is_file() and not args.force:
+            reason = f"{name} 已存在（`00` GC3：test 只评一次；--force 才覆盖）"
+            print(f"[run_e1] 跳过 {run_id}（{out.name}）：{reason}", flush=True)
+            _append_eval_history(history, {
+                "at": now_iso(), "run_id": run_id, "station": args.station,
+                "n_low": int(n_low), "subs": args.subs, "out": out.name,
+                "skipped": True, "reason": reason, "overwrote_existing": False,
+            })
+            continue
+        overwrote = out.is_file()
         argv = [
             "--ckpt", str(ckpt), "--data-dir", str(args.data_dir), "--split", args.split,
             "--station", str(args.station), "--n-low", str(n_low), "--subs", args.subs,
@@ -288,6 +318,12 @@ def cmd_eval(args: argparse.Namespace) -> int:
         if rc != 0:
             print(f"[run_e1] eval {run_id} 返回 {rc}", flush=True)
             return rc
+        _append_eval_history(history, {
+            "at": now_iso(), "run_id": run_id, "station": args.station,
+            "n_low": int(n_low), "subs": args.subs, "out": out.name,
+            "skipped": False, "force": bool(args.force),
+            "overwrote_existing": bool(overwrote),
+        })
     return 0
 
 
@@ -317,6 +353,10 @@ def main(argv: list[str] | None = None) -> int:
     p_eval.add_argument("--runs", nargs="*", default=None)
     p_eval.add_argument("--split", default="test")
     p_eval.add_argument("--station", type=int, default=0)
+    p_eval.add_argument(
+        "--force", action="store_true",
+        help="覆盖已存在的 test_eval*.json（缺省跳过；`00` GC3 只评一次的派发端强制）",
+    )
     p_eval.add_argument(
         "--n-low", type=int, default=None,
         help="缺省 = 按各 run 的 run_meta.json 的 n_low（E2 的 3e3/1e5 run 需按 run 档位）",

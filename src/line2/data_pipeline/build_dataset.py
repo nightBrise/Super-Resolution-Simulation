@@ -22,9 +22,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--data-version", default="line2_ds_v1")
     args = parser.parse_args(argv)
 
-    from .anchor import read_anchor_particles
-    from .dataset import build_dataset
-
     anchor_table = read_anchor_particles(args.anchor_dir / "injector.sdds")
     out = build_dataset(
         args.out, anchor_table, n_beams=args.n_beams,

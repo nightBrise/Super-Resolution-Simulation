@@ -87,8 +87,6 @@ def _write_beam_group(
                 )
                 dset.attrs["bin_edges"] = edges
                 dset.attrs["axes"] = np.array(AXES, dtype=h5py.string_dtype())
-                dset.attrs["bin_edges"] = edges
-                dset.attrs["axes"] = np.array(AXES, dtype=h5py.string_dtype())
         ds.attrs["bin_edges"] = edges
         ds.attrs["axes"] = np.array(AXES, dtype=h5py.string_dtype())
         st.attrs["n_particles_full"] = table.shape[0]

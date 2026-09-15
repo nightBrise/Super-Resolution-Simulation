@@ -115,9 +115,63 @@
 **Spec section:** [S1] C2
 **Status:** live（待验收闸口裁决）
 
+## D15: H7 第四分支的口径裁定——任一侧带 N_eff 标记即判"不可判定"
+**Phase:** review
+**Chosen:** `40` [S2] 的第四分支字面为"N_eff 触发上/下溢标记**使 ρ 无法计算** → 不可判定"；本批 ρ **可计算且恰为 1.0**（`rho_median = 1e5/1e5`，5 个种子逐种子均为 1.0），实现（`gates.py`）仍降级为不可判定（`reason_code = n_eff_flag_present`）。此处把该分支的口径裁定为：**任一侧携带上/下溢标记即判不可判定**，不再要求"ρ 无法计算"。
+**Rationale:** 站 0 与站 1 两侧 5/5 种子同时被截断在域顶 1×10⁵ 时真值不可辨识——ρ = 1.0 是"两个被截断值相等"的产物，不构成任何跨站结论；该读法比字面读法更忠实于 `20` [S3] 的上溢语义（上溢标记 = 达到可验证域顶，该侧 N_eff 只有下界而无点值）。方向保守：把本可读作"成立"的结果降为"不可判定"，不利于结论方；`map_report._GATE_RULES["H7"]` 已把扩展后的规则连同 spec 引用一并写进报告（`phase1_report.md`）。
+**Rejected:** 字面读法（ρ 算得出即按 {1.0, 0.5} 判定）——会把"双侧触顶"读成 ρ = 1 的跨站成立，制造报告域内不存在的分辨力；"ρ = 1.0 即判成立"——同上，且与 [S3] 的保守披露原则冲突。
+**Spec section:** [S2]（联动 `20` [S3]）
+**Status:** live（待验收闸口确认）
+
+## D16: GC3 派发端未强制"test 只评一次"——同一 (run, 站, 档) 被重复派发
+**Phase:** implementation
+**Chosen:** 登记为机制缺口，修法已落地于派发端：`run_e1.py` 的 `cmd_eval` 在目标 `test_eval*.json` 已存在时**默认跳过**、须 `--force` 才覆盖，且每次派发（含跳过）在 run 目录追加一行 `eval_history.jsonl`（记 `skipped`/`overwrote_existing`），使覆盖事实可审计。执行本批时 `cmd_eval` 为无条件覆盖写（`--runs` 缺省 = 所有含 `best_val.ckpt` 的目录），机制缺口的成因即在此。
+**Rationale:** 链日志实测同一 (run, 站, 档) 被派发 2–3 次——`phase1_chain.log` 15 次派发（10 个站 0 + 5 个站 1 各一次）、`phase1_e2_chain.log` 40 次（20 个 run 各两次），站位 0 的 E1 run 因此共被评 3 次。`00` GC3 与 `40` Global Constraints 写的是"全程只评一次""仅由本 spec 的矩阵调度执行一次"。**本次无数值损害**：`git diff a7b3530 306d396 -- src/line2/experiments/evaluate.py src/line2/metrics src/line2/training src/line2/data_pipeline` 为空，且确定性测试钉住逐位可复现——但这是运气而非机制：若期间 `evaluate.py` 或 `e0_curve.json` 变过，交付件会静默反映另一版本而无审计痕迹。
+**Rejected:** 只登记偏差、不补机制 —— 机制缺失是根因，下一批交付会重演（评估口径本身见 D12，两者互补）。
+**不可验证项:** 20 份站 0 `test_eval.json` 是最后一次覆盖写的产物（`code_version = 306d396`），首次写入的版本已不可查；"数值等价"由代码 diff + 确定性测试承载，而非两次派发产物的字节对拍。
+**Spec section:** [S3]、Global Constraints（联动 `00` GC3）
+**Status:** live（待验收闸口确认）
+
+## D17: `tree_dirty` 记录——E1 十个 run 无该字段、E2 两个为 `true`
+**Phase:** implementation
+**Chosen:** 如实登记 `run_meta.json` 的 `tree_dirty` 分布：**E1 十个 run 无该字段、E2 八个为 `false`、两个为 `true`**（`e2_joint_n3000_s0`、`e2_joint_n3000_s3`，`code_version = a7b3530`）。两个 `true` 的 run 意味着**执行的代码不能由所记 `code_version` 唯一确定**；两者均参与主曲线的 3×10³ 点（放大比 33.3×）。
+**Rationale:** `00` GC7 要求留痕，`run_e1.py` 自身写明"脏树不阻断启动，但必须留痕——`run_meta.json` 记 `tree_dirty`"。字段缺失（E1）与为 `true`（E2 两个）都是可追溯性的下限而非可忽略的元数据：只有披露后，读者才知道该点所在 run 的代码状态不能由 GC7 三元组还原。
+**Rejected:** 事后回填 `tree_dirty` 字段 —— 会伪造成运行时产物（同 D14 的理由）。
+**Spec section:** [S1] C2、`00` GC7
+**Status:** live
+
+## D18: `00` [S4] 登记——`20` [S5] 冻结基线族缺"零信息常数解"，而该解在本批数据上优于全部 run
+**Phase:** review
+**Chosen:** 按 `00` [S4] 的"歧义记入对应 `.decisions.md`"登记该 spec 层缺口（条目落于本日志，指针指向 `20` [S5]）：冻结基线族 = B-raw / B-curve / B-moment，**不含"零信息常数解"**（train 束目标均值图）这一族；后续阶段应把该族补入 `20` [S5]。
+**Rationale:** 独立复算（只读 `train.h5`/`test.h5`，逐投影按参照总计数归一后按 `20` [S1] M1 评价）：700 个 train 束目标图的均值图（仅用 train 划分构造、不接触 test）对 150 个 test 束的 M1 中位数为 **0.194398**（逐束标准差 **0.0870**；该值依赖 train 子集选取，仅用前 200 束 ⇒ 0.2104，结论不变），**优于全部 20 个 run 的 test err 中位数（0.2218–0.2898）**；模型只在 **40–69 / 150** 束上优于它（逐束比值中位 1.14–1.48）。且 0.194398 < 1×10⁵ 档裸误差 0.285636 ⇒ 该常数解的 N_eff 同样是 1×10⁵ / 上溢，**同样满足 H1 的冻结判定表达式、同样在 H3 上构成域顶平局**。故"基线族缺此一族"不是无害的清单遗漏：它使 H1 的"成立"可与一个零信息解同时成立，是本阶段结论解读的边界条件。（模型不是字面常数解：逐束 err 标准差 0.0021–0.0063 vs 该常数解的 0.0870，低 14–41 倍。）
+**Rejected:** 本批把该解加入基线族并重跑门禁 —— 基线族是冻结文本，改它属 spec 修改；且该解与模型同为域顶，H1/H3/H8 的已落盘判定不会改变，故只登记、留待下阶段。
+**Spec section:** `20` [S5]（按 `00` [S4] 登记）
+**Status:** live
+
+## D19: E1 独立臂 config 的两个死键在交付后清理（冻结副本的可读性整改）
+**Phase:** review
+**Chosen:** 删除 `docs/specs/line2/e1_configs/e1_indep_s{0..4}.json` 中的 `base: 24` 与 `blocks: 1`（`train.build_model` 对 `variant="independent"` 只读 `ind_base`/`ind_blocks`/`num_levels`，这两键在独立臂上**不生效**）；并在 `tests/unit/test_line2_experiments.py` 增加"该臂不得携带另一臂拓扑键"的断言。
+**Rationale:** 保留会让 config diff 显示一个**不存在**的拓扑差异（公平性测试只能靠变体键白名单吸收），对读者与后续复核都是误导；删除后十份 config 的差异面与 `40` [S1] C3 的契约一致。**对已执行实验无影响**：删除的是惰性键，`run_meta.json` 记录的 `config` 路径与 `cmd` 不变，独立臂的实际拓扑（ind_base=16 / num_levels=4 / ind_blocks=3）与参数量（10,092,870）不受影响。E2 的十份 config 由删除前的 E1 config 派生，但其生效键集与删除后一致。
+**Rejected:** 保留死键、只加注释说明其惰性 —— 冻结副本会被反复误读；把 `base`/`blocks` 改为独立臂的生效值 —— 会与 `build_model` 的读键约定混淆（同一键名两种含义）。
+**Spec section:** [S1] C3
+**Status:** live
+
+## D20: `scripts/check_spec_consistency.py` 的覆盖面与引用校验效力（已知局限）
+**Phase:** review
+**Chosen:** 已把该脚本的 spec 扫描由 `SPECS_DIR.glob('*.md')`（非递归）改为递归并排除 `.decisions.md`，引入目录命名空间（根级 `20` 与 line2 `20` 编号撞车，故文档键取 `<子目录>/NN`、引用解析限定同命名空间内）。改动后 line2 五份 spec 的 **81 条 Claim 全部被抽取**（总计 565 → 646），`spec_claim_index.md` 重生成，`exit=0`。
+**Rationale:** 改动前 line2 完全不在索引内（`spec_claim_index.md` 命中 0），与本仓库"该文件为全 spec Claim 索引"的声明不符。
+**已知局限（未修，登记以免被当作已解决）：** 该脚本的跨文档引用校验实际是**空转**的——`REF_PATTERN` 只匹配"目标编号 == 文件自身编号且带 Claim 编号"的引用形式，而全仓此类引用 **0 条**（现有 33 条命中全是 `` `NN [Sn]` `` 形式的节级引用）。故其输出"OK: 所有跨文档引用一致"不构成证据，`--strict` 也永不因 broken ref 失败。要让校验有牙齿需扩到节级引用（断言 `## [Sn]` 存在性），属检查器语义变更，另立批次处理。
+**Rejected:** 本批顺手扩到节级引用 —— 会改变校验语义与 `--strict` 的失败条件，需独立设计与测试，不宜混在验收整改里。
+**Spec section:** `00` [S4]（一致性检查）
+**Status:** live
+
+## Progress
+
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | fb04ef5、21aaedb | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | implemented（train/eval/gates 编排） |
-| [S2] | — | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | 待 E3 |
-| [S3] | fb04ef5、21aaedb | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | implemented |
-| [S4] | — | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | 待报告 |
+| [S1] | fb04ef5、21aaedb、3264ea4、4e311a2、8896b95 | **L4 批次复审：needs fixes → 已整改**（reviewer agent-14 2026-09-14 裁定 B1（H7 上/下溢分支改写预注册判据）为 blocking，另 M1/M2/M5、m1/m5/m6/m10；整改于 3264ea4（H7 按 40 [S2] 原文改判 + map_report 文案回正）、4e311a2（H7 聚合条目传播标记）、8896b95（H3 平局/严格获胜数披露）、b2d320a） | implemented（E0/E1/E2 编排执行完毕） |
+| [S2] | 306d396、148604d | 同 [S1] 的 L4 复审结论 | **E3 已执行**（5 份 `test_eval_station1.json`，H7 = 不可判定，口径裁定见 D15） |
+| [S3] | fb04ef5、21aaedb、3264ea4、8896b95、306d396、148604d | 同 [S1] 的 L4 复审结论 | implemented（H1/H3/H8 判定 + 三分类 + 一票否决） |
+| [S4] | 306d396、148604d | 同 [S1] 的 L4 复审结论 | **报告已交付**（`line2_phase1_stage_report.md` + `phase1_report.md` + `figure_avail_domain.png` + `n_eff_table.csv`） |
+
+**Phase 1 最终验收审查（agent-7m1095z1，2026-09-15，审查对象 HEAD `1dfc197`）：needs fixes** —— 两条 blocking（报告 §3 的常数解论证被可复算对照否证；[S3] H8 要求的暗桶 M2 单独报告缺失且未登记偏差）+ Major M1–M9；**产物侧独立复算全部成立**（25 份 `test_eval*.json` 的 N_eff 逐位一致、`n_eff_table.csv` 字段级零失配、H1/H3/H8 逐位一致、默认套件 443 passed / 2 xfailed）。本批登记 D15–D18；报告侧整改见 `studies/line2_particle_sr/reports/line2_phase1_stage_report.md`；暗桶 M2 分项的实现已落地（`per_beam[].m2_buckets` + `gates.h8_dark_bucket_report`），待重生成 `phase1_report.md` 的 H8 小节暗桶段。

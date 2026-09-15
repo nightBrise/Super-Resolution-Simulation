@@ -14,7 +14,8 @@
   任一侧携带上/下溢标记（端点截断值）⇒ 不可判定，ρ 仅作披露
 - H8（细结构可恢复性，[S3]）：13 项观测量对容差线的达标率 ≥80% 成立 / ≤50% 不成立 /
   之间不可判定；聚合 = test 束 × 站 0 × 1e4 × 5 种子**中位数输出**（`20` [S4]）；
-  容差档映射（束级 N_eff 中位数 → 最近曲线档）是判定表达式的输入，随结论落盘
+  容差档映射（束级 N_eff 中位数 → 最近曲线档）是判定表达式的输入，随结论落盘；
+  暗桶（B0/B1）的 M2 相对改进由 :func:`h8_dark_bucket_report` 单独产出，**不并入**达标率
 - `evaluate_gates_from_disk`：只读 run 目录产物出 `e1_gates.json`（不训练、不推理，[S3] C2）
 
 两段式消费边界（[S3]、D6）：变体路由只吃 **val** 段（run 目录 summary.json 的
@@ -52,6 +53,8 @@ __all__ = [
     "OBSERVABLE_NAMES",
     "h8_deviation_matrix",
     "evaluate_h8",
+    "h8_dark_bucket_report",
+    "DARK_BUCKET_NAMES",
     "evaluate_h7_cross_station",
     "evaluate_gates_from_disk",
 ]
@@ -498,6 +501,97 @@ def _h8_tier_summary(tier_per_beam: Mapping[str, Mapping]) -> dict:
     }
 
 
+#: 暗桶（`20` D11「H8 主战场恰在暗桶」）：低计数区两桶
+DARK_BUCKET_NAMES = ("B0", "B1")
+
+DARK_BUCKET_NOTE = (
+    "`40` [S3] H8 明文要求「暗桶（B0/B1）的 M2 相对改进单独报告（不并入达标率）」"
+    "（机制依据 `20` D11：H8 主战场恰在暗桶）；聚合 = 逐束先对种子取中位数、再对 test 束取"
+    "中位数；相对改进 = （裸输入 M2 中位 − 模型 M2 中位）/ 裸输入 M2 中位。B0 的裸输入恒为 0"
+    "（子样本是全量粒子集的子集 ⇒ 参照的零格在子样本中亦为零），其相对改进无定义，"
+    "只报两侧绝对值。B0B1 合并值 = 两暗桶逐束等权平均后再取束中位数。"
+    "本段不参与 H8 的达标率与结论。"
+)
+
+
+def _bucket_seed_medians(
+    records: Sequence[Mapping[int, dict]], beam_id: int, name: str
+) -> tuple[float | None, float | None]:
+    """该束的（裸输入, 模型）桶值 = 5 个种子对束级桶值取中位数。
+
+    任一种子的产物缺该桶（未记录 / 桶内格子不足 / 桶值为 null）即整束不计入——不猜值。
+    """
+    bare: list[float] = []
+    model: list[float] = []
+    for rec in records:
+        entry = (rec.get(beam_id, {}).get("m2_buckets") or {}).get(name)
+        if not entry or entry.get("insufficient"):
+            return None, None
+        if entry.get("bare_median") is None or entry.get("model_median") is None:
+            return None, None
+        bare.append(float(entry["bare_median"]))
+        model.append(float(entry["model_median"]))
+    return float(np.median(bare)), float(np.median(model))
+
+
+def _dark_bucket_entry(
+    bare_values: Sequence[float], model_values: Sequence[float]
+) -> dict:
+    """桶条目：中位数对照 + 相对改进（裸输入为 0 → null，不伪造比值）。"""
+    if not bare_values:
+        return {"bare_median": None, "model_median": None, "relative_improvement": None,
+                "n_beams": 0}
+    bare = float(np.median(np.asarray(bare_values, dtype=np.float64)))
+    model = float(np.median(np.asarray(model_values, dtype=np.float64)))
+    improvement = None if bare == 0.0 else (bare - model) / bare
+    return {"bare_median": bare, "model_median": model,
+            "relative_improvement": improvement, "n_beams": len(bare_values)}
+
+
+def h8_dark_bucket_report(runs_by_seed: Mapping[int, dict], beam_ids: Sequence[int]) -> dict:
+    """H8 的暗桶 M2 报告段（`40` [S3] 明文要求单独报告，与 ``pass_rate`` 并列）。
+
+    逐桶：对每束先取种子的束级桶值中位数、再对 test 束取中位数（`20` [S4] 的
+    「种子中位数输出」次序）；``B0B1_combined`` 取两暗桶逐束等权平均后的束中位数。
+    输入缺 ``per_beam[].m2_buckets`` 时该 run 记进 ``runs_without_m2`` 并整束排除，
+    条目以 null 显式表达"没有可报的暗桶数"，不猜值、不静默省略。
+    """
+    seeds = sorted(runs_by_seed)
+    runs = [runs_by_seed[s] for s in seeds]
+    records = [_beam_records(r) for r in runs]
+    beams = [int(b) for b in beam_ids]
+
+    per_bucket: dict[str, dict[int, tuple[float, float]]] = {n: {} for n in DARK_BUCKET_NAMES}
+    for beam_id in beams:
+        for name in DARK_BUCKET_NAMES:
+            bare, model = _bucket_seed_medians(records, beam_id, name)
+            if bare is not None and model is not None:
+                per_bucket[name][beam_id] = (bare, model)
+
+    report = {
+        "aggregation": "per_beam_seed_median_then_beam_median",
+        "n_runs": len(runs),
+        "n_beams_total": len(beams),
+        "runs_without_m2": [
+            str(r["run_id"])
+            for r, rec in zip(runs, records)
+            if any(not (rec.get(b, {}).get("m2_buckets") or {}) for b in beams)
+        ],
+    }
+    for name in DARK_BUCKET_NAMES:
+        values = per_bucket[name]
+        report[name] = _dark_bucket_entry(
+            [v[0] for v in values.values()], [v[1] for v in values.values()]
+        )
+    both = [b for b in beams if b in per_bucket["B0"] and b in per_bucket["B1"]]
+    report["B0B1_combined"] = _dark_bucket_entry(
+        [0.5 * (per_bucket["B0"][b][0] + per_bucket["B1"][b][0]) for b in both],
+        [0.5 * (per_bucket["B0"][b][1] + per_bucket["B1"][b][1]) for b in both],
+    )
+    report["note"] = DARK_BUCKET_NOTE
+    return report
+
+
 def _h8_from_disk(
     runs_by_seed: dict[int, dict],
     curve_nodes: tuple[int, ...],
@@ -509,6 +603,9 @@ def _h8_from_disk(
     故与逐束 N_eff 一并落盘（``tolerance_tier_per_beam`` / ``_counts`` / ``_mode``）：
     `40` [S4] C2 要求读者由产物本身即可确认"用了哪条容差线"，不必回读本模块。
     容差线缺失或无 run 时三个字段仍按同一形状落盘（空映射 / None）。
+
+    ``dark_bucket_m2``（`40` [S3] H8 明文要求的暗桶 M2 单独报告）与达标率**并列**落盘，
+    不参与 ``pass_rate``/``verdict``：判定表达式仍只吃 13 项观测量。
     """
     seeds = sorted(runs_by_seed)
     runs = [runs_by_seed[s] for s in seeds]
@@ -521,16 +618,18 @@ def _h8_from_disk(
         return {
             **base, "verdict": VERDICT_INDETERMINATE, "pass_rate": None,
             "per_observable": [], "n_beams": 0, "beam_ids": [], "reason_code": "no_runs",
+            "dark_bucket_m2": h8_dark_bucket_report(runs_by_seed, []),
         }
     records = [_beam_records(r) for r in runs]
     beam_ids = sorted(set.intersection(*[{int(b) for b in rec} for rec in records]))
+    dark_bucket_m2 = h8_dark_bucket_report(runs_by_seed, beam_ids)
     dev = h8_deviation_matrix(runs, beam_ids)
     dev_table = _load_tolerance(tolerance_path)
     if dev_table is None:
         return {
             **base, "verdict": VERDICT_INDETERMINATE, "pass_rate": None,
             "per_observable": [], "n_beams": len(beam_ids), "beam_ids": beam_ids,
-            "reason_code": "tolerance_missing",
+            "reason_code": "tolerance_missing", "dark_bucket_m2": dark_bucket_m2,
         }
     missing = [int(n) for n in curve_nodes if int(n) not in dev_table]
     if missing:
@@ -553,6 +652,7 @@ def _h8_from_disk(
         "tolerance": str(tolerance_path),
         "tolerance_tier_per_beam": tier_per_beam,
         **_h8_tier_summary(tier_per_beam),
+        "dark_bucket_m2": dark_bucket_m2,
     }
 
 

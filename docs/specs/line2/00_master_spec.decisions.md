@@ -38,7 +38,9 @@
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | — | — | pending |
-| [S2] | — | — | pending |
-| [S3] | — | — | pending |
-| [S4] | — | — | pending |
+| [S1] | 74bfe84（冻结）、fb04ef5 | **Phase 1 最终验收审查（2026-09-15）实测**：C2 有断言（`tests/unit/test_line2_dataset.py::test_build_dataset_deterministic_and_traceable` 的 `axes == list(AXES)`）+ 生产件 128² int32、∑counts 逐档严格等于 N_low；C3 由 `beam_splits(1000)` 复算与生产 `manifest.json` 切分逐元素一致、抖动参数由 (beam_id, master_seed) 还原有测试（`test_beam_group_jitter_metadata_matches_params`）；**C1（术语单一来源的静态检查）未逐条审计**（仅抽读） | implemented（C1 未核实） |
+| [S2] | 74bfe84、fb04ef5、ae9d4b8 | **C5 实测通过**（本次实跑 `python scripts/check_env.py` → `OK: 环境依赖版本一致`，ocelot/sdds 已入 `environment.yml`）；**C4（路径前缀断言）无任何测试**——三个 CLI 的默认输出确实指向 `studies/line2_particle_sr/`，但全仓无 `startswith`/`is_relative_to` 一类断言（审查实测） | implemented with gap（C4 无测试） |
+| [S3] | 74bfe84、306d396、148604d | **C6 实测满足**（四条门禁各对应一个可执行表达式，`map_report._GATE_RULES` 与 `40` [S3] 逐条 1:1）；**C7 无专用存在性入口**——交付物实测齐备（`e1_gates.json` 四条结论 + `figure_avail_domain.png` + `n_eff_table.csv` + 两份报告，非空），但"交付物清单"由一个显式入口逐项断言的检查缺失 | implemented with gap（C7 无专用入口） |
+| [S4] | 74bfe84、c00fe03、b758e57 | **C8 实测满足**（`docs/specs/line2/` 下 00/10/20/30/40 五份 spec + `99_change_log.md` 在册，[S4] 索引与文件一一对应）；**C9 未逐 commit 对账**（审计项，未核实） | implemented（C9 未核实） |
+
+**范围与事实依据**：C5 由本次实跑确认，C2/C3/C6/C8 由 Phase 1 最终验收审查的实测记录与仓库现件确认，C1/C9 属抽读/审计项故记"未核实"；C4/C7 的覆盖缺口按本表登记（本批不新增测试）。

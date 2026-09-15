@@ -20,7 +20,7 @@ from src.line2.data_pipeline.dataset import build_dataset
 from src.line2.training.common import config_hash
 from src.line2.training.infer import infer, load_ckpt_payload
 from src.line2.training.infer import main as infer_main
-from src.line2.training.train import should_update_best, train
+from src.line2.training.train import _forward_variant, build_model, should_update_best, train
 
 pytestmark = pytest.mark.unit
 
@@ -266,6 +266,42 @@ def test_infer_independent_ckpt(ind_run: dict, data_dir: pathlib.Path,
     np.testing.assert_array_equal(again["prob"], first["prob"])
 
 
+def test_infer_matches_train_forward_variant(joint_run: dict, ind_run: dict,
+                                            data_dir: pathlib.Path) -> None:
+    """`30` [S5] C1 + `40` [S2] E3：`infer` 的前向与 `train._forward_variant` 逐位一致。
+
+    变体前向有三份实现（训练循环、门禁评估、交付推理）。前两份已有逐位对拍；本用例把
+    第三份也钉上：同一 ckpt 在两条路径上必须给出同一数值，否则 E3 跨站推理与训练期
+    验证/交付评估之间没有数值可比性。两变体各一例（CPU，float32 主干）。
+    """
+    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
+    beam_id = int(manifest["splits"]["train"][0])
+    counts, edges = _group_counts(data_dir, beam_id)
+    for run in (joint_run, ind_run):
+        ckpt = run["out_a"] / "best_val.ckpt"
+        payload = _load_ckpt(run["out_a"])
+        variant = str(payload["config"]["variant"])
+        prob, rate = infer(ckpt, counts, edges, 200_000.0)
+
+        net = build_model(payload["config"])
+        net.load_state_dict(payload["state_dict"])
+        net.eval()
+        batch = {
+            "counts": torch.from_numpy(counts.astype(np.float32)).unsqueeze(0),
+            "target": torch.zeros(1, 6, 128, 128),
+            "edges": torch.from_numpy(edges.astype(np.float32)).unsqueeze(0),
+        }
+        with torch.no_grad():
+            train_prob, _target, _edges = _forward_variant(
+                net, variant, batch, torch.device("cpu")
+            )
+        np.testing.assert_array_equal(
+            prob, train_prob[0].numpy().astype(np.float64),
+            err_msg=f"{variant}：infer 与 train._forward_variant 前向不一致",
+        )
+        np.testing.assert_array_equal(rate, prob * 200_000.0)
+
+
 # ------------------------------------------- [S1] C3：ckpt 载入的 config 哈希/种子校验
 def _group_counts(data_dir: pathlib.Path, beam_id: int, sub: int = 0
                   ) -> tuple[np.ndarray, np.ndarray]:
@@ -342,7 +378,7 @@ def test_infer_rejects_tampered_or_incomplete_ckpt(
 def test_infer_meta_separates_file_and_config_hashes(
     joint_run: dict, data_dir: pathlib.Path, tmp_path: pathlib.Path,
 ) -> None:
-    """[S5] C2 + [S1] C3：meta.json 分别记文件字节哈希与 ckpt 内 config 哈希，不再同名混用。"""
+    """[S5] C2 + [S1] C3：meta.json 把文件字节哈希与 ckpt 内 config 哈希分别记在两个字段。"""
     manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
     beam_id = int(manifest["splits"]["train"][0])
     ckpt = joint_run["out_a"] / "best_val.ckpt"

@@ -583,8 +583,9 @@ def test_param_alignment_e1_production_configs() -> None:
     """[S4] C1（E1 生产档）：按 e1_configs 实际取值构造两臂，参数量差 ≤ 30%。
 
     生产档取值：联合臂 `base=48, num_levels=4, blocks=2`（10,708,710 参数）；独立臂
-    由 `ind_base=16, ind_blocks=3` 决定（`build_model` 对 independent 不读 `blocks`，
-    故 config 里的 `blocks=1` 是死键）→ 10,092,870 = −5.8%，标定来源见 `30` D11。
+    由 `ind_base=16, ind_blocks=3` 决定（`build_model` 对 independent 只读
+    `ind_base`/`ind_blocks`，故独立臂 config 不携带 `base`/`blocks`）→ 10,092,870
+    = −5.8%，标定来源见 `30` D11。
     """
     cfg_joint = json.loads((_E1_CONFIGS / "e1_joint_s0.json").read_text(encoding="utf-8"))
     cfg_independent = json.loads((_E1_CONFIGS / "e1_indep_s0.json").read_text(encoding="utf-8"))

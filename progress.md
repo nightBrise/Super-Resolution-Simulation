@@ -6,10 +6,10 @@
 
 | 项目 | 值 |
 |---|---|
-| **当前阶段** | line1 收官（2026-09-12）；line2 Phase 1 交付完成（2026-09-15，待最终验收审查裁决） |
-| **当前任务** | line2 Phase 1 **交付完成**：L1/L2/L3b/L4 实现 + 两轮复审整改（needs fixes → 全部清零，默认套件 443 passed / 2 xfailed）；E0 曲线 + 容差线尺子先行（时间戳早于 E1）；**E1 十次（2026-09-14 23:47）+ E2 十次（2026-09-15 07:53）训练全部完成**，站 0/站 1 test 端评估、门禁、三点放大主曲线、域地图与报告均已落盘。门禁结论：**H1 成立（饱和，5 种子 N_eff 全 1e5）/ H3 成立（5/5 对全为域顶平局，n_ties=5、n_strict_joint_wins=0）/ H7 不可判定（rho_median=1.0 披露但两站全 overflow）/ H8 不成立（达标率 0.1318，容差档 mode=1e5）**。核心定量结论：**放大比 N_eff/N_low 随 N_low 单调下降——3e3 档 ≥33.3×、1e4 档 ≥10×、1e5 档 1.0×（该档 5 个 run 中 1 个未触顶，N_eff=98,724）**。执行期修掉六个实测缺陷（图内轴向布局、E1 配置两处、`run_e1` 相对路径、E2 链等待脚本、`map_report` 必填参数）并补两处规格合规（H8 容差档落盘、config 契约名） |
+| **当前阶段** | line1 收官（2026-09-12）；line2 Phase 1 交付完成 + 最终验收审查已出（2026-09-15，裁决 **needs fixes**——缺陷集中在报告表述、披露完整性与决策登记，均可在不重训不重评的前提下闭合） |
+| **当前任务** | line2 Phase 1 **交付完成**：L1/L2/L3b/L4 实现 + 两轮复审整改（needs fixes → 全部清零，默认套件 443 passed / 2 xfailed）；E0 曲线 + 容差线尺子先行（时间戳早于 E1）；**E1 十次（2026-09-14 训练完成）+ E2 十次（2026-09-14T23:22:22Z 训练完成、23:53:42Z 全链完成）**，站 0/站 1 test 端评估、门禁、三点放大主曲线、域地图与报告均已落盘。门禁结论：**H1 成立（饱和，5 种子 N_eff 全 1e5）/ H3 成立（5/5 对全为域顶平局，n_ties=5、n_strict_joint_wins=0）/ H7 不可判定（rho_median=1.0 披露但两站全 overflow）/ H8 不成立（达标率 0.1318，容差档 mode=1e5）**。核心定量结论：**放大比 N_eff/N_low 随 N_low 单调下降——3e3 档 ≥33.3×、1e4 档 ≥10×、1e5 档 1.0×（该档 5 个 run 中 1 个未触顶，N_eff=98,724）；3e3/1e4 两档的中位放大比恰等于 1e5/N_low，由域顶构造得出、分辨力为零，故仅 1e5 档含可测量的非饱和点**。执行期修掉六个实测缺陷（图内轴向布局、E1 配置两处、`run_e1` 相对路径、E2 链等待脚本、`map_report` 必填参数）并补两处规格合规（H8 容差档落盘、config 契约名）。**最终验收审查裁决（2026-09-15，审查对象 HEAD `1dfc197`）= needs fixes**：两条 blocking（报告 §3 的常数解论证被可复算对照否证；`40` [S3] H8 要求的暗桶 M2 单独报告缺失）+ Major M1–M9；**产物侧独立复算全部成立**（25 份 `test_eval*.json` 的 N_eff 逐位一致、`n_eff_table.csv` 字段级零失配、H1/H3/H8 逐位一致、默认套件 443 passed / 2 xfailed）。文档侧整改已落地：`line2_phase1_stage_report.md`（常数解对照重写、E2 时间窗、`tree_dirty`、版本核对命令、κ 影响面、选型饱和披露）+ 决策登记 `40` D15–D18、`10` D13、`30` D20/D21 + `00` 进度板；代码侧两项修法已落地（`cmd_eval` 默认跳过 + `--force` 覆盖 + `eval_history.jsonl` 留痕；`evaluate.py` 记 `per_beam[].m2_buckets`，`gates.h8_dark_bucket_report` 汇总暗桶），待提交后重生成 `phase1_report.md` 的 H8 小节暗桶段 |
 | **进度** | M0–M6 全部完成；出口决策「不进入下一阶段」定案——分支树 (a) 阴性/等效合法终点（条件 1 等效/种子敏感、非显著负），分支 (b) 不触发（读法裁决随 99 R187 登记）；99 [S4] 未决问题表 7 条全部闭环；核心结论——主指标上先验增益未获跨种子稳健确认（A−B 等效（种子级）/ A−C、B−C 种子敏感不可判定），次指标 ε_z 与预测离散度上方案 C 四种子一致占优（约为 A/B 的一半），G3：A−B 通过、A−C/B−C 极端退化档反转（E 类如实报告） |
-| **下一步** | 收到 qwen3.8-max 最终验收审查结论后：处置 findings → 向用户汇报 Phase 1 结论与**偏差裁决清单**（`10` D12 身份字段、`30` D12 单卡/C4 未满足、`30` D13 κ 尺度惰性、`30` D14 log₁₀N 口径、`30` D17 独立臂 κ 用协方差、`40` D14 config 副本），由用户决定是否进入 Phase 2（束流接口/分辨率扩展） |
+| **下一步** | 向用户汇报 Phase 1 结论与**偏差裁决清单**（`10` D12 身份字段、`30` D12 单卡/C4 未满足、`30` D13/D20 κ 无信息量、`30` D14 log₁₀N 口径、`30` D17 独立臂 κ 用协方差、`30` D21 暗桶 M2 报告、`40` D14 config 副本、`40` D15 H7 口径裁定、`40` D16 重复派发、`40` D17 `tree_dirty`、`40` D18 基线族缺口），待实现侧补齐暗桶报告与派发机制；由用户决定是否进入 Phase 2（束流接口/分辨率扩展）|
 | **最近一次报告** | [`final_report.md`](docs/reports/line1_substitute_sr_final_report.md)（M6 最终报告，2026-08-30；2026-09-12 收官时修正 5 处图片相对链接）；[`studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md)（M5）；[`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md)（M4）|
 
 ## 阶段完成历史
@@ -42,6 +42,7 @@
   - [x] L2 `20` [S1]–[S5]：度量族 M1–M6、裸误差–N 曲线（含参照噪声地板）、N_eff 恒等测试、容差线、基线族
   - [x] L3b `30` [S1]–[S5]：U-Net 概率头 + FiLM 条件化 + 独立/联合两版 + ★防泄露测试（**C4 未满足**：DDP 双卡缓期，已登记 D12）
   - [x] L4/L5 `40` [S1]–[S4]：E0 ✓ → E1 十次 ✓ → E2 十次 ✓ → E3 跨站 ✓ → H1/H3/H7/H8 门禁 + 三点放大域地图 + 双报告 ✓
+  - [ ] line2 Phase 1 最终验收整改（2026-09-15 审查裁决 needs fixes）：文档侧已落地（`line2_phase1_stage_report.md` + `40` D15–D18、`10` D13、`30` D20/D21 + `00` 进度板）；代码侧修法已落地（派发端 `cmd_eval` 默认跳过 + `--force` + `eval_history.jsonl`；暗桶 `per_beam[].m2_buckets` + `gates.h8_dark_bucket_report`），待提交后重生成 `phase1_report.md` 的 H8 小节暗桶段
 
 ## Agent 工作守则（与 `00 [S13]` 同步）
 
