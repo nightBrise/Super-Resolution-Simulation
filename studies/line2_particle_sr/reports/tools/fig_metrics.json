@@ -1,0 +1,294 @@
+{
+ "column_px": 864,
+ "min_screen_px_required": 11.0,
+ "palette": {
+  "pine": "#2D5A4A",
+  "saddle": "#8B4513",
+  "ink": "#1A1A1A",
+  "grey": "#666666",
+  "violet": "#6A4C93",
+  "tier1000": "#7F7F7F",
+  "tier3000": "#2B6CB0",
+  "tier10000": "#2D5A4A",
+  "tier30000": "#B7791F",
+  "tier100000": "#A02020"
+ },
+ "noncolor_encodings": {
+  "fig05_training_dynamics.png": "4 组曲线用「实线+圆 / 虚线+方 / 点划线+三角 / 点线+菱形」区分——线型与标记均不同，图例按线型给出样本",
+  "fig06_neff_and_err.png": "三档柱形用阴影线区分（///=3e3、\\\\=1e4、xxx=1e5），N_eff 面板同档用不同 marker；图例标题写明“阴影线 = 档位”",
+  "fig08a_h8_passrate.png": "达标档用阴影线区分（xx=全通过、\\\\=部分通过、//=全不通过），且每根柱旁直接给出百分比与通过束数",
+  "fig08b_dark_buckets.png": "裸输入用斜纹、模型用实心，图例文字点明“斜纹 / 实心”",
+  "fig09a_zero_info_errs.png": "四个档位分组有背景色带 + 行末组名文字；箱体再叠加阴影线，y 轴标签只留种子号",
+  "fig09b_zero_info_wins.png": "同上：分组色带 + 行末组名文字；柱长数值与误差比直接写在柱旁",
+  "fig03_e0_curve.png": "四条落点系列用不同 marker（圆/方/三角/菱形）+ 深色描边；曲线用实线、地板线用虚线",
+  "fig04_amplification.png": "两臂用不同 marker（圆/方）；域内为实心、上溢为空心（形状之外再编码填充）",
+  "fig07_h3_pairing.png": "两臂用不同 marker（圆/方）+ 上溢空心，哑铃连线给出配对关系",
+  "fig10_h7_cross_station.png": "两站用不同 marker（圆/菱形）+ 站 1 上溢空心；连线给出逐种子配对",
+  "fig01_pipeline.png": "流程节点为独立方框 + 箭头方向，不依赖颜色",
+  "fig02_lattice.png": "两站两投影为四个独立面板 + 面板标题文字，不依赖颜色"
+ },
+ "figures": [
+  {
+   "png": "fig01_pipeline.png",
+   "png_px": [
+    2537,
+    1382
+   ],
+   "dpi": 300.0,
+   "n_texts": 8,
+   "min_screen_px": 15.61,
+   "min_screen_px_element": "锚点粒子表⏎2×10^5 行 × 6 列⏎(x, x′, y, y′)⏎束群 1000（抖动 ×FODO）（11.0 pt）",
+   "min_fontsize": 11.0,
+   "text_px_histogram": [
+    15.61,
+    18.45
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig02_lattice.png",
+   "png_px": [
+    2436,
+    2334
+   ],
+   "dpi": 300.0,
+   "n_texts": 79,
+   "min_screen_px": 15.52,
+   "min_screen_px_element": "物理 RMS：σ(x) = 2.470e-04⏎                σ(x′) = 2.398e-05（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    15.52,
+    16.26,
+    17.73,
+    19.21
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig03_e0_curve.png",
+   "png_px": [
+    2323,
+    1617
+   ],
+   "dpi": 300.0,
+   "n_texts": 16,
+   "min_screen_px": 16.27,
+   "min_screen_px_element": "误差随粒子数近似幂律下降：⏎1e3 → 1e4 档，4.030 → 1.246（约 1/3.2）（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    16.27,
+    17.05,
+    18.6,
+    20.15
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig04_amplification.png",
+   "png_px": [
+    2373,
+    1644
+   ],
+   "dpi": 300.0,
+   "n_texts": 17,
+   "min_screen_px": 15.93,
+   "min_screen_px_element": "可验证放大域（≤ 10×，`00` [S1] 声明的叙事上限）（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    15.93,
+    16.69,
+    18.2,
+    19.72
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig05_training_dynamics.png",
+   "png_px": [
+    2728,
+    1511
+   ],
+   "dpi": 300.0,
+   "n_texts": 42,
+   "min_screen_px": 13.86,
+   "min_screen_px_element": "选型准绳 $N_{eff}$ 在域顶 $10^5$ 饱和 ⇒ 之后不再更新 best（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    13.86,
+    14.52,
+    15.84,
+    17.16
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig06_neff_and_err.png",
+   "png_px": [
+    2479,
+    2101
+   ],
+   "dpi": 300.0,
+   "n_texts": 46,
+   "min_screen_px": 15.25,
+   "min_screen_px_element": "空心 = 上溢（域顶截断）（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    15.25,
+    15.97,
+    17.43,
+    18.88
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig07_h3_pairing.png",
+   "png_px": [
+    2403,
+    1499
+   ],
+   "dpi": 300.0,
+   "n_texts": 17,
+   "min_screen_px": 15.73,
+   "min_screen_px_element": "报告域顶 $10^5$：两臂 10 个 N_eff 全部落在这里（空心 = 上溢标记）（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    15.73,
+    16.48,
+    17.98,
+    19.48
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig08a_h8_passrate.png",
+   "png_px": [
+    2884,
+    1752
+   ],
+   "dpi": 300.0,
+   "n_texts": 39,
+   "min_screen_px": 13.11,
+   "min_screen_px_element": "0.0%  (0/150)（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    13.11,
+    13.73,
+    14.98,
+    16.23
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig08b_dark_buckets.png",
+   "png_px": [
+    2291,
+    1588
+   ],
+   "dpi": 300.0,
+   "n_texts": 29,
+   "min_screen_px": 16.5,
+   "min_screen_px_element": "0.000（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    16.5,
+    17.29,
+    18.86,
+    20.43
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig09a_zero_info_errs.png",
+   "png_px": [
+    2825,
+    2122
+   ],
+   "dpi": 300.0,
+   "n_texts": 34,
+   "min_screen_px": 13.38,
+   "min_screen_px_element": "1e5 档裸误差 0.285636（上溢判据线）（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    13.38,
+    14.02,
+    15.29,
+    16.57
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig09b_zero_info_wins.png",
+   "png_px": [
+    2410,
+    1937
+   ],
+   "dpi": 300.0,
+   "n_texts": 55,
+   "min_screen_px": 15.68,
+   "min_screen_px_element": "75/150 = 50% 平局线（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    15.68,
+    16.43,
+    17.93,
+    19.42
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  },
+  {
+   "png": "fig10_h7_cross_station.png",
+   "png_px": [
+    2406,
+    1547
+   ],
+   "dpi": 300.0,
+   "n_texts": 24,
+   "min_screen_px": 15.71,
+   "min_screen_px_element": "域顶 $10^5$：站 0 与站 1 的 10 个 N_eff 全部触顶（空心菱形 = 站 1 上溢）（10.5 pt）",
+   "min_fontsize": 10.5,
+   "text_px_histogram": [
+    15.71,
+    16.46,
+    17.96,
+    19.45
+   ],
+   "aabb_candidates": 0,
+   "pixel_overlaps": [],
+   "text_over_nontext_px_100dpi": 0,
+   "text_over_nontext_detail": []
+  }
+ ]
+}

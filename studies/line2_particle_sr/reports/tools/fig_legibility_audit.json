@@ -1,0 +1,420 @@
+{
+ "column_px": 864,
+ "min_screen_px_required": 11.0,
+ "figures": [
+  {
+   "png": "fig01_pipeline.png",
+   "png_px": [
+    2537,
+    1382
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 11.0,
+   "min_screen_px": 15.61,
+   "n_texts": 8,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 15.61,
+   "noncolor_encoding": "流程节点为独立方框 + 箭头方向，不依赖颜色"
+  },
+  {
+   "png": "fig02_lattice.png",
+   "png_px": [
+    2436,
+    2334
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 15.52,
+   "n_texts": 79,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 15.52,
+   "noncolor_encoding": "两站两投影为四个独立面板 + 面板标题文字，不依赖颜色"
+  },
+  {
+   "png": "fig03_e0_curve.png",
+   "png_px": [
+    2323,
+    1617
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 16.27,
+   "n_texts": 16,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 16.27,
+   "noncolor_encoding": "四条落点系列用不同 marker（圆/方/三角/菱形）+ 深色描边；曲线用实线、地板线用虚线"
+  },
+  {
+   "png": "fig04_amplification.png",
+   "png_px": [
+    2373,
+    1644
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 15.93,
+   "n_texts": 17,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 15.93,
+   "noncolor_encoding": "两臂用不同 marker（圆/方）；域内为实心、上溢为空心（形状之外再编码填充）"
+  },
+  {
+   "png": "fig05_training_dynamics.png",
+   "png_px": [
+    2728,
+    1511
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 13.86,
+   "n_texts": 42,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 13.86,
+   "noncolor_encoding": "4 组曲线用「实线+圆 / 虚线+方 / 点划线+三角 / 点线+菱形」区分——线型与标记均不同，图例按线型给出样本"
+  },
+  {
+   "png": "fig06_neff_and_err.png",
+   "png_px": [
+    2479,
+    2101
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 15.25,
+   "n_texts": 46,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 15.25,
+   "noncolor_encoding": "三档柱形用阴影线区分（///=3e3、\\\\=1e4、xxx=1e5），N_eff 面板同档用不同 marker；图例标题写明“阴影线 = 档位”"
+  },
+  {
+   "png": "fig07_h3_pairing.png",
+   "png_px": [
+    2403,
+    1499
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 15.73,
+   "n_texts": 17,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 15.73,
+   "noncolor_encoding": "两臂用不同 marker（圆/方）+ 上溢空心，哑铃连线给出配对关系"
+  },
+  {
+   "png": "fig08a_h8_passrate.png",
+   "png_px": [
+    2884,
+    1752
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 13.11,
+   "n_texts": 39,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 13.11,
+   "noncolor_encoding": "达标档用阴影线区分（xx=全通过、\\\\=部分通过、//=全不通过），且每根柱旁直接给出百分比与通过束数"
+  },
+  {
+   "png": "fig08b_dark_buckets.png",
+   "png_px": [
+    2291,
+    1588
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 16.5,
+   "n_texts": 29,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 16.5,
+   "noncolor_encoding": "裸输入用斜纹、模型用实心，图例文字点明“斜纹 / 实心”"
+  },
+  {
+   "png": "fig09a_zero_info_errs.png",
+   "png_px": [
+    2825,
+    2122
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 13.38,
+   "n_texts": 34,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 13.38,
+   "noncolor_encoding": "四个档位分组有背景色带 + 行末组名文字；箱体再叠加阴影线，y 轴标签只留种子号"
+  },
+  {
+   "png": "fig09b_zero_info_wins.png",
+   "png_px": [
+    2410,
+    1937
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 15.68,
+   "n_texts": 55,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 15.68,
+   "noncolor_encoding": "同上：分组色带 + 行末组名文字；柱长数值与误差比直接写在柱旁"
+  },
+  {
+   "png": "fig10_h7_cross_station.png",
+   "png_px": [
+    2406,
+    1547
+   ],
+   "dpi": 300.0,
+   "min_font_pt": 10.5,
+   "min_screen_px": 15.71,
+   "n_texts": 24,
+   "overlap_px": 0,
+   "text_over_dark_ink_px": 0,
+   "missing_glyph_warnings": 0,
+   "recorded_min_screen_px": 15.71,
+   "noncolor_encoding": "两站用不同 marker（圆/菱形）+ 站 1 上溢空心；连线给出逐种子配对"
+  }
+ ],
+ "palette_delta_l": [
+  {
+   "a": "pine",
+   "b": "tier100000",
+   "dL": 0.0025
+  },
+  {
+   "a": "tier10000",
+   "b": "tier100000",
+   "dL": 0.0025
+  },
+  {
+   "a": "saddle",
+   "b": "violet",
+   "dL": 0.0055
+  },
+  {
+   "a": "grey",
+   "b": "tier3000",
+   "dL": 0.0109
+  },
+  {
+   "a": "saddle",
+   "b": "tier100000",
+   "dL": 0.0118
+  },
+  {
+   "a": "pine",
+   "b": "saddle",
+   "dL": 0.0143
+  },
+  {
+   "a": "saddle",
+   "b": "tier10000",
+   "dL": 0.0143
+  },
+  {
+   "a": "violet",
+   "b": "tier100000",
+   "dL": 0.0173
+  },
+  {
+   "a": "pine",
+   "b": "violet",
+   "dL": 0.0198
+  },
+  {
+   "a": "violet",
+   "b": "tier10000",
+   "dL": 0.0198
+  },
+  {
+   "a": "tier1000",
+   "b": "tier30000",
+   "dL": 0.0262
+  },
+  {
+   "a": "grey",
+   "b": "violet",
+   "dL": 0.0295
+  },
+  {
+   "a": "saddle",
+   "b": "grey",
+   "dL": 0.0349
+  },
+  {
+   "a": "violet",
+   "b": "tier3000",
+   "dL": 0.0403
+  },
+  {
+   "a": "saddle",
+   "b": "tier3000",
+   "dL": 0.0458
+  },
+  {
+   "a": "grey",
+   "b": "tier100000",
+   "dL": 0.0468
+  },
+  {
+   "a": "pine",
+   "b": "grey",
+   "dL": 0.0492
+  },
+  {
+   "a": "grey",
+   "b": "tier10000",
+   "dL": 0.0492
+  },
+  {
+   "a": "tier3000",
+   "b": "tier100000",
+   "dL": 0.0576
+  },
+  {
+   "a": "pine",
+   "b": "tier3000",
+   "dL": 0.0601
+  },
+  {
+   "a": "tier3000",
+   "b": "tier10000",
+   "dL": 0.0601
+  },
+  {
+   "a": "tier1000",
+   "b": "tier3000",
+   "dL": 0.0685
+  },
+  {
+   "a": "pine",
+   "b": "ink",
+   "dL": 0.0733
+  },
+  {
+   "a": "ink",
+   "b": "tier10000",
+   "dL": 0.0733
+  },
+  {
+   "a": "ink",
+   "b": "tier100000",
+   "dL": 0.0758
+  },
+  {
+   "a": "grey",
+   "b": "tier1000",
+   "dL": 0.0794
+  },
+  {
+   "a": "saddle",
+   "b": "ink",
+   "dL": 0.0876
+  },
+  {
+   "a": "ink",
+   "b": "violet",
+   "dL": 0.0931
+  },
+  {
+   "a": "tier3000",
+   "b": "tier30000",
+   "dL": 0.0947
+  },
+  {
+   "a": "grey",
+   "b": "tier30000",
+   "dL": 0.1055
+  },
+  {
+   "a": "violet",
+   "b": "tier1000",
+   "dL": 0.1088
+  },
+  {
+   "a": "saddle",
+   "b": "tier1000",
+   "dL": 0.1143
+  },
+  {
+   "a": "ink",
+   "b": "grey",
+   "dL": 0.1225
+  },
+  {
+   "a": "tier1000",
+   "b": "tier100000",
+   "dL": 0.1261
+  },
+  {
+   "a": "pine",
+   "b": "tier1000",
+   "dL": 0.1286
+  },
+  {
+   "a": "tier1000",
+   "b": "tier10000",
+   "dL": 0.1286
+  },
+  {
+   "a": "ink",
+   "b": "tier3000",
+   "dL": 0.1334
+  },
+  {
+   "a": "violet",
+   "b": "tier30000",
+   "dL": 0.135
+  },
+  {
+   "a": "saddle",
+   "b": "tier30000",
+   "dL": 0.1405
+  },
+  {
+   "a": "tier30000",
+   "b": "tier100000",
+   "dL": 0.1523
+  },
+  {
+   "a": "pine",
+   "b": "tier30000",
+   "dL": 0.1548
+  },
+  {
+   "a": "tier10000",
+   "b": "tier30000",
+   "dL": 0.1548
+  },
+  {
+   "a": "ink",
+   "b": "tier1000",
+   "dL": 0.2019
+  },
+  {
+   "a": "ink",
+   "b": "tier30000",
+   "dL": 0.2281
+  }
+ ]
+}

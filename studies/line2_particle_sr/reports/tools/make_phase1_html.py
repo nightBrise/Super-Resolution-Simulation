@@ -41,16 +41,18 @@ ALL_RUNS = JOINT_RUNS + INDEP_RUNS + E2_RUNS
 TIER_LABEL = {1000: "1e3", 3000: "3e3", 10000: "1e4", 30000: "3e4", 100000: "1e5"}
 
 FIG_INVENTORY = [
-    ("fig01_pipeline.png", "任务与数据管线示意：粒子表 → 六投影 → 五档低计数输入 → 2×10⁵ 目标"),
+    ("fig01_pipeline.png", "任务与数据管线示意：粒子表 → 六投影 → 低计数输入 → 2×10⁵ 目标"),
     ("fig02_lattice.png", "同束在 FODO 站 0 / 站 1 的 (x,x′) 与 (y,y′) 二维直方图对照"),
     ("fig03_e0_curve.png", "E0 裸误差–N 曲线（中位数 + IQR 带）、参照噪声地板线与各档模型误差落点"),
     ("fig04_amplification.png", "三点放大主曲线 N_eff/N_low vs N_low（可验证域带、无放大线、域顶线、空心 = 上溢）"),
-    ("fig05_neff_and_err.png", "20 个 run 的 N_eff（按档位分组）与 test 误差中位数双面板"),
-    ("fig06_training_dynamics.png", "20 个 run 的 val N_eff 轨迹 + e1_joint_s0 的 train/val NLL 与选型点/停机点"),
+    ("fig05_training_dynamics.png", "20 个 run 的 val N_eff 轨迹（线型+标记分四组）+ e1_joint_s0 的 train/val NLL"),
+    ("fig06_neff_and_err.png", "20 个 run 的 N_eff（标记形状 + 空心/实心）与 test 误差中位数（阴影线分档）"),
     ("fig07_h3_pairing.png", "H3 的 5 对同种子 joint vs independent 哑铃图（连线长度为零）"),
-    ("fig08_h8_and_dark.png", "H8 十三项观测量达标率条形图 + 暗桶 B0–B3 的 M2 裸输入 vs 模型对照"),
-    ("fig09_zero_info_control.png", "核心对照：20 个 run 的逐束误差分布 vs 零信息常数解 + 胜出束数与误差比"),
-    ("fig10_h7_cross_station.png", "H7 跨站：站 0 与站 1 逐种子配对的 N_eff（ρ = 1.0，两侧上溢）"),
+    ("fig08a_h8_passrate.png", "H8 十三项观测量达标率（阴影线分达标档 + 柱旁数值与通过束数）"),
+    ("fig08b_dark_buckets.png", "暗桶 B0–B3 的 M2 裸输入（斜纹）vs 模型（实心）对照"),
+    ("fig09a_zero_info_errs.png", "核心对照（上）：20 个 run 的逐束误差箱线图 vs 零信息常数解逐束散点"),
+    ("fig09b_zero_info_wins.png", "核心对照（下）：各 run 相对常数解的胜出束数与中位误差比"),
+    ("fig10_h7_cross_station.png", "H7 跨站：站 0 与站 1 逐种子配对的 N_eff（圆/菱形 + 站 1 上溢空心）"),
 ]
 
 
@@ -101,7 +103,8 @@ CAP["fig01"] = (
 )
 CAP["fig02"] = (
     "<i>画的是什么：</i>同一束粒子（val 划分的 beam_0006）在 FODO 入口（站 0）与出口（站 1）的相空间形状，"
-    "左列是水平面 (x, x′)、右列是垂直面 (y, y′)，颜色是计数（log 色标，白色框内给出该轴的物理 RMS 尺度）。"
+    "左列是水平面 (x, x′)、右列是垂直面 (y, y′)，颜色是计数（log 色标；面板内的白字框给出该轴的物理 RMS 尺度，"
+    "全文符号统一写作 x′ / y′，不再混用 xp / yp）。"
     "<i>怎么读：</i>上下对比同一列：形状与物理尺度都被传输改变了；每个面各自归一到 [-1, 1]，"
     "所以“填得多满”反映的是分布相对自身量程的形态，绝对尺度看白框里的数字。"
     f"<i>结论：</i>站 1 的输入图不是站 0 那张图的平移或缩放——例如 σ_x′ 由站 0 的 "
@@ -112,14 +115,17 @@ CAP["fig02"] = (
 )
 CAP["fig03"] = (
     "<i>画的是什么：</i>“尺子”——不经过任何网络，纯裸模拟的误差随粒子数 N 的变化（绿色折线为中位数，浅绿带为 IQR），"
-    "外加两条水平参照（琥珀色虚线：参照噪声地板；蓝色与红色菱形：各模型 run 在对应档位的实际误差落点）。"
+    "外加一条水平参照（琥珀色虚线：参照噪声地板）与四个档位的模型误差落点（形状标记 + 深色描边，不依赖颜色）。"
     "<i>怎么读：</i>横轴 log 的粒子数、纵轴 log 的六投影平均相对 RMSE（M1）。"
     "先看曲线：粒子数每涨 10 倍，误差大约降到 1/3.2（1e3 档 4.030 → 1e4 档 1.246）。"
-    "再看菱形：它们全部落在 1e5 档曲线的下方。"
+    "再看各形状的标记点：它们全部落在 1e5 档曲线的下方。"
+    "<strong>两个 0.2856 的区别</strong>：参照噪声地板 0.285597 是 1e5 档子样本两两配对差 / √2，"
+    "1e5 档裸误差 0.285636 是同档曲线节点的中位数——两者相差仅 "
+    f"{D['floor_vs_tier_gap']:.1e}，是同一“可分辨性下界”的两种估计，不是两个互相矛盾的数。"
     f"<i>结论：</i>模型误差低于 1e5 档裸模拟的误差 → 按预注册定义一律触到报告域顶（上溢）；"
     f"同时曲线右端逼近地板 {E0['reference_noise_floor']:.6f}，意味着“再堆裸粒子也换不来可分辨的改善”。"
     "<i>限定：</i>地板是 1e5 档子样本两两互差的估计，它限制的是<strong>可分辨性</strong>——低于地板时，模型之间以及模型与裸模拟之间的差异在这个度量下已经无法区分；"
-    "菱形落点用的是 test 束 × 站 0 的口径，与曲线的 val+test 口径不完全相同（1.2455 vs 1.2477 量级的差异即由此而来）。"
+    "标记点落点用的是 test 束 × 站 0 的口径，与曲线的 val+test 口径不完全相同（1.2455 vs 1.2477 量级的差异即由此而来）。"
     '<br /><span style="color:#666">来源：results/e0_curve.json、e0_curve.meta.json、results/n_eff_table.csv</span>'
 )
 CAP["fig04"] = (
@@ -137,20 +143,11 @@ CAP["fig04"] = (
     '<br /><span style="color:#666">来源：results/n_eff_table.csv、results/e0_curve.json、docs/specs/line2/00_master_spec.md [S1]</span>'
 )
 CAP["fig05"] = (
-    "<i>画的是什么：</i>上格是 20 个 run 的 N_eff（按档位分组，log 纵轴），下格是同一批 run 的 test 形状误差中位数，"
-    "并叠加两条水平参照（琥珀：1e5 档裸误差；紫：零信息常数解）。"
-    "<i>怎么读：</i>上格里空心圆 = 上溢（贴在域顶线 10<sup>5</sup> 上），实心圆 = 域内真实插值；"
-    "下格里柱子越低越好，但两条水平线告诉你“低于哪条线”意味着什么。"
-    f"<i>结论：</i>20 个 run 里 19 个 N_eff 都贴在域顶（= 达到可验证域顶），唯一例外是 1e5 档的 s2（98,724）；"
-    f"误差中位数分布 0.2218–0.2898，横向跨越 30% 左右，比 N_eff 的差异更能分辨 run 之间的差别。"
-    "<i>限定：</i>N_eff 在被截断的档位上不可排序（19 个点都写着 1e5），"
-    "要比较 run 的强弱必须看下格的误差，且要用“相对基线”的读法（见诚实边界一章）。"
-    '<br /><span style="color:#666">来源：results/n_eff_table.csv（N_eff/err 逐 run 明细）、results/e0_curve.json</span>'
-)
-CAP["fig06"] = (
     "<i>画的是什么：</i>左格是全部 20 个 run 的验证选型准绳 val N_eff 随训练步数的轨迹；"
     "右格取其中一个 run（e1_joint_s0）的 train/val NLL 曲线，两条竖虚线标出“选型点”和“实际停机点”。"
-    "<i>怎么读：</i>左格里曲线一旦贴上 10<sup>5</sup> 就再也不下来——那是报告域顶；"
+    "<i>怎么读：</i>四组曲线除颜色外<strong>同时用线型与标记区分</strong>（joint@3e3 实线+圆、joint@1e4 虚线+方、"
+    "indep@1e4 点划线+三角、joint@1e5 点线+菱形），黑白打印下同样可辨；"
+    "左格里曲线一旦贴上 10<sup>5</sup> 就再也不下来——那是报告域顶；"
     "右格里 NLL 一直下降，说明训练本身没有变差，只是准绳不再更新 best。"
     f"<i>结论：</i>准绳在首个评估周期就会触顶，此后 patience 计数走到 10 就停机，"
     f"所以 20 个 run 都只用了 50,000 步预算的 22–26%（两臂均值 24.8%/22.4%），"
@@ -159,6 +156,18 @@ CAP["fig06"] = (
     "<i>限定：</i>这不代表“训练到 50,000 步一定更好”（没有做对照），只说明<strong>当前准绳在饱和后失去分辨力</strong>，"
     "选型点的语义因此空洞。"
     '<br /><span style="color:#666">来源：results/&lt;run&gt;/train_log.jsonl 与 summary.json（best_step/steps）</span>'
+)
+CAP["fig06"] = (
+    "<i>画的是什么：</i>上格是 20 个 run 的 N_eff（按档位分组，log 纵轴），下格是同一批 run 的 test 形状误差中位数，"
+    "并叠加两条水平参照（琥珀：1e5 档裸误差；紫：零信息常数解）。"
+    "<i>怎么读：</i>上格里标记形状再编码档位（圆 = 3e3、方 = 1e4、三角 = 1e5），空心 = 上溢（贴在域顶线 "
+    "10<sup>5</sup> 上）、实心 = 域内真实插值；下格柱形用<strong>阴影线</strong>区分档位（///、\\\\、xxx），"
+    "不依赖颜色。下格里柱子越低越好，但两条水平线告诉你“低于哪条线”意味着什么。"
+    f"<i>结论：</i>20 个 run 里 19 个 N_eff 都贴在域顶（= 达到可验证域顶），唯一例外是 1e5 档的 s2（98,724）；"
+    f"误差中位数分布 0.2218–0.2898，横向跨越 30% 左右，比 N_eff 的差异更能分辨 run 之间的差别。"
+    "<i>限定：</i>N_eff 在被截断的档位上不可排序（19 个点都写着 1e5），"
+    "要比较 run 的强弱必须看下格的误差，且要用“相对基线”的读法（见诚实边界一章）。"
+    '<br /><span style="color:#666">来源：results/n_eff_table.csv（N_eff/err 逐 run 明细）、results/e0_curve.json</span>'
 )
 CAP["fig07"] = (
     "<i>画的是什么：</i>H3 的 5 对同种子配对：每对里菱形是独立臂（6 个单投影子网）、圆是联合臂（1 个 6 进 6 出网），"
@@ -171,37 +180,57 @@ CAP["fig07"] = (
     "因此 3e3 档也没有独立臂对照可用于事后复核这个选择。"
     '<br /><span style="color:#666">来源：results/e1_gates.json 的 H3 段、results/n_eff_table.csv</span>'
 )
-CAP["fig08"] = (
-    "<i>画的是什么：</i>左格是 H8 的 13 项物理观测量逐项达标率（横条），两条竖虚线是预注册的 50% 与 80% 阈值；"
-    "右格是 M2 分桶（按参照计数分的 B0–B3 四档）上“裸输入 vs 模型”的相对误差对照。"
-    "<i>怎么读：</i>左格横条越长越好，右侧文字给出通过束数；右格每对柱子的相对改进百分比写在下方。"
-    f"<i>结论：</i>13 项里只有 ε_4D 全过（150/150），σ_x′x′、|Δρ(x′,y)|、|Δρ(x′,y′)| 部分通过，其余近似为零；"
-    f"整体达标率 {GATES['H8']['pass_rate']:.4f} ≤ 0.50 → H8 不成立。"
-    f"右格显示分桶误差上模型确有实效：B1（暗而非常空）相对改进 {pct(DB['B1']['relative_improvement'])}"
-    f"、B2 {pct(DB['B2']['relative_improvement'])}、B3 {pct(DB['B3']['relative_improvement'])}；"
-    f"但 B0（参照计数 &lt; 0.5 的格子）的裸输入结构性恒零，相对改进无定义——"
-    f"而模型在该桶仍有 {DB['B0']['model_median']:.6f} 的 M2，即<strong>在参照为空的格子里产生了计数</strong>。"
+CAP["fig08a"] = (
+    "<i>画的是什么：</i>H8 的 13 项物理观测量逐项达标率（横条），两条竖虚线是预注册的 50% 与 80% 阈值，"
+    "每根柱右侧直接写出达标率与通过束数。"
+    "<i>怎么读：</i>横条越长越好；阴影线给出达标档位（xx = 全通过、\\\\ = 部分通过、// = 全不通过），"
+    "所以只看黑白也能分辨三档。"
+    f"<i>结论：</i>13 项里只有 ε_4D 全过（150/150），σ_x′x′、|Δρ(x′,y)|、|Δρ(x′,y′)| 部分通过，其余 9 项一项未过；"
+    f"整体达标率 {GATES['H8']['pass_rate']:.4f} ≤ 0.50 → <strong>H8 不成立</strong>。"
     "<i>限定：</i>容差线按每束 N_eff 映射到最近档，本批全部 150 束都落到最严的 1e5 档（见门禁一章），"
-    "所以 H8 的“不成立”与“网络把 N_eff 推到域顶”是同一件事的两面；暗桶分项不并入达标率。"
-    '<br /><span style="color:#666">来源：results/e1_gates.json 的 H8.per_observable 与 H8.dark_bucket_m2（暗桶 B2/B3 由 results/&lt;run&gt;/test_eval.json 的 m2_buckets 按同口径聚合）</span>'
+    "所以 H8 的“不成立”与“网络把 N_eff 推到域顶”是同一件事的两面；"
+    "同一组观测量若改用 1e4 档容差，达标率为 0.9836（成立）。"
+    '<br /><span style="color:#666">来源：results/e1_gates.json 的 H8.per_observable（达标率与逐项通过束数）</span>'
 )
-CAP["fig09"] = (
-    "<i>画的是什么：</i>核心对照实验。左格是 20 个 run 的逐束误差分布（水平箱线图），"
-    "最下面一行紫色圆点是“零信息常数解”的逐束误差；右格是每个 run 在 150 个 test 束上战胜该常数解的束数，"
-    "并标注逐束误差比的中位数。"
+CAP["fig08b"] = (
+    "<i>画的是什么：</i>M2 分桶（按参照计数分 B0–B3 四档）上“裸输入 vs 模型”的相对误差中位数对照。"
+    "<i>怎么读：</i>每对柱子里斜纹是裸输入、实心是模型（13 项观测量之外的另一条独立信息）；"
+    "柱顶给出绝对数值，柱下给出相对改进百分比。"
+    f"<i>结论：</i>模型在分桶误差上确有实效：B1（暗而非常空）相对改进 {pct(DB['B1']['relative_improvement'])}、"
+    f"B2 {pct(DB['B2']['relative_improvement'])}、B3 {pct(DB['B3']['relative_improvement'])}；"
+    f"但 B0（参照计数 &lt; 0.5）的裸输入结构性恒零，相对改进无定义——而模型在该桶仍有 "
+    f"{DB['B0']['model_median']:.6f} 的 M2，即<strong>在参照为空的格子里产生了计数</strong>。"
+    "<i>限定：</i>暗桶分项由 40 [S3] 强制单独报告、不并入达标率；B2/B3 的相对改进与 B0/B1 同口径，"
+    "均为“逐束先对 5 种子取中位、再对 150 束取中位”。"
+    '<br /><span style="color:#666">来源：results/e1_gates.json 的 H8.dark_bucket_m2（B2/B3 由 results/&lt;run&gt;/test_eval.json 的 m2_buckets 按同口径聚合）</span>'
+)
+CAP["fig09a"] = (
+    "<i>画的是什么：</i>核心对照实验的第一半：20 个 run 的逐束误差分布（水平箱线图），"
+    "最下面一行紫色圆点是“零信息常数解”的逐束误差；四个档位分组有背景色带与行末组名，y 轴只标种子号。"
     "<i>怎么读：</i>常数解 = 700 个 train 束目标图逐投影归一后求平均得到的“均值束”，"
-    "它不含任何 test 信息，也不随输入变化（纯零信息的退化解）；箱体越低越好，"
-    "紫色的“1e5 档裸误差 0.285636”是上溢判据线。"
-    f"<i>结论：</i>常数解的误差中位数只有 {ZI['const_median']:.6f}，低于全部 20 个 run（0.2218–0.2898）；"
-    f"模型只在 {min(v['n_wins_vs_const'] for v in ZI['per_run'].values())}–"
-    f"{max(v['n_wins_vs_const'] for v in ZI['per_run'].values())}/150 束上更好，逐束误差比中位数 "
-    f"{min(v['median_ratio_model_over_const'] for v in ZI['per_run'].values()):.2f}–"
-    f"{max(v['median_ratio_model_over_const'] for v in ZI['per_run'].values()):.2f}（&gt;1 = 模型更差）；"
-    f"同时 {ZI['const_median']:.6f} &lt; 0.285636，所以这个常数解也会触发上溢、同样满足 H1 的判定表达式。"
+    "它不含任何 test 信息、也不随输入变化（纯零信息的退化解）；箱体与紫点越靠左越好，"
+    "琥珀虚线是 1e5 档裸误差 0.285636（上溢判据线）。"
+    f"<i>结论：</i>常数解的误差中位数只有 {ZI['const_median']:.6f}（逐束标准差 {ZI['const_std']:.4f}、"
+    f"范围 {ZI['const_min']:.4f}–{ZI['const_max']:.4f}），落在全部 20 个 run 的箱体左侧；"
+    f"同时 {ZI['const_median']:.6f} &lt; 0.285636，所以这个常数解同样会触发上溢。"
     "<i>限定：</i>这说的是“在冻结的 M1 聚合口径下，一个与束无关的常数解拿到更低的分”，"
-    "它否掉的是“模型恢复了束特异结构”这一读法，"
-    "并不意味着网络输出等于常数（模型逐束误差的标准差只有 0.0021–0.0063，常数解为 0.0870，相差 14–41 倍）。"
-    '<br /><span style="color:#666">来源：本目录 tools/compute_phase1_numbers.py 复算（口径见诚实边界一章与 tools/phase1_numbers.json）、results/&lt;run&gt;/test_eval.json</span>'
+    "否掉的是“模型恢复了束特异结构”这一读法；并不意味着网络输出等于常数"
+    "（模型逐束误差标准差只有 0.0021–0.0063，常数解为 0.0870，相差 14–41 倍）。"
+    '<br /><span style="color:#666">来源：本目录 tools/compute_phase1_numbers.py 复算（口径见诚实边界一章）、results/&lt;run&gt;/test_eval.json</span>'
+)
+CAP["fig09b"] = (
+    "<i>画的是什么：</i>核心对照实验的第二半：每个 run 在 150 个 test 束上战胜常数解的束数，"
+    "并在柱旁标注逐束误差比的中位数。"
+    "<i>怎么读：</i>点线是 75/150（50% 平局线）——柱长全部在它左侧，说明多数束上模型并不比常数解更好；"
+    "数值 &gt;1 表示模型误差更大。"
+    f"<i>结论：</i>胜出束数 {min(v['n_wins_vs_const'] for v in ZI['per_run'].values())}–"
+    f"{max(v['n_wins_vs_const'] for v in ZI['per_run'].values())}/150，逐束误差比中位数 "
+    f"{min(v['median_ratio_model_over_const'] for v in ZI['per_run'].values()):.2f}–"
+    f"{max(v['median_ratio_model_over_const'] for v in ZI['per_run'].values()):.2f}；"
+    "最好的两个 run（joint@1e4 的 s3、indep@1e4 的 s3）也没到半数。"
+    "<i>限定：</i>该对照不在 20 [S5] 冻结基线族内，属 spec 层缺口（已立条目）；"
+    "它衡量的是“逐束胜负”，不替代主指标 N_eff 的聚合口径。"
+    '<br /><span style="color:#666">来源：tools/phase1_numbers.json（复算）与 results/&lt;run&gt;/test_eval.json</span>'
 )
 CAP["fig10"] = (
     "<i>画的是什么：</i>H7 跨站检验：获胜变体（joint）的 5 个 ckpt <strong>不重训练</strong>，"
@@ -747,7 +776,7 @@ def build() -> str:
 
   <p>原因是选型准绳 <strong>val N_eff</strong> 在第一个评估周期就会贴到报告域顶 1×10<sup>5</sup>，而更新 best 用的是严格大于号——触顶之后 best 永不刷新，patience = 10 一路走完就停机。<span class="warn">全部 {n_runs} 个 run 只用了 50,000 步预算的 22–26%</span>（两臂均值 24.8% / 22.4%）。这不是训练失败，而是准绳在饱和后失去了分辨力：被选中的 ckpt 是“并列最优里最早到达的那一个”，不是训练最充分的那一刻。</p>
 
-{fig('fig06_training_dynamics.png', CAP['fig06'], '6', '训练动力学：选型准绳在首个评估周期即饱和')}
+{fig('fig05_training_dynamics.png', CAP['fig05'], '5', '训练动力学：选型准绳在首个评估周期即饱和')}
 </section>
 
 <section class="chapter" id="sec-results">
@@ -756,7 +785,7 @@ def build() -> str:
 
   <p class="lead">评估口径：test 束 × 站 0 × 该 run 的档位 × 20 个子样本，逐 (束, 子样本) 推理 → 对子样本取误差中位数 → 全束中位数 → 在 E0 曲线上做 log-N 线性插值反解 N_eff。下面是 {n_runs} 个 run 的全部读数。</p>
 
-{fig('fig05_neff_and_err.png', CAP['fig05'], '5', f'{n_runs} 个 run 的 N_eff 与形状误差中位数')}
+{fig('fig06_neff_and_err.png', CAP['fig06'], '6', f'{n_runs} 个 run 的 N_eff 与形状误差中位数')}
 
   <table>
     <thead><tr><th>run</th><th>变体</th><th>种子</th><th>N_low</th><th>站</th><th>test err 中位数</th><th>N_eff</th><th>标记</th></tr></thead>
@@ -813,9 +842,11 @@ def build() -> str:
 
 {fig('fig07_h3_pairing.png', CAP['fig07'], '7', 'H3 的 5 对同种子比较：逐对连线长度为零')}
 
-{fig('fig08_h8_and_dark.png', CAP['fig08'], '8', 'H8 的 13 项达标率与暗桶 M2 分项')}
+{fig('fig08a_h8_passrate.png', CAP['fig08a'], '8a', 'H8 的 13 项观测量逐项达标率')}
 
-  <h3>H8 逐项明细与暗桶分项</h3>
+{fig('fig08b_dark_buckets.png', CAP['fig08b'], '8b', '暗桶 M2：裸输入 vs 模型')}
+
+  <h3>H8 逐项明细与暗桶分项（图 8a / 8b 的数值表）</h3>
   <table>
     <thead><tr><th>#</th><th>观测量</th><th>通过束数</th><th>达标率</th></tr></thead>
     <tbody>
@@ -829,9 +860,11 @@ def build() -> str:
 {db_rows}
     </tbody>
   </table>
-  <p>暗桶的分项不并入达标率（40 [S3] 要求单独报告），而它给出的是一条独立信息：在<strong>计数稀少但真实存在结构</strong>的 B1 上，模型相对裸输入把 M2 相对误差压低 {pct(DB['B1']['relative_improvement'])}；但在<strong>参照恒为零</strong>的 B0 上，模型的 M2 仍有 {DB['B0']['model_median']:.6f}——那是它在空区产生的计数。</p>
+  <p>暗桶的分项（图 8b）不并入达标率（40 [S3] 要求单独报告），而它给出的是一条独立信息：在<strong>计数稀少但真实存在结构</strong>的 B1 上，模型相对裸输入把 M2 相对误差压低 {pct(DB['B1']['relative_improvement'])}；但在<strong>参照恒为零</strong>的 B0 上，模型的 M2 仍有 {DB['B0']['model_median']:.6f}——那是它在空区产生的计数。</p>
 
-{fig('fig09_zero_info_control.png', CAP['fig09'], '9', '核心对照：零信息常数解的误差比全部 run 都低')}
+{fig('fig09a_zero_info_errs.png', CAP['fig09a'], '9a', '核心对照（上）：逐束误差分布 vs 零信息常数解')}
+
+{fig('fig09b_zero_info_wins.png', CAP['fig09b'], '9b', '核心对照（下）：胜出束数与逐束误差比')}
 
 {fig('fig10_h7_cross_station.png', CAP['fig10'], '10', 'H7 跨站泛化：ρ = 1.0，但两侧上溢让结论不可辨识')}
 </section>
@@ -842,7 +875,7 @@ def build() -> str:
 
   <p class="lead">Phase 1 的读数里有一组彼此牵制的限定条件。把它们集中写在这里，是因为结论的正确用法取决于它们。</p>
 
-  <h3>① 一个零信息常数解比全部 {n_runs} 个 run 都好（见图 9）</h3>
+  <h3>① 一个零信息常数解比全部 {n_runs} 个 run 都好（见图 9a、图 9b）</h3>
   <p>把 700 个 <strong>train</strong> 束的目标图逐投影归一后求平均，得到一张“均值束”图（只看 train，不碰 test）。它与输入无关、与束无关，是彻底的零信息退化解。对 150 个 test 束：误差中位数 <strong>{ZI['const_median']:.6f}</strong>、逐束标准差 {ZI['const_std']:.4f}、范围 {ZI['const_min']:.4f}–{ZI['const_max']:.4f}，<span class="warn">优于全部 {n_runs} 个 run 的 test 误差中位数（0.2218–0.2898）</span>；而且 {ZI['const_median']:.6f} &lt; 1×10<sup>5</sup> 档裸误差 {E0['points'][-1]['median']:.6f}，所以它<strong>同样触发上溢、同样满足 H1 的判定表达式、同样在 H3 上构成域顶平局</strong>。模型只在 {min(v['n_wins_vs_const'] for v in ZI['per_run'].values())}–{max(v['n_wins_vs_const'] for v in ZI['per_run'].values())}/150 束上优于它（逐束误差比中位 {min(v['median_ratio_model_over_const'] for v in ZI['per_run'].values()):.2f}–{max(v['median_ratio_model_over_const'] for v in ZI['per_run'].values()):.2f}）。只取前 200 个 train 束构造该常数解，中位数为 {ZI['const_first200_median']:.4f}，结论不变。</p>
   <blockquote>
     H1 的“成立”只说明“网络在聚合形状误差上达到了 ≥10× 的等效精度”，<strong>不能</strong>读作“网络恢复了束特异结构”。
@@ -853,7 +886,7 @@ def build() -> str:
   <h3>② 域顶饱和让“成立”变成下界陈述</h3>
   <p>报告域上端是 1×10<sup>5</sup>，而目标粒子数是 2×10<sup>5</sup>。模型在 1×10<sup>4</sup> 输入下很快就撞到域顶，于是：H1 是饱和成立；H3 的 5 对全是平局（判定表达式里的“联合 ≥ 独立”把平局计入胜，所以字面成立）；H7 因为两侧都溢出而不可辨识。三点主曲线里只有 1×10<sup>5</sup> 档有非饱和点。</p>
 
-  <h3>③ 早停于预算的 22–26%（见图 6）</h3>
+  <h3>③ 早停于预算的 22–26%（见图 5）</h3>
   <p><code>best_step</code>：joint {', '.join(str(TR[x]['best_step']) for x in JOINT_RUNS)}；independent {', '.join(str(TR[x]['best_step']) for x in INDEP_RUNS)}。<code>steps</code>：joint {min(TR[x]['steps_total'] for x in JOINT_RUNS):,}–{max(TR[x]['steps_total'] for x in JOINT_RUNS):,}、independent {min(TR[x]['steps_total'] for x in INDEP_RUNS):,}–{max(TR[x]['steps_total'] for x in INDEP_RUNS):,}。根因是准绳饱和，后果有三：选型点语义空洞（并列最优里最早到达的那个）；被评估的 ckpt 不是训练最充分的；<strong>两臂实际步数不等</strong>（joint 比 independent 多跑若干个百分点），而 H3 恰好是 0 严格胜的平局，两件事叠加使 H3 更加无从解读。</p>
 
   <h3>④ κ 条件向量在 Phase 1 没有任何信息量</h3>

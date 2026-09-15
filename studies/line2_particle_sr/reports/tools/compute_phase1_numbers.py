@@ -237,7 +237,10 @@ def derived() -> dict:
                     float(np.sqrt((pi * (ui - mi) ** 2).sum())),
                     float(np.sqrt((pj * (uj - mj) ** 2).sum())),
                 )
+    e0_obj = json.loads((RESULTS / "e0_curve.json").read_text(encoding="utf-8"))
+    floor_gap = float(e0_obj["points"][-1]["median"]) - float(e0_obj["reference_noise_floor"])
     return {
+        "floor_vs_tier_gap": floor_gap,
         "e1_first_start": e1_start,
         "e1_last_end": e1_end,
         "e2_start": e2_start,
