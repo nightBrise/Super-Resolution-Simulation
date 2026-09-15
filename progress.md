@@ -6,10 +6,10 @@
 
 | 项目 | 值 |
 |---|---|
-| **当前阶段** | line1 收官（2026-09-12）；line2 Phase 1 执行中 |
-| **当前任务** | line2 Phase 1：L1/L2/L3b/L4 实现 + 两轮复审整改（needs fixes → 全部清零，默认套件 435 passed / 2 xfailed）；E0 曲线 + 容差线尺子先行（时间戳早于 E1）；**E1 十次训练完成（2026-09-14 23:47）**，站 0/站 1 test 端评估 + 门禁 + 域地图与报告已落盘——**H1 成立（饱和：5 种子 N_eff 全 1e5）/ H3 成立（5/5 对全为域顶平局，n_ties=5、n_strict_joint_wins=0）/ H7 不可判定（ρ=1.0 披露但两站全 overflow）/ H8 不成立（达标率 0.1318）**；**E2 十次训练运行中**（joint × {3e3,1e5} × 5 种子，3e3 档首个读数 92978/84255 未饱和 = 曲线上的非饱和点）。执行期修掉四个实测缺陷：图内轴向布局消费者侧不一致（Σ 对角误差 −87%…+653%）、E1 配置两臂种子不重叠 + 独立臂深度不符标定（−76.9%）、`run_e1` 相对 `--configs-dir` 路径解析、E2 链等待超时与 `map_report` 必填参数 |
+| **当前阶段** | line1 收官（2026-09-12）；line2 Phase 1 交付完成（2026-09-15，待最终验收审查裁决） |
+| **当前任务** | line2 Phase 1 **交付完成**：L1/L2/L3b/L4 实现 + 两轮复审整改（needs fixes → 全部清零，默认套件 443 passed / 2 xfailed）；E0 曲线 + 容差线尺子先行（时间戳早于 E1）；**E1 十次（2026-09-14 23:47）+ E2 十次（2026-09-15 07:53）训练全部完成**，站 0/站 1 test 端评估、门禁、三点放大主曲线、域地图与报告均已落盘。门禁结论：**H1 成立（饱和，5 种子 N_eff 全 1e5）/ H3 成立（5/5 对全为域顶平局，n_ties=5、n_strict_joint_wins=0）/ H7 不可判定（rho_median=1.0 披露但两站全 overflow）/ H8 不成立（达标率 0.1318，容差档 mode=1e5）**。核心定量结论：**放大比 N_eff/N_low 随 N_low 单调下降——3e3 档 ≥33.3×、1e4 档 ≥10×、1e5 档 1.0×（该档 5 个 run 中 1 个未触顶，N_eff=98,724）**。执行期修掉六个实测缺陷（图内轴向布局、E1 配置两处、`run_e1` 相对路径、E2 链等待脚本、`map_report` 必填参数）并补两处规格合规（H8 容差档落盘、config 契约名） |
 | **进度** | M0–M6 全部完成；出口决策「不进入下一阶段」定案——分支树 (a) 阴性/等效合法终点（条件 1 等效/种子敏感、非显著负），分支 (b) 不触发（读法裁决随 99 R187 登记）；99 [S4] 未决问题表 7 条全部闭环；核心结论——主指标上先验增益未获跨种子稳健确认（A−B 等效（种子级）/ A−C、B−C 种子敏感不可判定），次指标 ε_z 与预测离散度上方案 C 四种子一致占优（约为 A/B 的一半），G3：A−B 通过、A−C/B−C 极端退化档反转（E 类如实报告） |
-| **下一步** | E2 十次训练完成（joint × {3e3,1e5} × 5 种子）→ 站 0 评估 → 门禁重汇总（三点放大曲线）→ 刷新域地图与实验报告（`reports/`）→ 全量 pytest 终校 → **最终验收审查（qwen3.8-max）** → 向用户汇报 Phase 1 结论与偏差裁决清单 |
+| **下一步** | 收到 qwen3.8-max 最终验收审查结论后：处置 findings → 向用户汇报 Phase 1 结论与**偏差裁决清单**（`10` D12 身份字段、`30` D12 单卡/C4 未满足、`30` D13 κ 尺度惰性、`30` D14 log₁₀N 口径、`30` D17 独立臂 κ 用协方差、`40` D14 config 副本），由用户决定是否进入 Phase 2（束流接口/分辨率扩展） |
 | **最近一次报告** | [`final_report.md`](docs/reports/line1_substitute_sr_final_report.md)（M6 最终报告，2026-08-30；2026-09-12 收官时修正 5 处图片相对链接）；[`studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-03_summary/stage_report.md)（M5）；[`studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md`](studies/line1_substitute_sr/results/summary/EXP-02_summary/stage_report.md)（M4）|
 
 ## 阶段完成历史
@@ -37,11 +37,11 @@
 - [x] M5：消融与归因（EXP-03/04/07/08 推理级 + G3 判定）—— A−B 不反转 G3 通过；A−C/B−C 方向反转 E 类如实报告；EXP-07 c_mid 有效；EXP-08 C 离散度最低；99 行 185 登记
 - [x] M6：最终报告 + 出口决策（final_report 完成 + N8 通过；出口决策 2026-09-12 用户定案「不进入下一阶段」，line1_substitute_sr 收官）
 - [x] line2 立项：4D 六投影一致超分（大纲 v0.8；五份 spec v1.0 冻结 2026-09-14，`docs/specs/line2/`）
-- [ ] line2 Phase 1 执行（goal 模式进行中）：L1 数据管线 → L2 判据 → L3b 训练 → L4/L5 实验矩阵
+- [x] line2 Phase 1 执行（2026-09-15 交付）：L1 数据管线 → L2 判据 → L3b 训练 → L4/L5 实验矩阵（E0/E1/E2/E3 全部完成、门禁与报告落盘）
   - [x] L1 `10` [S1]–[S5]：锚点入库（MD5 f39d905f…）+ 1000 束抖动群 700/150/150 + FODO + 五档 ×k=20 子采样落盘（`studies/line2_particle_sr/data/line2_ds_v1/`）
   - [x] L2 `20` [S1]–[S5]：度量族 M1–M6、裸误差–N 曲线（含参照噪声地板）、N_eff 恒等测试、容差线、基线族
   - [x] L3b `30` [S1]–[S5]：U-Net 概率头 + FiLM 条件化 + 独立/联合两版 + ★防泄露测试（**C4 未满足**：DDP 双卡缓期，已登记 D12）
-  - [ ] L4/L5 `40` [S1]–[S4]：E0 ✓ → **E1 运行中** → E2/E3 按路由 → H1/H3/H8 门禁 + 域地图 + 报告
+  - [x] L4/L5 `40` [S1]–[S4]：E0 ✓ → E1 十次 ✓ → E2 十次 ✓ → E3 跨站 ✓ → H1/H3/H7/H8 门禁 + 三点放大域地图 + 双报告 ✓
 
 ## Agent 工作守则（与 `00 [S13]` 同步）
 
