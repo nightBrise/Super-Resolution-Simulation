@@ -2,8 +2,8 @@
 
 > Spec：`docs/specs/line2/40_experiment_spec.md`（Frozen v1.0）[S4] 产出物；判据与 N_eff 见 `20`，模型与训练见 `30`，总纲与全局约束见 `00`。
 > 生成方式：`python -m src.line2.experiments.map_report --results-dir <dir>`（只读；同输入逐位一致，[S4] C1）。
-> 输入产物：`e0_curve.json`、`e1_gates.json`、15 份 `*/test_eval*.json`、12 份 `*/run_meta.json`。
-> 门禁产物 code_version：148604dc9f658684f0fa5e828d35de199301ab60（产生 `e1_gates.json` 的判定代码版本；`00` GC7 要求的每个 run 的三元组见 §1.2）｜数据版本：line2_ds_v1｜spec 版本：line2-spec-v1.0
+> 输入产物：`e0_curve.json`、`e1_gates.json`、25 份 `*/test_eval*.json`、20 份 `*/run_meta.json`。
+> 门禁产物 code_version：306d3964f60a03bc3fd3cc57eef4bbdd2b289c56（产生 `e1_gates.json` 的判定代码版本；`00` GC7 要求的每个 run 的三元组见 §1.2）｜数据版本：line2_ds_v1｜spec 版本：line2-spec-v1.0
 > 配套产出物：地图 `studies/line2_particle_sr/reports/figure_avail_domain.png`、N_eff 表 `studies/line2_particle_sr/results/n_eff_table.csv`。
 
 ## 1. 数据
@@ -48,8 +48,16 @@
 | e1_joint_s2 | line2_ds_v1 | 3cb412bb68265102ec80c76d864a75902dc545f1 | line2-spec-v1.0 | joint | 102 | 10000 | 50000 |
 | e1_joint_s3 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 103 | 10000 | 50000 |
 | e1_joint_s4 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 104 | 10000 | 50000 |
+| e2_joint_n100000_s0 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 100 | 100000 | 50000 |
+| e2_joint_n100000_s1 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 101 | 100000 | 50000 |
+| e2_joint_n100000_s2 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 102 | 100000 | 50000 |
+| e2_joint_n100000_s3 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 103 | 100000 | 50000 |
+| e2_joint_n100000_s4 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 104 | 100000 | 50000 |
 | e2_joint_n3000_s0 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 100 | 3000 | 50000 |
+| e2_joint_n3000_s1 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 101 | 3000 | 50000 |
+| e2_joint_n3000_s2 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 102 | 3000 | 50000 |
 | e2_joint_n3000_s3 | line2_ds_v1 | a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015 | line2-spec-v1.0 | joint | 103 | 3000 | 50000 |
+| e2_joint_n3000_s4 | line2_ds_v1 | 306d3964f60a03bc3fd3cc57eef4bbdd2b289c56 | line2-spec-v1.0 | joint | 104 | 3000 | 50000 |
 
 ## 2. 设置
 
@@ -86,7 +94,7 @@
 ### 2.3 尺子先行审计（`40` [S1] C5）
 
 - E0 completed_at：2026-09-14T04:11:22.933516+00:00
-- 已核验 run 数：12（全部 started_at 晚于 E0 completed_at）
+- 已核验 run 数：20（全部 started_at 晚于 E0 completed_at）
 
 | run_id | started_at |
 |---|---|
@@ -100,13 +108,26 @@
 | e1_joint_s2 | 2026-09-14T09:20:30.810315+00:00 |
 | e1_joint_s3 | 2026-09-14T10:47:18.931852+00:00 |
 | e1_joint_s4 | 2026-09-14T12:17:37.368205+00:00 |
+| e2_joint_n100000_s0 | 2026-09-14T20:31:35.581057+00:00 |
+| e2_joint_n100000_s1 | 2026-09-14T21:58:00.424828+00:00 |
+| e2_joint_n100000_s2 | 2026-09-14T19:03:01.468354+00:00 |
+| e2_joint_n100000_s3 | 2026-09-14T20:21:15.566076+00:00 |
+| e2_joint_n100000_s4 | 2026-09-14T21:43:16.102283+00:00 |
 | e2_joint_n3000_s0 | 2026-09-14T16:10:45.357370+00:00 |
+| e2_joint_n3000_s1 | 2026-09-14T17:34:17.850831+00:00 |
+| e2_joint_n3000_s2 | 2026-09-14T19:04:24.110913+00:00 |
 | e2_joint_n3000_s3 | 2026-09-14T16:10:45.365345+00:00 |
+| e2_joint_n3000_s4 | 2026-09-14T17:37:19.174550+00:00 |
 
 ### 2.4 run 清单（test 段评估，`00` GC3：只评一次）
 
 | run_id | variant | seed | station | n_low | split | n_beams |
 |---|---|---|---|---|---|---|
+| e2_joint_n3000_s0 | joint | 100 | 0 | 3000 | test | 150 |
+| e2_joint_n3000_s1 | joint | 101 | 0 | 3000 | test | 150 |
+| e2_joint_n3000_s2 | joint | 102 | 0 | 3000 | test | 150 |
+| e2_joint_n3000_s3 | joint | 103 | 0 | 3000 | test | 150 |
+| e2_joint_n3000_s4 | joint | 104 | 0 | 3000 | test | 150 |
 | e1_indep_s0 | independent | 100 | 0 | 10000 | test | 150 |
 | e1_indep_s1 | independent | 101 | 0 | 10000 | test | 150 |
 | e1_indep_s2 | independent | 102 | 0 | 10000 | test | 150 |
@@ -117,6 +138,11 @@
 | e1_joint_s2 | joint | 102 | 0 | 10000 | test | 150 |
 | e1_joint_s3 | joint | 103 | 0 | 10000 | test | 150 |
 | e1_joint_s4 | joint | 104 | 0 | 10000 | test | 150 |
+| e2_joint_n100000_s0 | joint | 100 | 0 | 100000 | test | 150 |
+| e2_joint_n100000_s1 | joint | 101 | 0 | 100000 | test | 150 |
+| e2_joint_n100000_s2 | joint | 102 | 0 | 100000 | test | 150 |
+| e2_joint_n100000_s3 | joint | 103 | 0 | 100000 | test | 150 |
+| e2_joint_n100000_s4 | joint | 104 | 0 | 100000 | test | 150 |
 | e1_joint_s0 | joint | 100 | 1 | 10000 | test | 150 |
 | e1_joint_s1 | joint | 101 | 1 | 10000 | test | 150 |
 | e1_joint_s2 | joint | 102 | 1 | 10000 | test | 150 |
@@ -131,6 +157,11 @@
 
 | run_id | variant | seed | n_low | station | split | n_eff | n_eff_flag | err_median | n_beams |
 |---|---|---|---|---|---|---|---|---|---|
+| e2_joint_n3000_s0 | joint | 100 | 3000 | 0 | test | 100000 | overflow | 0.269786 | 150 |
+| e2_joint_n3000_s1 | joint | 101 | 3000 | 0 | test | 100000 | overflow | 0.281423 | 150 |
+| e2_joint_n3000_s2 | joint | 102 | 3000 | 0 | test | 100000 | overflow | 0.262211 | 150 |
+| e2_joint_n3000_s3 | joint | 103 | 3000 | 0 | test | 100000 | overflow | 0.277993 | 150 |
+| e2_joint_n3000_s4 | joint | 104 | 3000 | 0 | test | 100000 | overflow | 0.281208 | 150 |
 | e1_indep_s0 | independent | 100 | 10000 | 0 | test | 100000 | overflow | 0.284933 | 150 |
 | e1_indep_s1 | independent | 101 | 10000 | 0 | test | 100000 | overflow | 0.281785 | 150 |
 | e1_indep_s2 | independent | 102 | 10000 | 0 | test | 100000 | overflow | 0.275088 | 150 |
@@ -141,20 +172,27 @@
 | e1_joint_s2 | joint | 102 | 10000 | 0 | test | 100000 | overflow | 0.266393 | 150 |
 | e1_joint_s3 | joint | 103 | 10000 | 0 | test | 100000 | overflow | 0.225916 | 150 |
 | e1_joint_s4 | joint | 104 | 10000 | 0 | test | 100000 | overflow | 0.263158 | 150 |
+| e2_joint_n100000_s0 | joint | 100 | 100000 | 0 | test | 100000 | overflow | 0.263266 | 150 |
+| e2_joint_n100000_s1 | joint | 101 | 100000 | 0 | test | 100000 | overflow | 0.258587 | 150 |
+| e2_joint_n100000_s2 | joint | 102 | 100000 | 0 | test | 98723.7 | — | 0.289844 | 150 |
+| e2_joint_n100000_s3 | joint | 103 | 100000 | 0 | test | 100000 | overflow | 0.284655 | 150 |
+| e2_joint_n100000_s4 | joint | 104 | 100000 | 0 | test | 100000 | overflow | 0.25309 | 150 |
 | e1_joint_s0 | joint | 100 | 10000 | 1 | test | 100000 | overflow | 0.244437 | 150 |
 | e1_joint_s1 | joint | 101 | 10000 | 1 | test | 100000 | overflow | 0.273902 | 150 |
 | e1_joint_s2 | joint | 102 | 10000 | 1 | test | 100000 | overflow | 0.236621 | 150 |
 | e1_joint_s3 | joint | 103 | 10000 | 1 | test | 100000 | overflow | 0.208691 | 150 |
 | e1_joint_s4 | joint | 104 | 10000 | 1 | test | 100000 | overflow | 0.236336 | 150 |
 
-### 3.2 主曲线聚合（N_low = 1e4；方法可用域地图面板 A 的数值）
+### 3.2 主曲线聚合（N_low = 3e3, 1e4, 1e5；方法可用域地图面板 A 的数值）
 
 放大比 = N_eff / N_low；N_eff 取 `20` [S3] 报告域 [1e3, 1e5]，上/下溢行以域端点计入并在表中计数（图内以空心叉号标注）。
 
 | station | variant | n_low | n_runs | ratio 中位数 | ratio [min, max] | 上溢数 | 下溢数 | err_median 中位数 |
 |---|---|---|---|---|---|---|---|---|
 | 0 | independent | 10000 | 5 | 10 | [10, 10] | 5 | 0 | 0.275505 |
+| 0 | joint | 3000 | 5 | 33.3333 | [33.3333, 33.3333] | 5 | 0 | 0.277993 |
 | 0 | joint | 10000 | 5 | 10 | [10, 10] | 5 | 0 | 0.263158 |
+| 0 | joint | 100000 | 5 | 1 | [0.987237, 1] | 4 | 0 | 0.263266 |
 | 1 | joint | 10000 | 5 | 10 | [10, 10] | 5 | 0 | 0.236621 |
 
 ### 3.3 跨站泛化（`40` [S2]，站 1 的 test 束）
@@ -169,11 +207,9 @@
 
 ## 4. 失败模式与不可验证项
 
-- 12/12 个 run 目录缺 `config.yaml`（`40` [S1] C2 契约文件）：e1_indep_s0, e1_indep_s1, e1_indep_s2, e1_indep_s3, e1_indep_s4, e1_joint_s0, e1_joint_s1, e1_joint_s2, e1_joint_s3, e1_joint_s4, e2_joint_n3000_s0, e2_joint_n3000_s3——配置实由 `docs/specs/line2/e1_configs/*.json` 冻结副本与 `run_meta.json` 的 `config`/`cmd` 字段承载；该缺口登记于 `40` 的 decisions，本报告只披露、不补写产物。
-- 2/12 个 run 目录缺 `last.ckpt`（`40` [S1] C2 契约文件）：e2_joint_n3000_s0, e2_joint_n3000_s3
-- 2/12 个 run 目录缺 `summary.json`（`40` [S1] C2 契约文件）：e2_joint_n3000_s0, e2_joint_n3000_s3
+- 20/20 个 run 目录缺 `config.yaml`（`40` [S1] C2 契约文件）：e1_indep_s0, e1_indep_s1, e1_indep_s2, e1_indep_s3, e1_indep_s4, e1_joint_s0, e1_joint_s1, e1_joint_s2, e1_joint_s3, e1_joint_s4, e2_joint_n100000_s0, e2_joint_n100000_s1, e2_joint_n100000_s2, e2_joint_n100000_s3, e2_joint_n100000_s4, e2_joint_n3000_s0, e2_joint_n3000_s1, e2_joint_n3000_s2, e2_joint_n3000_s3, e2_joint_n3000_s4——配置实由 `docs/specs/line2/e1_configs/*.json` 冻结副本与 `run_meta.json` 的 `config`/`cmd` 字段承载；该缺口登记于 `40` 的 decisions，本报告只披露、不补写产物。
 - H7：n_eff_flag_present（判定降级为 不可判定）。
-- 15 行 N_eff 触及报告域端点（上溢 15 / 下溢 0）——放大比在端点处为截断值，只声明达到域顶/域底，不可外推（`20` [S3] C2）。
+- 24 行 N_eff 触及报告域端点（上溢 24 / 下溢 0）——放大比在端点处为截断值，只声明达到域顶/域底，不可外推（`20` [S3] C2）。
 
 ## 5. 门禁结论（每条附判定表达式的输入数值快照，`40` [S4] C2）
 
