@@ -85,6 +85,8 @@ archive/
 # 排除后不能重新包含），与 AGENTS.md「assets 不入库」一致，故图落盘于 reports/ 下随报告入库。
 !studies/line2_particle_sr/reports/
 !studies/line2_particle_sr/reports/**
+# 白名单会覆盖文件顶部 __pycache__/ 规则，故在报告目录下显式排除字节码
+studies/line2_particle_sr/reports/**/__pycache__/
 
 # ----- Heavy artefacts that should never be committed -----
 *.ckpt
