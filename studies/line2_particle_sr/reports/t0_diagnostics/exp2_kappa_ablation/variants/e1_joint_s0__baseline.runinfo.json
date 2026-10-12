@@ -1,0 +1,50 @@
+{
+  "run_id": "e1_joint_s0",
+  "variant": "baseline",
+  "n_calls": 3000,
+  "n_kappa_delta_nonzero": 0,
+  "kappa_max_abs_delta_overall": 0.0,
+  "kappa_max_abs_delta_median": 0.0,
+  "err_median": 0.25481791403949994,
+  "n_eff_flag": "overflow",
+  "elapsed_s": 103.3,
+  "out": "/home/zhangny/Super-Resolution-Simulation/studies/line2_particle_sr/reports/t0_diagnostics/exp2_kappa_ablation/variants/e1_joint_s0__baseline.json",
+  "device": "cuda:0",
+  "probe": {
+    "zero": {
+      "l1_rel_median": 1.6503512421949478,
+      "l1_rel_max": 1.6516672195110584,
+      "maxabs_median": 0.00854218865151779,
+      "err_delta_median": 4.213293154119594,
+      "err_rel_delta_median": 16.62644190664072
+    },
+    "sigma_zero": {
+      "l1_rel_median": 1.6780154057399874e-07,
+      "l1_rel_max": 1.7799389735910912e-07,
+      "maxabs_median": 2.3283064365386963e-09,
+      "err_delta_median": 4.994419655623972e-09,
+      "err_rel_delta_median": 1.9714601580956367e-08
+    },
+    "mean": {
+      "l1_rel_median": 1.5966131466141673e-07,
+      "l1_rel_max": 1.7686542371364756e-07,
+      "maxabs_median": 2.3283064365386963e-09,
+      "err_delta_median": 6.591285850454653e-10,
+      "err_rel_delta_median": 2.5637220451217103e-09
+    },
+    "permuted": {
+      "l1_rel_median": 1.600131947678404e-07,
+      "l1_rel_max": 1.691373301880715e-07,
+      "maxabs_median": 2.3283064365386963e-09,
+      "err_delta_median": -5.4032644192236745e-09,
+      "err_rel_delta_median": -2.146604818054826e-08
+    },
+    "control_scale1000": {
+      "l1_rel_median": 0.8284520256496082,
+      "l1_rel_max": 0.8489753848802764,
+      "maxabs_median": 0.008557876572012901,
+      "err_delta_median": 3.5182012648833583,
+      "err_rel_delta_median": 13.876043901012594
+    }
+  }
+}

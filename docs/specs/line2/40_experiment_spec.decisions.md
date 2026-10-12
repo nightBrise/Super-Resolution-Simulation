@@ -165,6 +165,14 @@
 **Spec section:** `00` [S4]（一致性检查）
 **Status:** live
 
+## D21: T0 诊断批次（五项零训练实验）与两份 Phase 1 报告的勘误修订
+**Phase:** review（Phase 1 交付后、Phase 1.5 提案前）
+**Chosen:** 2026-10-12 依用户指示执行五项零训练诊断（T0-1 早停损失量化 / T0-2 κ 推理期消融 / T0-3 常数解逐束回归 / T0-4 H8 偏差方差解剖 / T0-5 跨站不饱和重测），产物在 `studies/line2_particle_sr/reports/t0_diagnostics/`（综合层 `T0_SUMMARY.md`）；并据其结论对 `line2_phase1_stage_report.md` 与 `line2_phase1_report.html` 做**显式标记的勘误修订**（每处以【2026-10-12 修订】开头，原文逐字保留）。
+**Rationale:** T0 头号发现：阶段报告"零信息常数解（0.194398）优于全部 20 个 run"是**选型缺陷伪影**——val N_eff 饱和致全部 run 早停于预算 22–26%，用 last.ckpt 同口径重评后 20/20 个 run 反超常数解（err 0.071–0.126 vs 0.194398，领先 1.55–2.75 倍，3000/3000 束级配对差全部改善）。κ 无信息获消融实锤（信息臂=浮点地板；全零臂=移走承重常偏置，其预注册规则字面判定与证据冲突，待闸口裁决）。H8 补充：independent 臂同口径 0.5174（不稳健）、12/13 项实例内偏移主导（oracle 上界 0.9723）、M6 容差线非噪声线。H7 补充：连续 err 口径站 1 低 7.36%（A→B 不被证伪），但训练集默认含站 1（E3 非迁移检验）且站 1 目标图近同形（待查因）。报告必须与最新证据一致，否则会误导 Phase 1.5 提案与 Phase 2 决策。
+**Rejected:** 无痕改写原文 —— 两份报告是已归档时点交付物（HTML 已提交 `fb00015`），无痕改写破坏审计轨迹；只加勘误不动原文 —— 原结论表述过于误导（"网络未超越先验"已反转），就地标记更正 + 顶部修订说明是完整性与可读性的平衡；同步改冻结门禁判定输出 —— H1/H3/H7/H8 的预注册输出保持原样，正式采纳 last/NLL 选型属协议变更须走 99。
+**Spec section:** `40` [S4]（报告交付物）；关联 `30` D13/D20、`40` D18
+**Status:** live
+
 ## Progress
 
 | [Sn] | commit | review | status |
@@ -175,3 +183,5 @@
 | [S4] | 306d396、148604d | 同 [S1] 的 L4 复审结论 | **报告已交付**（`line2_phase1_stage_report.md` + `phase1_report.md` + `figure_avail_domain.png` + `n_eff_table.csv`） |
 
 **Phase 1 最终验收审查（agent-7m1095z1，2026-09-15，审查对象 HEAD `1dfc197`）：needs fixes** —— 两条 blocking（报告 §3 的常数解论证被可复算对照否证；[S3] H8 要求的暗桶 M2 单独报告缺失且未登记偏差）+ Major M1–M9；**产物侧独立复算全部成立**（25 份 `test_eval*.json` 的 N_eff 逐位一致、`n_eff_table.csv` 字段级零失配、H1/H3/H8 逐位一致、默认套件 443 passed / 2 xfailed）。本批登记 D15–D18；报告侧整改见 `studies/line2_particle_sr/reports/line2_phase1_stage_report.md`；暗桶 M2 分项已落地并交付（`per_beam[].m2_buckets` + `gates.h8_dark_bucket_report` + `map_report` 独立渲染）：B1 相对改进 81.2%、B0+B1 等权 74.2%；B0 的裸输入结构性恒零故其相对改进无定义，模型在该桶仍有 0.306 的绝对 M2（参照空区幻觉计数）。报告与产物已于 7d4d993 重生成，门禁判定与 pass_rate 逐位不变，图与 CSV 的 md5 与改动前一致。
+
+**T0 诊断批次与报告勘误（D21，2026-10-12）**：五项零训练诊断完成（`reports/t0_diagnostics/`），头号结论——"常数解优于全部 run"系选型缺陷伪影，last.ckpt 口径 20/20 反超（领先 1.55–2.75 倍）；两份报告已就地标记勘误（冻结门禁判定输出不变）。待闸口/用户裁决：exp2 消融规则修订、训练含站 1 vs H7 语义、M6 容差线构造、站 1 目标图同形查因。Phase 1.5 预注册提案（选型准绳改 NLL/err + 训满预算等）待用户批准后走 99。

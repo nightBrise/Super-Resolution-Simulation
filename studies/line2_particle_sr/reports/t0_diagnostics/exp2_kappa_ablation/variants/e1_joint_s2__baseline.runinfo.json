@@ -1,0 +1,13 @@
+{
+  "run_id": "e1_joint_s2",
+  "variant": "baseline",
+  "n_calls": 3000,
+  "n_kappa_delta_nonzero": 0,
+  "kappa_max_abs_delta_overall": 0.0,
+  "kappa_max_abs_delta_median": 0.0,
+  "err_median": 0.2663933188574208,
+  "n_eff_flag": "overflow",
+  "elapsed_s": 112.0,
+  "out": "/home/zhangny/Super-Resolution-Simulation/studies/line2_particle_sr/reports/t0_diagnostics/exp2_kappa_ablation/variants/e1_joint_s2__baseline.json",
+  "device": "cuda:0"
+}

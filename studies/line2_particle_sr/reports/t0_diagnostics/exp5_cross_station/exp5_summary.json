@@ -1,0 +1,437 @@
+{
+  "analysis": "T0-exp5：跨站（站 0 → 站 1）不饱和度量复测",
+  "metric": "M1 = group_rel_rmse，取 test_eval per_beam[].err（逐束对 20 子样本取中位数）",
+  "n_low": 10000,
+  "master_seed": 20260825,
+  "n_bootstrap": 10000,
+  "scope": {
+    "included": [
+      "e1_joint_s0",
+      "e1_joint_s1",
+      "e1_joint_s2",
+      "e1_joint_s3",
+      "e1_joint_s4"
+    ],
+    "missing_station1": [],
+    "scan": {
+      "runs_with_station0": [
+        "e1_indep_s0",
+        "e1_indep_s1",
+        "e1_indep_s2",
+        "e1_indep_s3",
+        "e1_indep_s4",
+        "e1_joint_s0",
+        "e1_joint_s1",
+        "e1_joint_s2",
+        "e1_joint_s3",
+        "e1_joint_s4",
+        "e2_joint_n100000_s0",
+        "e2_joint_n100000_s1",
+        "e2_joint_n100000_s2",
+        "e2_joint_n100000_s3",
+        "e2_joint_n100000_s4",
+        "e2_joint_n3000_s0",
+        "e2_joint_n3000_s1",
+        "e2_joint_n3000_s2",
+        "e2_joint_n3000_s3",
+        "e2_joint_n3000_s4"
+      ],
+      "runs_with_station1": [
+        "e1_joint_s0",
+        "e1_joint_s1",
+        "e1_joint_s2",
+        "e1_joint_s3",
+        "e1_joint_s4"
+      ],
+      "station0_only": [
+        "e1_indep_s0",
+        "e1_indep_s1",
+        "e1_indep_s2",
+        "e1_indep_s3",
+        "e1_indep_s4",
+        "e2_joint_n100000_s0",
+        "e2_joint_n100000_s1",
+        "e2_joint_n100000_s2",
+        "e2_joint_n100000_s3",
+        "e2_joint_n100000_s4",
+        "e2_joint_n3000_s0",
+        "e2_joint_n3000_s1",
+        "e2_joint_n3000_s2",
+        "e2_joint_n3000_s3",
+        "e2_joint_n3000_s4"
+      ],
+      "paired_available": [
+        "e1_joint_s0",
+        "e1_joint_s1",
+        "e1_joint_s2",
+        "e1_joint_s3",
+        "e1_joint_s4"
+      ]
+    }
+  },
+  "interpretation_caveats": [
+    "E1/E2 训练消费两站：train.py 构造 Line2Pairs 未传 stations，取 data.py 默认 (0, 1)（src/line2/training/train.py:104、src/line2/training/data.py:47），故站 1 在训练分布内——本对比度量的是站间性能一致性，不是把模型外推到未见站点的迁移检验",
+    "E0 曲线 dump 的裸输入 M1 为两站池化；逐站值由 raw_samples 的（束, 站, 子样本）展开次序解出，次序经逐点复算校验",
+    "站 0 与站 1 的 test_eval 由不同 commit 产生（文件名内记录 code_version），但 src/line2/metrics/ 与模型推理路径在两 commit 间逐字节相同（差异只新增 M2 分桶字段）"
+  ],
+  "per_run": [
+    {
+      "run_id": "e1_joint_s0",
+      "seed": 100,
+      "n_low": 10000,
+      "n_subs": 20,
+      "n_beams": 150,
+      "err_station0_median": 0.25481791403949994,
+      "err_station1_median": 0.2444370795731821,
+      "err_station0_run_field": 0.25481791403949994,
+      "err_station1_run_field": 0.2444370795731821,
+      "median_delta": -0.00846521912384944,
+      "median_delta_ci": [
+        -0.010091450640203614,
+        -0.006863074934298746
+      ],
+      "median_rel": -0.03347591055789563,
+      "median_rel_ci": [
+        -0.03995695754596496,
+        -0.027335581873215706
+      ],
+      "rel_ci_includes_zero": false,
+      "delta_ci_includes_zero": false,
+      "wilcoxon_delta_p": 1.2794889704587476e-25,
+      "wilcoxon_rel_p": 1.305082178464069e-25,
+      "frac_beams_station1_worse": 0.04666666666666667,
+      "station0": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "station1": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "code_version_station0": "b758e579a69fea823fb9d596a4655fe2c2c913ad",
+      "code_version_station1": "a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015"
+    },
+    {
+      "run_id": "e1_joint_s1",
+      "seed": 101,
+      "n_low": 10000,
+      "n_subs": 20,
+      "n_beams": 150,
+      "err_station0_median": 0.28106139849350886,
+      "err_station1_median": 0.2739018435093379,
+      "err_station0_run_field": 0.28106139849350886,
+      "err_station1_run_field": 0.2739018435093379,
+      "median_delta": -0.006769257857044492,
+      "median_delta_ci": [
+        -0.00785129222885722,
+        -0.005824105346982633
+      ],
+      "median_rel": -0.0241772970290692,
+      "median_rel_ci": [
+        -0.027897499603765787,
+        -0.02073161269243809
+      ],
+      "rel_ci_includes_zero": false,
+      "delta_ci_includes_zero": false,
+      "wilcoxon_delta_p": 1.9000929472586165e-25,
+      "wilcoxon_rel_p": 1.9000929472586165e-25,
+      "frac_beams_station1_worse": 0.04666666666666667,
+      "station0": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 0.8466666666666667,
+        "flagged_frac": 0.8466666666666667,
+        "n_eff_beam_median": 100000.0
+      },
+      "station1": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "code_version_station0": "b758e579a69fea823fb9d596a4655fe2c2c913ad",
+      "code_version_station1": "a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015"
+    },
+    {
+      "run_id": "e1_joint_s2",
+      "seed": 102,
+      "n_low": 10000,
+      "n_subs": 20,
+      "n_beams": 150,
+      "err_station0_median": 0.2663933188574208,
+      "err_station1_median": 0.2366206440175873,
+      "err_station0_run_field": 0.2663933188574208,
+      "err_station1_run_field": 0.2366206440175873,
+      "median_delta": -0.030443650736754382,
+      "median_delta_ci": [
+        -0.0311904811330104,
+        -0.0297745456527701
+      ],
+      "median_rel": -0.11468656259867971,
+      "median_rel_ci": [
+        -0.11741642433408017,
+        -0.11208300279948566
+      ],
+      "rel_ci_includes_zero": false,
+      "delta_ci_includes_zero": false,
+      "wilcoxon_delta_p": 2.2996057560669792e-26,
+      "wilcoxon_rel_p": 2.2996057560669792e-26,
+      "frac_beams_station1_worse": 0.0,
+      "station0": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "station1": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "code_version_station0": "b758e579a69fea823fb9d596a4655fe2c2c913ad",
+      "code_version_station1": "a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015"
+    },
+    {
+      "run_id": "e1_joint_s3",
+      "seed": 103,
+      "n_low": 10000,
+      "n_subs": 20,
+      "n_beams": 150,
+      "err_station0_median": 0.22591617738410583,
+      "err_station1_median": 0.20869094165226043,
+      "err_station0_run_field": 0.22591617738410583,
+      "err_station1_run_field": 0.20869094165226043,
+      "median_delta": -0.01679879688169854,
+      "median_delta_ci": [
+        -0.01770189229273046,
+        -0.01611072467458223
+      ],
+      "median_rel": -0.07360439715329499,
+      "median_rel_ci": [
+        -0.07747280007297938,
+        -0.07088098409105206
+      ],
+      "rel_ci_includes_zero": false,
+      "delta_ci_includes_zero": false,
+      "wilcoxon_delta_p": 2.2996057560669792e-26,
+      "wilcoxon_rel_p": 2.2996057560669792e-26,
+      "frac_beams_station1_worse": 0.0,
+      "station0": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "station1": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "code_version_station0": "b758e579a69fea823fb9d596a4655fe2c2c913ad",
+      "code_version_station1": "a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015"
+    },
+    {
+      "run_id": "e1_joint_s4",
+      "seed": 104,
+      "n_low": 10000,
+      "n_subs": 20,
+      "n_beams": 150,
+      "err_station0_median": 0.2631583140345301,
+      "err_station1_median": 0.23633597221820024,
+      "err_station0_run_field": 0.2631583140345301,
+      "err_station1_run_field": 0.23633597221820024,
+      "median_delta": -0.02620721513410834,
+      "median_delta_ci": [
+        -0.027133911872176703,
+        -0.025564764168583276
+      ],
+      "median_rel": -0.10013574336102923,
+      "median_rel_ci": [
+        -0.10322446797183141,
+        -0.09764423235036879
+      ],
+      "rel_ci_includes_zero": false,
+      "delta_ci_includes_zero": false,
+      "wilcoxon_delta_p": 2.2996057560669792e-26,
+      "wilcoxon_rel_p": 2.2996057560669792e-26,
+      "frac_beams_station1_worse": 0.0,
+      "station0": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "station1": {
+        "n_eff": 100000.0,
+        "flag": "overflow",
+        "overflow_frac": 1.0,
+        "flagged_frac": 1.0,
+        "n_eff_beam_median": 100000.0
+      },
+      "code_version_station0": "b758e579a69fea823fb9d596a4655fe2c2c913ad",
+      "code_version_station1": "a7b3530c8bdd1eb56ae9f8c3fc660e17c9597015"
+    }
+  ],
+  "summary": {
+    "n_runs": 5,
+    "median_rel_across_runs": -0.07360439715329499,
+    "median_rel_range": [
+      -0.11468656259867971,
+      -0.0241772970290692
+    ],
+    "median_delta_across_runs": -0.01679879688169854,
+    "median_delta_range": [
+      -0.030443650736754382,
+      -0.006769257857044492
+    ],
+    "err_station0_median_across_runs": 0.2631583140345301,
+    "err_station1_median_across_runs": 0.2366206440175873,
+    "n_rel_ci_includes_zero": 0,
+    "n_abs_rel_le_threshold": 2,
+    "n_seeds_station1_better": 5,
+    "rel_threshold": 0.05,
+    "bootstrap": {
+      "n_resamples": 10000,
+      "seed_sequence": 20260825
+    },
+    "verdict": "quantified_cross_station_difference",
+    "verdict_text": "存在可量化的跨站差异：5/5 个种子的中位相对落差 CI 排除 0，跨种子中位 = -7.36%（阈值 ±5%）；方向 = 站 1 误差低于站 0（负向，非退化）",
+    "verdict_branch": "rule2_ci_excludes_zero_and_over_threshold"
+  },
+  "bare_reference": {
+    "k": 20,
+    "n_beams": 300,
+    "n_stations": 2,
+    "tiers": {
+      "1000": {
+        "bare_median_pooled": 4.0300252356711805,
+        "bare_median_station0": 4.032284611466432,
+        "bare_median_station1": 4.026756517364564,
+        "bare_median_testonly_station0": 4.032242021445185,
+        "bare_median_testonly_station1": 4.025077764397147
+      },
+      "3000": {
+        "bare_median_pooled": 2.31609701411317,
+        "bare_median_station0": 2.316766874211607,
+        "bare_median_station1": 2.314718696904507,
+        "bare_median_testonly_station0": 2.317009020989651,
+        "bare_median_testonly_station1": 2.3141005557742282
+      },
+      "10000": {
+        "bare_median_pooled": 1.2455297293285257,
+        "bare_median_station0": 1.246355210411783,
+        "bare_median_station1": 1.2445188213988685,
+        "bare_median_testonly_station0": 1.246738594403071,
+        "bare_median_testonly_station1": 1.244580143778962
+      },
+      "30000": {
+        "bare_median_pooled": 0.680085904860009,
+        "bare_median_station0": 0.6803112545831791,
+        "bare_median_station1": 0.6797621214581031,
+        "bare_median_testonly_station0": 0.6804548131109385,
+        "bare_median_testonly_station1": 0.6798221943009214
+      },
+      "100000": {
+        "bare_median_pooled": 0.28563574695791116,
+        "bare_median_station0": 0.2857630991925302,
+        "bare_median_station1": 0.2855080337665322,
+        "bare_median_testonly_station0": 0.2856779424179271,
+        "bare_median_testonly_station1": 0.28555162195632794
+      }
+    },
+    "reference_noise_floor": 0.2855971158381057,
+    "mutual_floor": {
+      "1000": 5.701190783622186,
+      "3000": 3.2751859909336623,
+      "10000": 1.7613698775168696,
+      "30000": 0.9616627091158273,
+      "100000": 0.403895314592889
+    },
+    "decode_verification": {
+      "tier": 10000,
+      "n_points": 24,
+      "max_abs_diff": 0.0,
+      "all_exact": true,
+      "sampled_beam_indices": [
+        0,
+        1,
+        150,
+        299
+      ],
+      "sampled_subs": [
+        0,
+        7,
+        19
+      ]
+    }
+  },
+  "constant_control": {
+    "enabled": true,
+    "definition": "700 个 train 束 target_full 逐投影归一后的均值图，对 150 个 test 束的 M1 中位数（口径同 exp3_constant_control，仅作分母语境，不参与判定）",
+    "station0": {
+      "n_train_beams": 700,
+      "n_test_beams": 150,
+      "constant_err_median": 0.19439819362062083,
+      "constant_err_percentile25": 0.12314482571134376,
+      "constant_err_percentile75": 0.3017428723538941,
+      "exp3_snapshot_median": 0.19439819362062083,
+      "max_abs_diff_vs_exp3_snapshot": 0.0,
+      "rerun_match_reported_value": true,
+      "model_err_median_run0": 0.25481791403949994
+    },
+    "station1": {
+      "n_train_beams": 700,
+      "n_test_beams": 150,
+      "constant_err_median": 0.03521226532359201,
+      "constant_err_percentile25": 0.025848430273423817,
+      "constant_err_percentile75": 0.04943515241691094,
+      "model_err_median_run0": 0.2444370795731821
+    }
+  },
+  "difficulty_normalized": {
+    "n_beams_sampled": 30,
+    "pair_scheme": "test 切分前 n 束的全部两两组合",
+    "station0": {
+      "inter_beam_m1_median": 0.28230576843104477,
+      "inter_beam_m1_p25": 0.14923327151621538,
+      "inter_beam_m1_p75": 0.45029193125967515,
+      "n_pairs": 435,
+      "bare_input_m1": 1.246738594403071,
+      "model_err_median": 0.2631583140345301,
+      "constant_floor_m1": 0.19439819362062083,
+      "model_over_inter_beam": 0.9321747674412414,
+      "model_minus_constant": 0.06876012041390928,
+      "model_over_constant": 1.353707609794454,
+      "bare_to_floor_gap": 1.0523404007824504,
+      "gap_closure_fraction": 0.9346598112523439
+    },
+    "station1": {
+      "inter_beam_m1_median": 0.05122517006819846,
+      "inter_beam_m1_p25": 0.03227839927731901,
+      "inter_beam_m1_p75": 0.07466891284071914,
+      "n_pairs": 435,
+      "bare_input_m1": 1.244580143778962,
+      "model_err_median": 0.2366206440175873,
+      "constant_floor_m1": 0.03521226532359201,
+      "model_over_inter_beam": 4.619226128533359,
+      "model_minus_constant": 0.2014083786939953,
+      "model_over_constant": 6.719835882272899,
+      "bare_to_floor_gap": 1.20936787845537,
+      "gap_closure_fraction": 0.8334597914480428
+    }
+  }
+}

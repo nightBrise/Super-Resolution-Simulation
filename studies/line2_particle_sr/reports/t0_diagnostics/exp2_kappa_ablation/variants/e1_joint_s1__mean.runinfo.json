@@ -1,0 +1,13 @@
+{
+  "run_id": "e1_joint_s1",
+  "variant": "mean",
+  "n_calls": 3000,
+  "n_kappa_delta_nonzero": 3000,
+  "kappa_max_abs_delta_overall": 4.76837158203125e-07,
+  "kappa_max_abs_delta_median": 4.76837158203125e-07,
+  "err_median": 0.28106148873053477,
+  "n_eff_flag": "overflow",
+  "elapsed_s": 114.1,
+  "out": "/home/zhangny/Super-Resolution-Simulation/studies/line2_particle_sr/reports/t0_diagnostics/exp2_kappa_ablation/variants/e1_joint_s1__mean.json",
+  "device": "cuda:0"
+}
