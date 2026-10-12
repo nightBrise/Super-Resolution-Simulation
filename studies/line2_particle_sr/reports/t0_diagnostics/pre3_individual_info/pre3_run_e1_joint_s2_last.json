@@ -1,0 +1,86 @@
+{
+  "ckpt": "studies/line2_particle_sr/results/e1_joint_s2/last.ckpt",
+  "ckpt_sha256": "633a22ea809fa7c09e3643db87a6978e068b1415b76c9ba60aedf977f4dc5ad9",
+  "step": 12000,
+  "variant": "joint",
+  "seed": 102,
+  "n_beams": 150,
+  "n_subs": 20,
+  "batch": 20,
+  "cos_true": {
+    "median": 0.9049495763174376,
+    "ci95": [
+      0.8816212590108456,
+      0.932359133101496
+    ],
+    "n_finite": 150
+  },
+  "cos_true_pp": {
+    "median": 0.6666012562626935,
+    "ci95": [
+      0.6273004178747024,
+      0.6858792178817799
+    ],
+    "n_finite": 150
+  },
+  "cos_scr": {
+    "median": -0.30365822042276747,
+    "ci95": [
+      -0.44671294353496876,
+      0.06341607792177226
+    ],
+    "n_finite": 150
+  },
+  "cos_scr_pair": {
+    "median": 0.9049495763174376,
+    "ci95": [
+      0.8816212590108456,
+      0.9322475806086962
+    ],
+    "n_finite": 150
+  },
+  "cos_mean_input": {
+    "median": -0.024071048459527608,
+    "ci95": [
+      -0.06425820762635606,
+      0.05440057817668172
+    ],
+    "n_finite": 150
+  },
+  "expl_frac": {
+    "median": 0.7966738578913701,
+    "ci95": [
+      0.7540595651045388,
+      0.8567418093266487
+    ],
+    "n_finite": 150
+  },
+  "disp_ratio": {
+    "median": 1.4051944739235744,
+    "ci95": [
+      1.2118441575230932,
+      1.5651279418011201
+    ],
+    "n_finite": 150
+  },
+  "err_true_median_of_beam_median": 0.1055597631135172,
+  "err_scr_median": 0.3055360862064962,
+  "norm_d_out_median": 984.555918799966,
+  "norm_d_tgt_median": 935.6940837201964,
+  "cos_true_iqr": [
+    0.7668073863888792,
+    0.9527614340798415
+  ],
+  "n_beam_nan_cos_true": 0,
+  "n_beam_nan_cos_scr": 0,
+  "drop_frac_median_cos": 1.3355526411299745,
+  "cos_true_minus_cos_scr_mean": 0.9617844450181294,
+  "n_beams_cos_true_gt_cos_scr": 144,
+  "infer_s": 62.7,
+  "xcheck_exp1": {
+    "path": "studies/line2_particle_sr/reports/t0_diagnostics/exp1_early_stop/e1_joint_s2_last_eval.json",
+    "max_abs_dev": 1.0823747124966143e-07,
+    "exp1_err_median": 0.1055598087109442,
+    "exp1_batch": 1
+  }
+}

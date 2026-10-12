@@ -1,0 +1,989 @@
+{
+  "meta": {
+    "code_version": "88beb395a9a5c747a6ab410937c26a0b45f69da6",
+    "data_version": "line2_ds_v1",
+    "spec_version": "line2-spec-v1.0",
+    "split": "test",
+    "station": 0,
+    "n_low": 10000,
+    "subs": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "n_beams": 150,
+    "beam_ids": [
+      245,
+      429,
+      559,
+      578,
+      859,
+      220,
+      752,
+      244,
+      428,
+      411,
+      666,
+      193,
+      733,
+      940,
+      427,
+      807,
+      957,
+      947,
+      459,
+      870,
+      875,
+      157,
+      879,
+      682,
+      13,
+      500,
+      929,
+      88,
+      731,
+      743,
+      493,
+      223,
+      980,
+      56,
+      42,
+      406,
+      650,
+      219,
+      567,
+      208,
+      25,
+      506,
+      616,
+      492,
+      843,
+      680,
+      670,
+      636,
+      324,
+      379,
+      425,
+      242,
+      844,
+      597,
+      691,
+      569,
+      303,
+      993,
+      113,
+      292,
+      235,
+      950,
+      533,
+      24,
+      396,
+      224,
+      890,
+      253,
+      611,
+      370,
+      285,
+      446,
+      197,
+      328,
+      502,
+      67,
+      296,
+      387,
+      283,
+      649,
+      511,
+      2,
+      564,
+      863,
+      540,
+      651,
+      815,
+      186,
+      946,
+      424,
+      874,
+      973,
+      956,
+      503,
+      850,
+      264,
+      299,
+      55,
+      534,
+      184,
+      343,
+      46,
+      114,
+      416,
+      247,
+      287,
+      241,
+      70,
+      615,
+      530,
+      190,
+      632,
+      848,
+      630,
+      134,
+      696,
+      460,
+      582,
+      213,
+      987,
+      701,
+      54,
+      41,
+      725,
+      881,
+      454,
+      645,
+      759,
+      840,
+      942,
+      590,
+      404,
+      728,
+      835,
+      467,
+      430,
+      601,
+      828,
+      105,
+      510,
+      884,
+      705,
+      982,
+      522,
+      21,
+      787,
+      360,
+      629,
+      96,
+      877
+    ],
+    "derangement_seed": 20260825,
+    "derangement_pair": {
+      "245": 850,
+      "429": 502,
+      "559": 884,
+      "578": 292,
+      "859": 582,
+      "220": 454,
+      "752": 630,
+      "244": 940,
+      "428": 859,
+      "411": 213,
+      "666": 650,
+      "193": 493,
+      "733": 446,
+      "940": 534,
+      "427": 264,
+      "807": 522,
+      "957": 503,
+      "947": 25,
+      "459": 590,
+      "870": 815,
+      "875": 645,
+      "157": 55,
+      "879": 731,
+      "682": 632,
+      "13": 287,
+      "500": 947,
+      "929": 597,
+      "88": 682,
+      "731": 844,
+      "743": 601,
+      "493": 411,
+      "223": 424,
+      "980": 807,
+      "56": 636,
+      "42": 459,
+      "406": 285,
+      "650": 406,
+      "219": 253,
+      "567": 379,
+      "208": 114,
+      "25": 759,
+      "506": 848,
+      "616": 567,
+      "492": 283,
+      "843": 569,
+      "680": 197,
+      "670": 987,
+      "636": 696,
+      "324": 500,
+      "379": 615,
+      "425": 13,
+      "242": 41,
+      "844": 343,
+      "597": 223,
+      "691": 564,
+      "569": 828,
+      "303": 840,
+      "993": 879,
+      "113": 324,
+      "292": 219,
+      "235": 875,
+      "950": 752,
+      "533": 511,
+      "24": 186,
+      "396": 942,
+      "224": 705,
+      "890": 245,
+      "253": 387,
+      "611": 184,
+      "370": 701,
+      "285": 299,
+      "446": 193,
+      "197": 950,
+      "328": 21,
+      "502": 208,
+      "67": 890,
+      "296": 430,
+      "387": 973,
+      "283": 611,
+      "649": 235,
+      "511": 105,
+      "2": 427,
+      "564": 982,
+      "863": 113,
+      "540": 881,
+      "651": 787,
+      "815": 244,
+      "186": 42,
+      "946": 134,
+      "424": 993,
+      "874": 425,
+      "973": 929,
+      "956": 578,
+      "503": 56,
+      "850": 616,
+      "264": 96,
+      "299": 533,
+      "55": 24,
+      "534": 190,
+      "184": 980,
+      "343": 877,
+      "46": 506,
+      "114": 242,
+      "416": 396,
+      "247": 874,
+      "287": 680,
+      "241": 649,
+      "70": 328,
+      "615": 835,
+      "530": 303,
+      "190": 2,
+      "632": 467,
+      "848": 70,
+      "630": 416,
+      "134": 67,
+      "696": 843,
+      "460": 725,
+      "582": 629,
+      "213": 370,
+      "987": 54,
+      "701": 957,
+      "54": 530,
+      "41": 247,
+      "725": 296,
+      "881": 691,
+      "454": 946,
+      "645": 651,
+      "759": 666,
+      "840": 404,
+      "942": 492,
+      "590": 157,
+      "404": 510,
+      "728": 460,
+      "835": 733,
+      "467": 870,
+      "430": 224,
+      "601": 559,
+      "828": 241,
+      "105": 743,
+      "510": 428,
+      "884": 220,
+      "705": 360,
+      "982": 429,
+      "522": 956,
+      "21": 670,
+      "787": 540,
+      "360": 728,
+      "629": 46,
+      "96": 88,
+      "877": 863
+    },
+    "bootstrap": {
+      "n_boot": 10000,
+      "root_seed": 20260825,
+      "unit": "beam",
+      "quantile": [
+        2.5,
+        97.5
+      ]
+    },
+    "device": "cuda:0",
+    "torch": "2.4.0",
+    "numpy": "1.26.4",
+    "python": "3.11.16",
+    "exec_mode": {
+      "deterministic_algorithms": true,
+      "warn_only": true,
+      "cudnn_deterministic": true,
+      "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+      "PYTHONHASHSEED": "0"
+    },
+    "argv": [
+      "studies/line2_particle_sr/reports/t0_diagnostics/pre3_individual_info/run_pre3_individual_info.py",
+      "--device",
+      "cuda:0"
+    ],
+    "batch_note": "批量前向（batch=20）与官方 batch=1 存在 ~1e-8 级 float32 核差异",
+    "elapsed_s": 377.3,
+    "infer_s_per_run": {
+      "e1_joint_s0/last": 63.0,
+      "e1_joint_s1/last": 62.2,
+      "e1_joint_s2/last": 62.7,
+      "e1_joint_s3/last": 62.4,
+      "e1_joint_s4/last": 62.5,
+      "e1_joint_s0/best_val": 63.1
+    },
+    "products": {
+      "per_beam_csv": "studies/line2_particle_sr/reports/t0_diagnostics/pre3_individual_info/pre3_per_beam.csv",
+      "per_beam_sub_csv": "studies/line2_particle_sr/reports/t0_diagnostics/pre3_individual_info/pre3_per_beam_sub.csv",
+      "per_run_json_glob": "studies/line2_particle_sr/reports/t0_diagnostics/pre3_individual_info/pre3_run_*.json",
+      "per_run_beam_csv_glob": "studies/line2_particle_sr/reports/t0_diagnostics/pre3_individual_info/pre3_run_*_beams.csv"
+    }
+  },
+  "prior": {
+    "n_train_beams": 700,
+    "const_err_median": 0.19439819362062083,
+    "snapshot_const_median": 0.19439819362062083,
+    "snapshot_const_errs_max_abs_dev": 0.0,
+    "exp3_err_const_max_abs_dev": 0.0,
+    "exp3_n_rows": 150,
+    "prior_sha256": "0a6d4d7b406da2b127b774c544fc36f8f2f332c408f2c1142828077182d9f72b",
+    "prior_projection_sums": [
+      0.9999999999999998,
+      0.9999999999999998,
+      0.9999999999999993,
+      0.9999999999999994,
+      0.9999999999999998,
+      0.9999999999999998
+    ]
+  },
+  "runs": {
+    "e1_joint_s0/last": {
+      "ckpt": "studies/line2_particle_sr/results/e1_joint_s0/last.ckpt",
+      "ckpt_sha256": "cb616146032d353aa4f5ab0683fe3b1c93c77bdafa33d27ea34bcf45c53c00a8",
+      "step": 13000,
+      "variant": "joint",
+      "seed": 100,
+      "n_beams": 150,
+      "n_subs": 20,
+      "batch": 20,
+      "cos_true": {
+        "median": 0.9207423029613846,
+        "ci95": [
+          0.8988154411435629,
+          0.9468995516628114
+        ],
+        "n_finite": 150
+      },
+      "cos_true_pp": {
+        "median": 0.6644884638628339,
+        "ci95": [
+          0.6310998895426477,
+          0.6896785953187414
+        ],
+        "n_finite": 150
+      },
+      "cos_scr": {
+        "median": -0.26517902845472263,
+        "ci95": [
+          -0.4790668021120099,
+          0.07207259804691044
+        ],
+        "n_finite": 150
+      },
+      "cos_scr_pair": {
+        "median": 0.9207423029613846,
+        "ci95": [
+          0.8997275379869499,
+          0.9466582757435322
+        ],
+        "n_finite": 150
+      },
+      "cos_mean_input": {
+        "median": 0.06941654502420953,
+        "ci95": [
+          0.005246107762965176,
+          0.1371654338266733
+        ],
+        "n_finite": 150
+      },
+      "expl_frac": {
+        "median": 0.8402265503758384,
+        "ci95": [
+          0.7967420604018233,
+          0.889586916455009
+        ],
+        "n_finite": 150
+      },
+      "disp_ratio": {
+        "median": 1.3802003719974922,
+        "ci95": [
+          1.2099594009852566,
+          1.6115983743797326
+        ],
+        "n_finite": 150
+      },
+      "err_true_median_of_beam_median": 0.09755634088083737,
+      "err_scr_median": 0.2960986274633727,
+      "norm_d_out_median": 953.5785261599276,
+      "norm_d_tgt_median": 935.6940837201964,
+      "cos_true_iqr": [
+        0.7885913723997215,
+        0.9622943838039743
+      ],
+      "n_beam_nan_cos_true": 0,
+      "n_beam_nan_cos_scr": 0,
+      "drop_frac_median_cos": 1.2880056967099556,
+      "cos_true_minus_cos_scr_mean": 0.9742246189028239,
+      "n_beams_cos_true_gt_cos_scr": 146,
+      "infer_s": 63.0,
+      "xcheck_exp1": {
+        "path": "studies/line2_particle_sr/reports/t0_diagnostics/exp1_early_stop/e1_joint_s0_last_eval.json",
+        "max_abs_dev": 1.0753457885259721e-07,
+        "exp1_err_median": 0.0975562905624535,
+        "exp1_batch": 1
+      }
+    },
+    "e1_joint_s1/last": {
+      "ckpt": "studies/line2_particle_sr/results/e1_joint_s1/last.ckpt",
+      "ckpt_sha256": "79d2a3b4e8d1d9e249e3a6011bf7a9e99bbe911931c869508ab708de3589f67f",
+      "step": 12000,
+      "variant": "joint",
+      "seed": 101,
+      "n_beams": 150,
+      "n_subs": 20,
+      "batch": 20,
+      "cos_true": {
+        "median": 0.9174764630199799,
+        "ci95": [
+          0.8969885942784457,
+          0.9431996282111654
+        ],
+        "n_finite": 150
+      },
+      "cos_true_pp": {
+        "median": 0.6588609426908035,
+        "ci95": [
+          0.6243525692396055,
+          0.6760052319367236
+        ],
+        "n_finite": 150
+      },
+      "cos_scr": {
+        "median": -0.29065344031545776,
+        "ci95": [
+          -0.4666800180777407,
+          0.05991629369076944
+        ],
+        "n_finite": 150
+      },
+      "cos_scr_pair": {
+        "median": 0.9174764630199799,
+        "ci95": [
+          0.8969885942784457,
+          0.9431554042453354
+        ],
+        "n_finite": 150
+      },
+      "cos_mean_input": {
+        "median": 0.013220301009558223,
+        "ci95": [
+          -0.03837505419564646,
+          0.09046000877116958
+        ],
+        "n_finite": 150
+      },
+      "expl_frac": {
+        "median": 0.8339022903788478,
+        "ci95": [
+          0.792639619959715,
+          0.8859902074248575
+        ],
+        "n_finite": 150
+      },
+      "disp_ratio": {
+        "median": 1.3715197371215981,
+        "ci95": [
+          1.2021175750363613,
+          1.5792978648378901
+        ],
+        "n_finite": 150
+      },
+      "err_true_median_of_beam_median": 0.09943668208233218,
+      "err_scr_median": 0.3033826601251166,
+      "norm_d_out_median": 951.1219033253477,
+      "norm_d_tgt_median": 935.6940837201964,
+      "cos_true_iqr": [
+        0.7912940404796431,
+        0.9608050301946932
+      ],
+      "n_beam_nan_cos_true": 0,
+      "n_beam_nan_cos_scr": 0,
+      "drop_frac_median_cos": 1.3167966177123915,
+      "cos_true_minus_cos_scr_mean": 0.9808435714195485,
+      "n_beams_cos_true_gt_cos_scr": 147,
+      "infer_s": 62.2,
+      "xcheck_exp1": {
+        "path": "studies/line2_particle_sr/reports/t0_diagnostics/exp1_early_stop/e1_joint_s1_last_eval.json",
+        "max_abs_dev": 1.5300276670626722e-07,
+        "exp1_err_median": 0.09943670080249162,
+        "exp1_batch": 1
+      }
+    },
+    "e1_joint_s2/last": {
+      "ckpt": "studies/line2_particle_sr/results/e1_joint_s2/last.ckpt",
+      "ckpt_sha256": "633a22ea809fa7c09e3643db87a6978e068b1415b76c9ba60aedf977f4dc5ad9",
+      "step": 12000,
+      "variant": "joint",
+      "seed": 102,
+      "n_beams": 150,
+      "n_subs": 20,
+      "batch": 20,
+      "cos_true": {
+        "median": 0.9049495763174376,
+        "ci95": [
+          0.8816212590108456,
+          0.932359133101496
+        ],
+        "n_finite": 150
+      },
+      "cos_true_pp": {
+        "median": 0.6666012562626935,
+        "ci95": [
+          0.6273004178747024,
+          0.6858792178817799
+        ],
+        "n_finite": 150
+      },
+      "cos_scr": {
+        "median": -0.30365822042276747,
+        "ci95": [
+          -0.44671294353496876,
+          0.06341607792177226
+        ],
+        "n_finite": 150
+      },
+      "cos_scr_pair": {
+        "median": 0.9049495763174376,
+        "ci95": [
+          0.8816212590108456,
+          0.9322475806086962
+        ],
+        "n_finite": 150
+      },
+      "cos_mean_input": {
+        "median": -0.024071048459527608,
+        "ci95": [
+          -0.06425820762635606,
+          0.05440057817668172
+        ],
+        "n_finite": 150
+      },
+      "expl_frac": {
+        "median": 0.7966738578913701,
+        "ci95": [
+          0.7540595651045388,
+          0.8567418093266487
+        ],
+        "n_finite": 150
+      },
+      "disp_ratio": {
+        "median": 1.4051944739235744,
+        "ci95": [
+          1.2118441575230932,
+          1.5651279418011201
+        ],
+        "n_finite": 150
+      },
+      "err_true_median_of_beam_median": 0.1055597631135172,
+      "err_scr_median": 0.3055360862064962,
+      "norm_d_out_median": 984.555918799966,
+      "norm_d_tgt_median": 935.6940837201964,
+      "cos_true_iqr": [
+        0.7668073863888792,
+        0.9527614340798415
+      ],
+      "n_beam_nan_cos_true": 0,
+      "n_beam_nan_cos_scr": 0,
+      "drop_frac_median_cos": 1.3355526411299745,
+      "cos_true_minus_cos_scr_mean": 0.9617844450181294,
+      "n_beams_cos_true_gt_cos_scr": 144,
+      "infer_s": 62.7,
+      "xcheck_exp1": {
+        "path": "studies/line2_particle_sr/reports/t0_diagnostics/exp1_early_stop/e1_joint_s2_last_eval.json",
+        "max_abs_dev": 1.0823747124966143e-07,
+        "exp1_err_median": 0.1055598087109442,
+        "exp1_batch": 1
+      }
+    },
+    "e1_joint_s3/last": {
+      "ckpt": "studies/line2_particle_sr/results/e1_joint_s3/last.ckpt",
+      "ckpt_sha256": "c79d4ef5948612a467a9e97ebbe8178775394b7447f157b79cfff6dad1248e4c",
+      "step": 13000,
+      "variant": "joint",
+      "seed": 103,
+      "n_beams": 150,
+      "n_subs": 20,
+      "batch": 20,
+      "cos_true": {
+        "median": 0.942779800772242,
+        "ci95": [
+          0.9290368285108943,
+          0.9609241288238126
+        ],
+        "n_finite": 150
+      },
+      "cos_true_pp": {
+        "median": 0.7031735601976703,
+        "ci95": [
+          0.6776112416782456,
+          0.7213198614760222
+        ],
+        "n_finite": 150
+      },
+      "cos_scr": {
+        "median": -0.2778414089916758,
+        "ci95": [
+          -0.4616510222043574,
+          0.07189944720611374
+        ],
+        "n_finite": 150
+      },
+      "cos_scr_pair": {
+        "median": 0.942779800772242,
+        "ci95": [
+          0.9290368285108943,
+          0.9607150702926192
+        ],
+        "n_finite": 150
+      },
+      "cos_mean_input": {
+        "median": 0.006121183312256754,
+        "ci95": [
+          -0.053064273095723716,
+          0.08929948726348119
+        ],
+        "n_finite": 150
+      },
+      "expl_frac": {
+        "median": 0.8856030965819355,
+        "ci95": [
+          0.8607800324268302,
+          0.9206693941726318
+        ],
+        "n_finite": 150
+      },
+      "disp_ratio": {
+        "median": 1.3712532615587967,
+        "ci95": [
+          1.224405696666087,
+          1.6304105281182801
+        ],
+        "n_finite": 150
+      },
+      "err_true_median_of_beam_median": 0.0816534679417544,
+      "err_scr_median": 0.29699115107928353,
+      "norm_d_out_median": 929.4440087649166,
+      "norm_d_tgt_median": 935.6940837201964,
+      "cos_true_iqr": [
+        0.8434641006716099,
+        0.9700312700919003
+      ],
+      "n_beam_nan_cos_true": 0,
+      "n_beam_nan_cos_scr": 0,
+      "drop_frac_median_cos": 1.2947044567184114,
+      "cos_true_minus_cos_scr_mean": 1.008105177336068,
+      "n_beams_cos_true_gt_cos_scr": 146,
+      "infer_s": 62.4,
+      "xcheck_exp1": {
+        "path": "studies/line2_particle_sr/reports/t0_diagnostics/exp1_early_stop/e1_joint_s3_last_eval.json",
+        "max_abs_dev": 1.2203503220453715e-07,
+        "exp1_err_median": 0.08165351799725484,
+        "exp1_batch": 1
+      }
+    },
+    "e1_joint_s4/last": {
+      "ckpt": "studies/line2_particle_sr/results/e1_joint_s4/last.ckpt",
+      "ckpt_sha256": "f2fb4a73cfe7d02d09f01739751ba2a7e7fda3ace1e536bf27b451c453f4b400",
+      "step": 12000,
+      "variant": "joint",
+      "seed": 104,
+      "n_beams": 150,
+      "n_subs": 20,
+      "batch": 20,
+      "cos_true": {
+        "median": 0.9327634792393196,
+        "ci95": [
+          0.914959917735715,
+          0.9539205828422982
+        ],
+        "n_finite": 150
+      },
+      "cos_true_pp": {
+        "median": 0.6856968745330781,
+        "ci95": [
+          0.6647087972736883,
+          0.7110817682766134
+        ],
+        "n_finite": 150
+      },
+      "cos_scr": {
+        "median": -0.33147118118244945,
+        "ci95": [
+          -0.4912367248942697,
+          0.05418753485999017
+        ],
+        "n_finite": 150
+      },
+      "cos_scr_pair": {
+        "median": 0.9327634792393196,
+        "ci95": [
+          0.914959917735715,
+          0.9539205828422982
+        ],
+        "n_finite": 150
+      },
+      "cos_mean_input": {
+        "median": -0.011297696559407813,
+        "ci95": [
+          -0.05652644813231337,
+          0.0777706726734359
+        ],
+        "n_finite": 150
+      },
+      "expl_frac": {
+        "median": 0.8644084565364154,
+        "ci95": [
+          0.8307227094008077,
+          0.9066719265200334
+        ],
+        "n_finite": 150
+      },
+      "disp_ratio": {
+        "median": 1.4244375241414158,
+        "ci95": [
+          1.2301041801200077,
+          1.6319107133887585
+        ],
+        "n_finite": 150
+      },
+      "err_true_median_of_beam_median": 0.08840108069916425,
+      "err_scr_median": 0.2983954226219845,
+      "norm_d_out_median": 932.1127916383355,
+      "norm_d_tgt_median": 935.6940837201964,
+      "cos_true_iqr": [
+        0.8190949162842217,
+        0.9675030090099577
+      ],
+      "n_beam_nan_cos_true": 0,
+      "n_beam_nan_cos_scr": 0,
+      "drop_frac_median_cos": 1.3553646648481223,
+      "cos_true_minus_cos_scr_mean": 0.9994410933134901,
+      "n_beams_cos_true_gt_cos_scr": 146,
+      "infer_s": 62.5,
+      "xcheck_exp1": {
+        "path": "studies/line2_particle_sr/reports/t0_diagnostics/exp1_early_stop/e1_joint_s4_last_eval.json",
+        "max_abs_dev": 9.622960261967961e-08,
+        "exp1_err_median": 0.0884010769676859,
+        "exp1_batch": 1
+      }
+    },
+    "e1_joint_s0/best_val": {
+      "ckpt": "studies/line2_particle_sr/results/e1_joint_s0/best_val.ckpt",
+      "ckpt_sha256": "fb2735845227e46eca37abd18d06970dd7e711c95dcc3d019f382e7a08172e8b",
+      "step": 3000,
+      "variant": "joint",
+      "seed": 100,
+      "n_beams": 150,
+      "n_subs": 20,
+      "batch": 20,
+      "cos_true": {
+        "median": 0.608695162643029,
+        "ci95": [
+          0.5369836476002487,
+          0.6969609011817741
+        ],
+        "n_finite": 150
+      },
+      "cos_true_pp": {
+        "median": 0.38964607910034926,
+        "ci95": [
+          0.3434297082968093,
+          0.4530050726132199
+        ],
+        "n_finite": 150
+      },
+      "cos_scr": {
+        "median": -0.14455635395490637,
+        "ci95": [
+          -0.27959600028053067,
+          -0.013791953006539
+        ],
+        "n_finite": 150
+      },
+      "cos_scr_pair": {
+        "median": 0.608695162643029,
+        "ci95": [
+          0.5369836476002487,
+          0.6968269601014467
+        ],
+        "n_finite": 150
+      },
+      "cos_mean_input": {
+        "median": 0.009483784341563788,
+        "ci95": [
+          -0.012996475975123423,
+          0.026028783427441263
+        ],
+        "n_finite": 150
+      },
+      "expl_frac": {
+        "median": -0.1015243017527663,
+        "ci95": [
+          -0.3170402788713246,
+          0.24918618093979522
+        ],
+        "n_finite": 150
+      },
+      "disp_ratio": {
+        "median": 0.97099870256949,
+        "ci95": [
+          0.8766212437895999,
+          1.1827111111329534
+        ],
+        "n_finite": 150
+      },
+      "err_true_median_of_beam_median": 0.2548179113140185,
+      "err_scr_median": 0.3727370965850644,
+      "norm_d_out_median": 1204.2561149307485,
+      "norm_d_tgt_median": 935.6940837201964,
+      "cos_true_iqr": [
+        0.2581782537918741,
+        0.7950208793018706
+      ],
+      "n_beam_nan_cos_true": 0,
+      "n_beam_nan_cos_scr": 0,
+      "drop_frac_median_cos": 1.2374856296331074,
+      "cos_true_minus_cos_scr_mean": 0.6099530190566891,
+      "n_beams_cos_true_gt_cos_scr": 117,
+      "infer_s": 63.1,
+      "xcheck_exp1": {
+        "path": "studies/line2_particle_sr/reports/t0_diagnostics/exp1_early_stop/e1_joint_s0_bestval_eval.json",
+        "max_abs_dev": 8.568820769605523e-08,
+        "exp1_err_median": 0.25481791403949994,
+        "exp1_batch": 1
+      }
+    }
+  },
+  "judgment": {
+    "n_runs": 5,
+    "n_cos_ci_positive": 5,
+    "rule": "≥4/5 run 中位 cos 的 95% CI 排除 0 且为正，且打乱使中位 cos 下降 ≥80%",
+    "verdict_individual_info": true,
+    "verdict_prior_only": false,
+    "verdict_input_insensitive_alarm": false,
+    "per_run": {
+      "e1_joint_s0/last": {
+        "cos_true_median": 0.9207423029613846,
+        "cos_true_ci95": [
+          0.8988154411435629,
+          0.9468995516628114
+        ],
+        "cos_scr_median": -0.26517902845472263,
+        "drop_frac": 1.2880056967099556,
+        "disp_ratio_median": 1.3802003719974922,
+        "cos_true_ci_excludes_0_positive": true,
+        "shuffle_drop_ge_80pct": true,
+        "dispatch_sensitive_ge_10pct": true
+      },
+      "e1_joint_s1/last": {
+        "cos_true_median": 0.9174764630199799,
+        "cos_true_ci95": [
+          0.8969885942784457,
+          0.9431996282111654
+        ],
+        "cos_scr_median": -0.29065344031545776,
+        "drop_frac": 1.3167966177123915,
+        "disp_ratio_median": 1.3715197371215981,
+        "cos_true_ci_excludes_0_positive": true,
+        "shuffle_drop_ge_80pct": true,
+        "dispatch_sensitive_ge_10pct": true
+      },
+      "e1_joint_s2/last": {
+        "cos_true_median": 0.9049495763174376,
+        "cos_true_ci95": [
+          0.8816212590108456,
+          0.932359133101496
+        ],
+        "cos_scr_median": -0.30365822042276747,
+        "drop_frac": 1.3355526411299745,
+        "disp_ratio_median": 1.4051944739235744,
+        "cos_true_ci_excludes_0_positive": true,
+        "shuffle_drop_ge_80pct": true,
+        "dispatch_sensitive_ge_10pct": true
+      },
+      "e1_joint_s3/last": {
+        "cos_true_median": 0.942779800772242,
+        "cos_true_ci95": [
+          0.9290368285108943,
+          0.9609241288238126
+        ],
+        "cos_scr_median": -0.2778414089916758,
+        "drop_frac": 1.2947044567184114,
+        "disp_ratio_median": 1.3712532615587967,
+        "cos_true_ci_excludes_0_positive": true,
+        "shuffle_drop_ge_80pct": true,
+        "dispatch_sensitive_ge_10pct": true
+      },
+      "e1_joint_s4/last": {
+        "cos_true_median": 0.9327634792393196,
+        "cos_true_ci95": [
+          0.914959917735715,
+          0.9539205828422982
+        ],
+        "cos_scr_median": -0.33147118118244945,
+        "drop_frac": 1.3553646648481223,
+        "disp_ratio_median": 1.4244375241414158,
+        "cos_true_ci_excludes_0_positive": true,
+        "shuffle_drop_ge_80pct": true,
+        "dispatch_sensitive_ge_10pct": true
+      }
+    }
+  }
+}

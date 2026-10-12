@@ -1,0 +1,81 @@
+{
+  "n_test_beams": 150,
+  "per_axis": {
+    "station0": {
+      "x": {
+        "window_width_median": 0.0036188213187521505,
+        "window_width_rel_spread": 0.00021717597209676976,
+        "center_median": -2.558041356752423e-05,
+        "center_abs_median_over_width": 0.007068714179108717,
+        "center_std_over_width": 4.384480685803001e-07,
+        "window_width_minover_max": 0.9992746876625367
+      },
+      "xp": {
+        "window_width_median": 0.0002545155924740918,
+        "window_width_rel_spread": 0.006224485780874836,
+        "center_median": 2.4153886801159345e-07,
+        "center_abs_median_over_width": 0.020197110530458712,
+        "center_std_over_width": 0.022951468719846047,
+        "window_width_minover_max": 0.9788601561952404
+      },
+      "y": {
+        "window_width_median": 0.0035693607722383407,
+        "window_width_rel_spread": 0.00021578839670093107,
+        "center_median": -1.690113365111984e-05,
+        "center_abs_median_over_width": 0.004735058944607935,
+        "center_std_over_width": 5.1997454685626e-06,
+        "window_width_minover_max": 0.9992793203202203
+      },
+      "yp": {
+        "window_width_median": 0.0006322103703326118,
+        "window_width_rel_spread": 0.016697991352188617,
+        "center_median": -7.037468292023452e-07,
+        "center_abs_median_over_width": 0.0077113505939605306,
+        "center_std_over_width": 0.009047969430790701,
+        "window_width_minover_max": 0.9457398184388415
+      }
+    },
+    "station1": {
+      "x": {
+        "window_width_median": 0.007228983481249384,
+        "window_width_rel_spread": 0.006329821670220169,
+        "center_median": 5.3362866135054786e-05,
+        "center_abs_median_over_width": 0.007381793895845519,
+        "center_std_over_width": 0.003458274689706088,
+        "window_width_minover_max": 0.9787203224735549
+      },
+      "xp": {
+        "window_width_median": 0.0010963926504940803,
+        "window_width_rel_spread": 0.0014706120965754144,
+        "center_median": 8.097878679247432e-06,
+        "center_abs_median_over_width": 0.007385929370830961,
+        "center_std_over_width": 0.0007814124505475435,
+        "window_width_minover_max": 0.9946937705620643
+      },
+      "y": {
+        "window_width_median": 0.0014829050630585387,
+        "window_width_rel_spread": 0.007630789320807346,
+        "center_median": 2.7737609088404613e-06,
+        "center_abs_median_over_width": 0.003786897744565854,
+        "center_std_over_width": 0.004127513027009049,
+        "window_width_minover_max": 0.9745439874973568
+      },
+      "yp": {
+        "window_width_median": 0.0017766312640205733,
+        "window_width_rel_spread": 0.006732345494195044,
+        "center_median": 8.48877889220707e-06,
+        "center_abs_median_over_width": 0.004778019538503838,
+        "center_std_over_width": 0.0036405484025423406,
+        "window_width_minover_max": 0.9775158694279149
+      }
+    }
+  },
+  "jitter_attrs_vs_producer_mismatches": [],
+  "width_ratio_s1_over_s0": {
+    "x": 1.9976071887799358,
+    "xp": 4.307762207557821,
+    "y": 0.4154539587570497,
+    "yp": 2.810190005402586
+  },
+  "note": "窗口 = 该束该站全量表逐轴 [min,max]（外扩 1%）；production 口径为逐束自定标，站 0/站 1 各自独立，故两站窗口不可比、且逐束平移与逐轴尺度在分箱时被消去。"
+}

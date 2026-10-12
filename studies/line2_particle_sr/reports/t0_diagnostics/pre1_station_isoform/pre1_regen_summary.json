@@ -1,0 +1,16 @@
+{
+  "n_beams": 150,
+  "elapsed_s": 155.1,
+  "h5_reproduction": {
+    "station0": {
+      "max_abs_count_diff": 0,
+      "edges_bitwise_equal": true
+    },
+    "station1": {
+      "max_abs_count_diff": 0,
+      "edges_bitwise_equal": true
+    }
+  },
+  "max_sigma_units_u": 7.924343579943803,
+  "v2c_window_sigma": 9.0
+}
