@@ -6,6 +6,9 @@ H3 对照臂设计（v0.2.1 复审修订）：E1 比较"联合 vs 独立"时，�
 写 ρ_ij（相关系数、无量纲），实现取**协方差**（第三分量与 log₁₀N_low 不同量级）——
 差异已登记于 `30_...decisions.md` D17「两臂 κ 的实际定义」。
 
+Phase 1.5（`50` [S4] C1）把该 4 维摘要的**前三个分量**除以 s_i²、s_j²、s_i·s_j（s_i =
+公共域半宽）使其无量纲，log 维口径不变；由 ``kappa_version`` 开关承载，v1 逐位不变。
+
 参数量对齐（`30` [S4] C1 ±30%）：spec 公式 ceil(C/√6)=20 与 line1 冻结主干
 `GroupNorm(min(8,ch), ch)` 的 8 整除约束冲突（构造即崩，审核 B-1）——偏差登记
 于 .decisions.md D11，采用 **C_ind=16、blocks=3**（实测 10,092,870 参数，
@@ -18,6 +21,8 @@ import torch
 from torch import nn
 
 from src.models.unet import UNetBackbone
+
+from .unet import reference_scales
 
 N_BINS = 128
 
@@ -59,13 +64,17 @@ class SingleProjNet(nn.Module):
 
 def proj_condition_batch(
     shape: torch.Tensor, centers_i: torch.Tensor, centers_j: torch.Tensor,
-    log_n_low: torch.Tensor,
+    log_n_low: torch.Tensor, scale_i: torch.Tensor | None = None,
+    scale_j: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """批量 4 维条件：(var_i, var_j, cov_ij, log₁₀N_low)（物理 bin 中心矩）。
 
     shape (B, H, W)、centers_i (B, H)、centers_j (B, W)、log_n_low (B,) → (B, 4)。
-    第三分量是**协方差** Σ p·d_i·d_j（`30` [S4] 的文字写 ρ_ij 相关系数，差异见模块
-    docstring 与 D17），故其量级与 log₁₀N_low 相差多个数量级。
+    第三分量是**协方差** Σ p·d_i·d_j（`30` [S4] 的文字写 ρ_ij 相关系数，差异见 D17），
+    故其量级与 log₁₀N_low 相差多个数量级。
+
+    传 ``scale_i``/``scale_j``（参考尺度 s_i、s_j，(B,)）时前三个分量除以
+    s_i²、s_j²、s_i·s_j 变为无量纲（`50` [S4] C1 的独立臂口径）；缺省不归一（Phase 1 口径）。
 
     图组存储布局 = `[后一坐标 a_j, 前一坐标 a_i]`（生产端 `six_projections` 的
     `h.T`，见 `10` [S4]）——此处先转置回 `[a_i, a_j]` 语义，下游 `sum(dim=2)`
@@ -85,22 +94,36 @@ def proj_condition_batch(
     var_i = (pi * di ** 2).sum(dim=1)
     var_j = (pj * dj ** 2).sum(dim=1)
     cov_ij = (p * di.unsqueeze(2) * dj.unsqueeze(1)).sum(dim=(1, 2))
+    if scale_i is not None and scale_j is not None:
+        var_i = var_i / scale_i.to(var_i.dtype) ** 2
+        var_j = var_j / scale_j.to(var_j.dtype) ** 2
+        cov_ij = cov_ij / (scale_i.to(cov_ij.dtype) * scale_j.to(cov_ij.dtype))
     return torch.stack([var_i, var_j, cov_ij, log_n_low.to(shape.dtype)], dim=1)
 
 
 def proj_condition(
     shape_map: torch.Tensor, centers_i: torch.Tensor, centers_j: torch.Tensor,
-    log_n_low: float,
+    log_n_low: float, scale_i: torch.Tensor | None = None,
+    scale_j: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """单图组 4 维条件（逐样本入口；供等价性核验与外部复用）。"""
+    """单图组 4 维条件（逐样本入口；供等价性核验与外部复用）；``scale_*`` 见上。"""
     log_n = torch.full((1,), float(log_n_low), dtype=shape_map.dtype, device=shape_map.device)
     return proj_condition_batch(
-        shape_map.unsqueeze(0), centers_i.unsqueeze(0), centers_j.unsqueeze(0), log_n
+        shape_map.unsqueeze(0),
+        centers_i.unsqueeze(0),
+        centers_j.unsqueeze(0),
+        log_n,
+        None if scale_i is None else scale_i.reshape(1),
+        None if scale_j is None else scale_j.reshape(1),
     )[0]
 
 
 class IndependentEnsemble(nn.Module):
-    """6 个独立单投影模型（H3 对照臂）。C_ind=16 满足 GroupNorm 8 整除约束。"""
+    """6 个独立单投影模型（H3 对照臂）。C_ind=16 满足 GroupNorm 8 整除约束。
+
+    ``kappa_version="v2"`` 时逐投影条件按公共域半宽无量纲化（`50` [S4] C1）；
+    缺省 ``"v1"`` 保持 Phase 1 的物理单位² 口径逐位不变。
+    """
 
     C_IND = 16
     BLOCKS = 3
@@ -112,9 +135,11 @@ class IndependentEnsemble(nn.Module):
         num_levels: int = 4,
         blocks: int = 3,
         n_proj: int = 6,
+        kappa_version: str = "v1",
     ) -> None:
         super().__init__()
         self.n_proj = int(n_proj)
+        self.kappa_version = str(kappa_version)
         self.nets = nn.ModuleList(
             [SingleProjNet(base=base, num_levels=num_levels, blocks=blocks) for _ in range(n_proj)]
         )
@@ -149,11 +174,14 @@ class IndependentEnsemble(nn.Module):
             edges = edges.unsqueeze(0).expand(b, -1, -1)
         axis_of = {"x": 0, "xp": 1, "y": 2, "yp": 3}
         centers = 0.5 * (edges[:, :, :-1] + edges[:, :, 1:])  # (B, 4, 128)
+        scales = reference_scales(edges) if self.kappa_version == "v2" else None  # (B, 4)
         per_proj: list[torch.Tensor] = []
         for gi, (ai, aj) in enumerate(PROJ_PAIRS):
             ii, jj = axis_of[ai], axis_of[aj]
             kappa = proj_condition_batch(
-                shape_maps[:, gi], centers[:, ii], centers[:, jj], log_n
+                shape_maps[:, gi], centers[:, ii], centers[:, jj], log_n,
+                None if scales is None else scales[:, ii],
+                None if scales is None else scales[:, jj],
             )
             out = self.nets[gi](shape_maps[:, gi].unsqueeze(1), kappa)  # (B, 1, 128, 128)
             per_proj.append(out[:, 0])

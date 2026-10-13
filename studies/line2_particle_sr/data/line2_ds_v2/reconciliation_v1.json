@@ -1,0 +1,16 @@
+{
+  "mismatches": [],
+  "n_beams": 1000,
+  "per_station": {
+    "0": {
+      "edges_bitwise_equal": true,
+      "max_abs_count_diff": 0,
+      "n_compared": 1000
+    },
+    "1": {
+      "edges_bitwise_equal": true,
+      "max_abs_count_diff": 0,
+      "n_compared": 1000
+    }
+  }
+}

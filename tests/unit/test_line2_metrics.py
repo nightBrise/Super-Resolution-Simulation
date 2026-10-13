@@ -10,8 +10,12 @@ M4 的主校验用已知 Σ 的 4D 高斯云投影重构（分箱偏差 ~5% 容�
 from __future__ import annotations
 
 import inspect
+import json
+import pathlib
+import re
 from collections.abc import Callable
 
+import h5py
 import numpy as np
 import pytest
 from scipy import stats as sps
@@ -23,6 +27,7 @@ from src.line2.data_pipeline.projections import (
     six_projections,
     station_edges,
 )
+from src.line2.metrics import alignment, baseline, decisions
 from src.line2.metrics.metrics import (
     BUCKET_EDGES,
     HALO_NSIGMA,
@@ -41,6 +46,10 @@ from src.line2.metrics.metrics import (
 from tests.conftest import derive_seed
 
 pytestmark = pytest.mark.unit
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+V2_DIR = REPO_ROOT / "studies/line2_particle_sr/data/line2_ds_v2"
+V2_RESULTS = REPO_ROOT / "studies/line2_particle_sr/results"
 
 
 def _synthetic_table(n: int, seed: int) -> np.ndarray:
@@ -596,3 +605,309 @@ def test_metric_signatures_expose_no_normalization_entry(func: Callable) -> None
         n for n in inspect.signature(func).parameters if any(w in n.lower() for w in forbidden)
     ]
     assert not leaked, f"{func.__name__} 暴露归一入口：{leaked}"
+
+
+# ---------------------------------------------------------------- [S3] C1
+#: N_eff 类字段名的探针（白名单校核必须逐类拒绝它们）
+_N_EFF_FIELDS = ("n_eff", "n_eff_flag", "best_val_n_eff", "n_eff_median", "val_n_eff")
+
+
+def test_neff_not_in_gate_inputs() -> None:
+    """`50` [S3] C1：判定输入按类别白名单化，选型/路由/门禁三类均不含 N_eff。
+
+    白名单是判定侧的唯一取数入口，本测试对它做静态断言（不依赖任何一次具体判定的
+    运行）：① 三类白名单的冻结内容（选型/路由 = val 段 val_nll；门禁 = test 段的
+    逐束 M1 err / 13 维 obs / 对齐仪器读数 / B-const 逐束误差）；② 任何键名命中
+    N_eff 类模式即不在白名单，N_eff 只出现在 ``DISCLOSURE_ONLY``；③ 两段不交叉
+    （沿用 `40` D6/D12）；④ 校核函数对三类都拒绝 N_eff 字段与白名单外键；
+    ⑤ 三类各自的消费点（选型 ``selection_reading``、路由
+    ``route_by_selection_reading``、门禁的
+    对齐仪器与 B-const 读数）在签名与源码层面都不出现 N_eff。
+    """
+    # ① 冻结白名单
+    assert decisions.DECISION_KINDS == ("selection", "routing", "gate")
+    assert decisions.inputs_for("selection") == ("val_nll",)
+    assert decisions.inputs_for("routing") == ("val_nll",)
+    assert decisions.inputs_for("gate") == (
+        "beam_err_m1", "obs13", "alignment", "bconst_beam_err",
+    )
+    # ② N_eff 只作披露字段
+    for kind in decisions.DECISION_KINDS:
+        for key in decisions.inputs_for(kind):
+            assert not re.search(r"(^|_)n_eff(_|$)", key), (kind, key)
+    assert "n_eff" in decisions.DISCLOSURE_ONLY
+    assert set(decisions.DISCLOSURE_ONLY) == {"n_eff", "n_eff_flag"}
+    # ③ 两段不交叉
+    assert decisions.segment_for("selection") == "val"
+    assert decisions.segment_for("routing") == "val"
+    assert decisions.segment_for("gate") == "test"
+    assert "val_nll" not in decisions.inputs_for("gate")
+    assert not any(k.startswith("test_") for k in decisions.inputs_for("selection"))
+    # ④ 校核函数：合法键通过、N_eff 与白名单外键一律拒绝（三类全覆盖）
+    for kind in decisions.DECISION_KINDS:
+        allowed = decisions.inputs_for(kind)
+        assert decisions.assert_inputs(kind, list(allowed)) == allowed
+        assert decisions.assert_inputs(kind, []) == allowed
+        for field in _N_EFF_FIELDS:
+            with pytest.raises(decisions.DecisionInputError, match="N_eff"):
+                decisions.assert_inputs(kind, [*allowed, field])
+        with pytest.raises(decisions.DecisionInputError, match="不在白名单"):
+            decisions.assert_inputs(kind, ["mystery_reading"])
+    # ⑤ 消费点的静态断言（签名 + 源码）
+    consumers = {
+        "selection": (decisions.selection_reading, decisions.selection_payload),
+        "routing": (decisions.route_by_selection_reading,),
+        "gate": (alignment.alignment_instrument, alignment.scramble_pairs,
+                 baseline.bconst_group, baseline.bconst_records),
+    }
+    for kind, funcs in consumers.items():
+        for func in funcs:
+            params = list(inspect.signature(func).parameters)
+            assert not any(re.search(r"(^|_)n_eff(_|$)", p) for p in params), (kind, func.__name__)
+            assert "n_eff" not in inspect.getsource(func).lower(), (kind, func.__name__)
+    assert list(inspect.signature(decisions.route_by_selection_reading).parameters) == ["per_arm"]
+    # 选型读数的唯一准绳是 val_nll：签名不接受任何其它判定读数
+    assert list(inspect.signature(decisions.selection_reading).parameters) == ["per_tier"]
+
+
+def test_route_by_selection_reading_is_the_only_routing_input() -> None:
+    """`50` [S3] C1/S5：路由只吃 val 段 val_nll；同值按臂名定序（确定性）。"""
+    assert decisions.route_by_selection_reading({"joint": 1.0, "independent": 2.0}) == "joint"
+    assert decisions.route_by_selection_reading({"joint": 2.0, "independent": 1.0}) == "independent"
+    assert decisions.route_by_selection_reading({"indep": 1.0, "independent": 1.0}) == "indep"
+    # 输入顺序不影响结论（排序键 = (val_nll, 臂名)）
+    shuffled = {"b_arm": 0.5, "a_arm": 0.5}
+    assert decisions.route_by_selection_reading(shuffled) == "a_arm"
+    assert decisions.route_by_selection_reading(dict(reversed(list(shuffled.items())))) == "a_arm"
+    with pytest.raises(ValueError, match="无臂"):
+        decisions.route_by_selection_reading({})
+    with pytest.raises(ValueError, match="非有限"):
+        decisions.route_by_selection_reading({"joint": float("nan"), "independent": 1.0})
+
+
+# ---------------------------------------------------------------- [S3] C2
+def _tier_matrix(beam_values: list[list[float]]) -> np.ndarray:
+    return np.asarray(beam_values, dtype=np.float64)
+
+
+def test_val_nll_three_tier_mean() -> None:
+    """`50` [S3] C2：val_nll = 逐 (束, 子样本) NLL → 每档逐束中位数 → 全束中位数 → 三档等权平均。
+
+    构造把三种读法分开（每档各 5 束 × 5 子样本）：
+
+    - 档 3×10³ 的束中位数为 [0, 1, 5, 6, 7]：**先逐束取中位数**再对束取中位数给 5；
+      把该档 25 个读数池化后取中位数给 7（`50` [S1] 的聚合惯性是"先逐束收子样本、
+      再对束取统计量"，池化读法是本断言的鉴别对象）；
+    - 三档档内中位数 = 5 / 2 / 7 ⇒ 等权算术平均 14/3；跨档池化读法与对全部读数取
+      均值都得不到该值（分别是 7.0 与 4.0 量级）。
+    """
+    tier_3000 = _tier_matrix([
+        [0.0, 0.0, 0.0, 50.0, 50.0],
+        [1.0, 1.0, 1.0, 50.0, 50.0],
+        [-100.0, -100.0, 5.0, 1000.0, 1000.0],
+        [6.0, 6.0, 6.0, 1000.0, 1000.0],
+        [7.0, 7.0, 7.0, 1000.0, 1000.0],
+    ])
+    tier_10000 = _tier_matrix([[1.0] * 5, [2.0] * 5, [3.0] * 5])
+    tier_100000 = _tier_matrix([[7.0] * 5])
+    per_tier = {3_000: tier_3000, 10_000: tier_10000, 100_000: tier_100000}
+
+    # 逐档分量：逐束中位数 → 全束中位数
+    np.testing.assert_array_equal(np.median(tier_3000, axis=1), [0.0, 1.0, 5.0, 6.0, 7.0])
+    assert decisions.tier_reading(per_tier, 3_000) == 5.0
+    assert decisions.tier_reading(per_tier, 10_000) == 2.0
+    assert decisions.tier_reading(per_tier, 100_000) == 7.0
+    # 池化读法在本构造上给 7（3e3 档）——先把两读法分开，再断言用的是哪一支
+    assert float(np.median(tier_3000)) == 7.0
+    assert decisions.selection_reading(per_tier) == pytest.approx((5.0 + 2.0 + 7.0) / 3.0)
+    assert decisions.selection_reading(per_tier) != (7.0 + 2.0 + 7.0) / 3.0
+    pooled_all = float(np.median(np.concatenate([v.ravel() for v in per_tier.values()])))
+    assert decisions.selection_reading(per_tier) != pytest.approx(pooled_all)
+
+    # 落盘载荷：附各档分项（`50` [S3] C2 明文）与冻结口径快照
+    payload = decisions.selection_payload(per_tier)
+    assert payload["val_nll"] == pytest.approx(decisions.selection_reading(per_tier))
+    assert payload["tiers"] == [3_000, 10_000, 100_000] == list(decisions.VAL_NLL_TIERS)
+    assert payload["station"] == 0 and payload["subs"] == [0, 1, 2, 3, 4]
+    assert payload["segment"] == "val"
+    assert payload["per_tier"]["3000"] == {"median_nll": 5.0, "n_beams": 5, "n_subs": 5}
+    assert payload["per_tier"]["10000"] == {"median_nll": 2.0, "n_beams": 3, "n_subs": 5}
+    assert json.loads(json.dumps(payload)) == payload  # 落盘可往返
+
+    # 契约护栏：缺档 / 非矩阵 / 站与子样本偏离冻结口径一律显式报错
+    with pytest.raises(ValueError, match="缺档"):
+        decisions.selection_reading({3_000: tier_3000, 10_000: tier_10000})
+    with pytest.raises(ValueError, match="矩阵"):
+        decisions.tier_reading({3_000: np.zeros(5)}, 3_000)
+    with pytest.raises(ValueError, match="站 0"):
+        decisions.selection_payload(per_tier, station=1)
+    with pytest.raises(ValueError, match="subs"):
+        decisions.selection_payload(per_tier, subs=(0, 1, 2, 3))
+
+
+# ---------------------------------------------------------------- [S3] C4
+def test_bconst_in_baseline_family() -> None:
+    """`50` [S3] C4：B-const（两站）入冻结基线族，并在 v2 公共域上可复算。
+
+    四层证据：① 族成员与实现点冻结（B-const → ``baseline.bconst_group``，且
+    ``baseline_family()`` 返回副本、改不动冻结族）；② 两站均值图 = train 束全量目标图
+    逐投影归一后的均值（手写循环独立重算，逐位一致），且所消费的 bin 边界逐位等于
+    manifest 的 v2 公共域边界（确认是 v2 口径而非 v1 逐束自定标）；③ 150 个 test 束
+    的逐束 M1 误差向量（两站）与抽样独立复算一致；④ 落盘产物与重算对账（组图、
+    逐束误差中位数）。
+
+    v1 边界的同口径读数为站 0 ≈ 0.194、站 1 ≈ 0.035（pre3/exp3）；v2 公共域下实测
+    中位数为站 0 ≈ 1.575、站 1 ≈ 1.510——本测试不断言该数值（属研究结果），只断言
+    结构、复算一致与 v2 边界口径。
+    """
+    # ① 冻结族
+    assert set(baseline.BASELINE_FAMILY) == {"B-raw", "B-const", "B-curve", "B-moment"}
+    assert baseline.BASELINE_FAMILY["B-const"] == "src.line2.metrics.baseline.bconst_group"
+    family = baseline.baseline_family()
+    family["B-const"] = "tampered"
+    assert baseline.BASELINE_FAMILY["B-const"] == "src.line2.metrics.baseline.bconst_group"
+
+    if not (V2_DIR / "manifest.json").is_file():
+        pytest.skip(f"v2 数据集不在本机：{V2_DIR}（*.h5 不入库）")
+    manifest = json.loads((V2_DIR / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["data_version"] == "line2_ds_v2"
+    train_beams = [int(b) for b in manifest["splits"]["train"]]
+    test_beams = [int(b) for b in manifest["splits"]["test"]]
+    assert len(train_beams) == 700 and len(test_beams) == 150
+
+    # ② 两站均值图：可复算 + 消费 v2 公共域边界
+    groups: dict[int, np.ndarray] = {}
+    for station in (0, 1):
+        group = baseline.bconst_group(V2_DIR, station, beam_ids=train_beams)
+        assert group.shape == (6, 128, 128) and (group >= 0).all()
+        np.testing.assert_allclose(group.sum(axis=(1, 2)), 1.0, rtol=0.0, atol=1e-12)
+        acc = np.zeros_like(group)
+        edges = np.stack([
+            np.asarray(manifest["edges"][f"station{station}"][axis], dtype=np.float64)
+            for axis in AXES
+        ])
+        with h5py.File(V2_DIR / "train.h5", "r") as h5:
+            for beam_id in train_beams:
+                stg = h5[f"beam_{beam_id:04d}"][f"station{station}"]
+                np.testing.assert_array_equal(
+                    stg["target_full"].attrs["bin_edges"], edges
+                )
+                raw = stg["target_full"][...].astype(np.float64)
+                acc += raw / raw.sum(axis=(1, 2), keepdims=True)
+        np.testing.assert_array_equal(group, acc / len(train_beams))
+        groups[station] = group
+
+    # ③ 逐束误差向量（150 test 束 × 两站）与抽样独立复算
+    for station in (0, 1):
+        errors = baseline.bconst_beam_errors(
+            groups[station], V2_DIR, station, beam_ids=test_beams
+        )
+        assert sorted(errors) == sorted(test_beams)
+        values = np.asarray([errors[b] for b in test_beams], dtype=np.float64)
+        assert np.isfinite(values).all() and (values > 0.0).all()
+        with h5py.File(V2_DIR / "test.h5", "r") as h5:
+            for beam_id in test_beams[:3]:
+                ref = h5[f"beam_{beam_id:04d}"][f"station{station}"]["target_full"][...]
+                assert errors[beam_id] == group_rel_rmse(groups[station], ref)
+
+    # ④ 落盘产物对账（另见 :func:`test_bconst_product_matches_recomputation`）
+    artifact = V2_RESULTS / "bconst_v2.json"
+    if not artifact.is_file():
+        pytest.skip(f"B-const 产物不在本机：{artifact.name}（results/ 不入库）")
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    assert payload["n_train_beams"] == 700
+    assert sorted(int(k) for k in payload["station"]) == [0, 1]
+    # 门禁输入的 C1 白名单性质：B-const 读数不含任何 N_eff 字段
+    assert "n_eff" not in artifact.read_text(encoding="utf-8")
+
+
+def test_bconst_product_matches_recomputation() -> None:
+    """`50` [S3] C4 的落盘对账：两站均值图与 150×2 个逐束误差向量可由数据复算。
+
+    产物（``bconst_v2.json`` + ``bconst_v2_groups.npz``）是 G1/G4/G5 的判定参照，
+    故其组图与逐束误差须与从 v2 数据重算的值逐位（组图）／1e-12 相对（误差）一致。
+    """
+    artifact = V2_RESULTS / "bconst_v2.json"
+    npz_path = V2_RESULTS / "bconst_v2_groups.npz"
+    if not artifact.is_file() or not npz_path.is_file():
+        pytest.skip(f"B-const 产物不在本机：{artifact.name}（results/ 不入库）")
+    if not (V2_DIR / "manifest.json").is_file():
+        pytest.skip(f"v2 数据集不在本机：{V2_DIR}（*.h5 不入库）")
+    manifest = json.loads((V2_DIR / "manifest.json").read_text(encoding="utf-8"))
+    train_beams = [int(b) for b in manifest["splits"]["train"]]
+    test_beams = [int(b) for b in manifest["splits"]["test"]]
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    stored = np.load(npz_path)
+    for station in (0, 1):
+        group = baseline.bconst_group(V2_DIR, station, beam_ids=train_beams)
+        np.testing.assert_allclose(
+            stored[f"station{station}"], group, rtol=1e-12, atol=0.0
+        )
+        errors = baseline.bconst_beam_errors(
+            group, V2_DIR, station, beam_ids=test_beams
+        )
+        per_beam = payload["station"][str(station)]["per_beam_m1"]
+        assert sorted(int(b) for b in per_beam) == sorted(test_beams)
+        np.testing.assert_allclose(
+            np.asarray([per_beam[str(b)] for b in test_beams], dtype=np.float64),
+            np.asarray([errors[b] for b in test_beams], dtype=np.float64),
+            rtol=1e-12,
+            atol=0.0,
+        )
+        assert payload["station"][str(station)]["err_median"] == pytest.approx(
+            float(np.median([errors[b] for b in test_beams])), rel=1e-12
+        )
+
+
+# ---------------------------------------------------------------- [S3] C3 支撑
+def test_signed_hf_gap_is_the_signed_m6_reading() -> None:
+    """`50` [S3] C3 的符号量口径：逐投影符号差的平均，且 |signed| ≤ M6 的 |Δ| 平均。
+
+    去偏需要符号（M6 在 13 维向量里先取 |·|），本测试钉住两个口径的关系：符号量按
+    逐投影差的平均独立重算；三角不等式给出 |signed| ≤ gap（各投影同号时取等）。
+    """
+    from src.line2.metrics.metrics import hf_energy_ratios, signed_hf_energy_ratio_gap
+
+    rng = np.random.default_rng(derive_seed(50, 11))
+    group_ref = rng.integers(0, 40, (6, 128, 128)).astype(np.int32)
+    assert signed_hf_energy_ratio_gap(group_ref, group_ref) == 0.0
+    for shift in (-3, 0, 3):
+        group = (group_ref + shift).clip(0).astype(np.int32)
+        ratios_g, ratios_r = hf_energy_ratios(group), hf_energy_ratios(group_ref)
+        signed = signed_hf_energy_ratio_gap(group, group_ref)
+        assert signed == pytest.approx(float(np.mean(ratios_g - ratios_r)), rel=1e-12)
+        gap = hf_energy_ratio_gap(group, group_ref)
+        assert gap == pytest.approx(float(np.mean(np.abs(ratios_g - ratios_r))), rel=1e-12)
+        assert abs(signed) <= gap + 1e-15
+        # 同号构造（整体更平滑 ⇒ 六个投影的高频比一致下降）下两口径取等
+        if np.all(np.sign(ratios_g - ratios_r) == np.sign(signed)) and signed != 0.0:
+            assert abs(signed) == pytest.approx(gap, rel=1e-12)
+
+
+def test_m6_gap_matches_the_v1_per_projection_formula() -> None:
+    """`50` Global Constraints（代码复用与语义不变）：M6 的数值与 v1 逐投影写法逐位一致。
+
+    ``hf_energy_ratios`` 抽出后，``hf_energy_ratio_gap`` 改为"先各算比值再取平均"；
+    本测试以 v1 的原始写法（逐投影 `gaussian_filter` 高通 + 逐投影取 |Δ| 后再平均）
+    作为独立 oracle，随机图组上要求逐位相等——防"重构顺手改了 M6 语义"。
+    """
+    from scipy.ndimage import gaussian_filter
+
+    from src.line2.metrics.metrics import _HF_SIGMA_BINS
+
+    def legacy(group: np.ndarray, group_ref: np.ndarray) -> float:
+        gaps = []
+        for gi in range(group.shape[0]):
+            ratios = []
+            for img in (group[gi].astype(np.float64), group_ref[gi].astype(np.float64)):
+                hp = img - gaussian_filter(img, _HF_SIGMA_BINS)
+                ratios.append(float(np.abs(hp).sum() / max(img.sum(), 1e-12)))
+            gaps.append(abs(ratios[0] - ratios[1]))
+        return float(np.mean(gaps))
+
+    rng = np.random.default_rng(derive_seed(50, 12))
+    for scale in (10, 1000):
+        group = rng.integers(0, scale, (6, 128, 128)).astype(np.int32)
+        group_ref = rng.integers(0, scale, (6, 128, 128)).astype(np.int32)
+        assert hf_energy_ratio_gap(group, group_ref) == legacy(group, group_ref)
+        assert hf_energy_ratio_gap(group, group) == 0.0

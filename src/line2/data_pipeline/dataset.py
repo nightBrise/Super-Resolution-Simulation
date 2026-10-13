@@ -119,19 +119,28 @@ def train_pooled_edges(
 def _clamp_precheck(
     anchor_table: np.ndarray, n_beams: int, edges_by_station: dict[int, np.ndarray]
 ) -> np.ndarray:
-    """逐 (束, 站) 夹取计数预检——写盘前算出全数据集占比（`50` [S2] C6 保险丝）。"""
+    """逐 (束, 站) 夹取**粒子数**预检——写盘前算出全数据集占比（`50` [S2] C6 保险丝）。
+
+    口径 = :func:`~.projections.count_oob_particles`（任一轴越界计一次，`50` D16），
+    与写盘路径同口径，供构建末尾的逐 (束, 站) 一致性守卫逐位比对。
+    """
     counts = np.zeros((n_beams, 2), dtype=np.int64)
     for beam_idx in range(n_beams):
         for station_idx, table in enumerate(transport_beam(anchor_table, beam_idx=beam_idx)):
-            _, axis_counts = clamp_table(table, edges_by_station[station_idx])
-            counts[beam_idx, station_idx] = int(axis_counts.sum())
+            counts[beam_idx, station_idx] = count_oob_particles(
+                table, edges_by_station[station_idx]
+            )
     return counts
 
 
 def _write_clamp_accounting(
     out_dir: Path, clamp_counts: np.ndarray, n_particles: int
 ) -> tuple[int, str]:
-    """逐 (束, 站) 夹取计数落盘为 CSV，返回 (总夹取数, 文件 SHA256)。"""
+    """逐 (束, 站) 夹取**粒子数**落盘为 CSV，返回 (总夹取粒子数, 文件 SHA256)。
+
+    列 ``n_clamped`` 的口径 = 任一轴越界的粒子数（`50` [S2] C6 / D16），与预检、
+    h5 站 attr 及 manifest 的 ``clamp`` 段一致。
+    """
     lines = ["beam_id,station,n_particles,n_clamped"]
     for beam_idx in range(clamp_counts.shape[0]):
         for station_idx in (0, 1):
@@ -169,7 +178,7 @@ def _write_beam_group(
             binned_table, n_clamped = table, 0
         else:
             edges = edges_by_station[station_idx]
-            binned_table, axis_counts = clamp_table(table, edges)
+            binned_table, _ = clamp_table(table, edges)  # 逐轴计数为诊断口径，报告用粒子数
             n_clamped = count_oob_particles(table, edges)
         st = grp.create_group(f"station{station_idx}")
         target = six_projections(binned_table, edges)
@@ -296,6 +305,7 @@ def build_dataset(
     }
     if edges_by_station is not None:
         assert clamp_precheck is not None and clamp_limit is not None
+        # 预检与写盘同口径（`50` [S2] C6 / D16：任一轴越界的粒子数），逐 (束, 站) 逐位比对
         if not np.array_equal(clamp_precheck, clamp_counts):
             raise RuntimeError("写盘夹取计数与预检不一致（构建非确定性）")
         n_particles = int(anchor_table.shape[0])

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import hashlib
 import json
 from pathlib import Path
 
+import h5py
 import numpy as np
 import pytest
+import torch
 
 from src.line2.experiments import evaluate, run_e1
 from src.line2.experiments.gates import (
@@ -903,3 +906,367 @@ def test_generate_raises_when_e0_order_violated(fake_products: Path, tmp_path: P
                     "2026-09-14T04:30:00+00:00")
     with pytest.raises(ValueError, match="C5"):
         generate(fake_products, out_dir=tmp_path / "out", reports_dir=tmp_path / "reports")
+
+
+# ------------------------------------------- `50` [S4] Phase 1.5：矩阵配置断言与选型准绳
+_PHASE15_TIERS = (3_000, 10_000, 100_000)
+_PHASE15_SEEDS = (100, 101, 102, 103, 104)
+#: 逐站四轴半宽（m / rad）——站 1 更宽（真实 v2 边界同构：公共域半宽站 1 ≈ 2× 站 0）
+_AXIS_HALF_WIDTHS = {
+    0: (1.99e-3, 1.756e-4, 1.964e-3, 3.672e-4),
+    1: (4.02e-3, 6.04e-4, 9.90e-4, 9.89e-4),
+}
+
+
+def _blob_group(n_particles: int, offset: int) -> np.ndarray:
+    """(6,128,128) int32 计数图组：六投影各一个高斯斑，逐投影和 = n_particles。"""
+    grid = np.mgrid[0:128, 0:128]
+    out = np.zeros((6, 128, 128), dtype=np.int64)
+    for gi in range(6):
+        cx, cy = 64 + (gi - 2) + offset % 5, 64 - gi + offset % 7
+        weight = np.exp(
+            -((grid[0] - cy) ** 2 + (grid[1] - cx) ** 2) / (2 * 5.0**2)
+        )
+        weight /= weight.sum()
+        counts = np.floor(weight * n_particles).astype(np.int64)
+        counts.flat[int(np.argmax(weight.ravel()))] += n_particles - int(counts.sum())
+        out[gi] = counts
+    return out
+
+
+def _station_edges_fixture(station: int) -> np.ndarray:
+    return np.stack(
+        [np.linspace(-half, half, 129) for half in _AXIS_HALF_WIDTHS[station]]
+    ).astype(np.float64)
+
+
+def _write_tiny_field_dataset(
+    root: Path,
+    tiers: tuple[int, ...] = _PHASE15_TIERS,
+    k: int = 5,
+    splits: dict[str, list[int]] | None = None,
+) -> Path:
+    """手写最小 v2 数据集（含站 0 与站 1），供批源/训练/矩阵断言用例使用。
+
+    站 1 数据**真实存在**：站 1 粒子数为 0 的断言因此可证伪（若批源误配 stations，
+    抽批会直接把它们捞出来）。
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    splits = splits if splits is not None else {"train": [0, 1, 2, 3], "val": [4], "test": []}
+    for split, beams in splits.items():
+        with h5py.File(root / f"{split}.h5", "w") as h5:
+            for beam in beams:
+                grp = h5.create_group(f"beam_{beam:04d}")
+                for station in (0, 1):
+                    stg = grp.create_group(f"station{station}")
+                    edges = _station_edges_fixture(station)
+                    stg.create_dataset(
+                        "target_full", data=_blob_group(200_000, beam + station)
+                    )
+                    for tier in tiers:
+                        for sub in range(k):
+                            dset = stg.create_dataset(
+                                f"tier_{tier:06d}_sub_{sub:02d}",
+                                data=_blob_group(tier, beam * 7 + station * 3 + sub),
+                            )
+                            dset.attrs["bin_edges"] = edges
+    manifest = {
+        "data_version": "line2_ds_v2",
+        "master_seed": 20260913,
+        "n_bins": 128,
+        "tiers": list(tiers),
+        "subsamples_per_tier": k,
+        "splits": {split: [int(b) for b in beams] for split, beams in splits.items()},
+    }
+    (root / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return root
+
+
+def _phase15_config(
+    data_dir: Path, variant: str, seed: int, out_dir: Path, **over
+) -> dict:
+    """Phase 1.5 run config（字段名 = `src.line2.training.config_check` 记录的契约）。"""
+    cfg = {
+        "phase": "1.5",
+        "variant": variant,
+        "seed": int(seed),
+        "kappa": "v2",
+        "data_dir": str(data_dir),
+        "out_dir": str(out_dir),
+        "tiers": list(_PHASE15_TIERS),
+        "stations": [0],
+        "k_train": 5,
+        "max_steps": 50_000,
+        "eval_every": 1_000,
+        "patience": 10,
+        "batch": 16,
+        "lr": 3e-4,
+        "num_levels": 4,
+        "w_psd": 0.1,
+        "n_high": 200_000.0,
+        "device": "cpu",
+        "torch_threads": 2,
+    }
+    if variant == "joint":
+        cfg.update({"base": 48, "blocks": 2})
+    else:
+        cfg.update({"ind_base": 16, "ind_blocks": 3})
+    cfg.update(over)
+    return cfg
+
+
+def _phase15_matrix(data_dir: Path, runs_dir: Path) -> list[dict]:
+    """2 臂 × 5 种子 = 10 个 run（`50` [S5] 矩阵；两臂种子逐元素相同）。"""
+    return [
+        _phase15_config(
+            data_dir, variant, seed, runs_dir / f"e15_{variant}_s{index}"
+        )
+        for variant in ("joint", "independent")
+        for index, seed in enumerate(_PHASE15_SEEDS)
+    ]
+
+
+def test_phase15_matrix_config_assertions(tmp_path: Path) -> None:
+    """`50` [S4] C3：矩阵配置自动校验（种子集合/参数量差/档集/站集/k_train/站 1 粒子数）。
+
+    正例走真实 v2 口径的字段组合；负例逐项违约（含"两臂种子集合不同"与"参数量对齐
+    失守"），且站 1 探针本身可证伪——把 stations 改成 [0,1] 后同一批源确实能捞出站 1
+    粒子（说明"批次含站 1 粒子数 = 0"不是空断言）。
+    """
+    from src.line2.training import config_check
+    from src.line2.training.config_check import validate_phase15_matrix
+
+    data_dir = _write_tiny_field_dataset(tmp_path / "ds")
+    configs = _phase15_matrix(data_dir, tmp_path / "runs")
+    report = validate_phase15_matrix(configs, data_dir=data_dir)
+
+    assert report["station_check"] == f"ok:{data_dir}"
+    assert report["station_counts"] == {0: 4 * 16}  # batch_probe=4 批 × batch=16
+    assert abs(report["param_rel_diff"]) <= 0.30
+    assert report["params_total"]["joint"] > 0 and report["params_total"]["independent"] > 0
+    assert [run["seed"] for run in report["runs"][:5]] == list(_PHASE15_SEEDS)
+    assert all(run["tiers"] == list(_PHASE15_TIERS) for run in report["runs"])
+    assert all(run["stations"] == [0] and run["k_train"] == 5 for run in report["runs"])
+
+    # 站 1 探针可证伪：loader 配了站 1 就能在 fixture 里捞到站 1 粒子
+    assert config_check._station_counts(dict(configs[0], stations=[0, 1]), data_dir, 4).get(1)
+
+    def _mutate(index: int, **over) -> dict:
+        mutated = dict(configs[index])
+        mutated.update(over)
+        return [*configs[:index], mutated, *configs[index + 1 :]]
+
+    cases = (
+        ("种子集合多一个", _mutate(9, seed=105), "种子集合"),
+        ("种子集合缺一个", _mutate(9, seed=103), "种子集合"),
+        ("档集缺 3×10³", _mutate(0, tiers=[10_000, 100_000]), "训练档集"),
+        ("站集含站 1", _mutate(0, stations=[0, 1]), "训练站集"),
+        ("k_train 非 5", _mutate(0, k_train=20), "k_train"),
+        ("参数量差超 30%", _mutate(0, base=24, blocks=1), "参数量差"),
+        ("预算未满", _mutate(0, max_steps=10_000), "max_steps"),
+        ("κ 口径非 v2", _mutate(0, kappa="v1"), "kappa"),
+    )
+    for label, mutated, expected in cases:
+        with pytest.raises(ValueError, match=expected):
+            validate_phase15_matrix(mutated, data_dir=data_dir)
+
+
+def _phase15_function():
+    """`train.train_phase15` 的 AST 节点（静态断言的作用域：Phase 1.5 选型分支）。"""
+    from src.line2.training import train as train_module
+
+    tree = ast.parse(Path(train_module.__file__).read_text(encoding="utf-8"))
+    return next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "train_phase15"
+    )
+
+
+def test_selection_val_nll_only(tmp_path: Path) -> None:
+    """`50` [S4] C4：训练结束的 summary 契约；选型分支不存在 N_eff 比较。
+
+    静态：``train_phase15`` 作用域内无任何含 ``n_eff`` 的标识符、best 更新走
+    ``should_update_best(..., minimize=True)``（严格 `<`）、summary 含四项 C4 字段且
+    stop_reason 的取值集 = {val_nll_patience, budget_exhausted}。
+    功能：小 run 两种停止路径各一次（lr=0 ⇒ 评估轨迹恒定，patience 必触发），
+    best_step = val_nll argmin、各档分项落盘、best_val.ckpt 与之同步。
+    """
+    from src.line2.training.train import train
+
+    fn = _phase15_function()
+    identifiers = {
+        node.id for node in ast.walk(fn) if isinstance(node, ast.Name)
+    } | {node.attr for node in ast.walk(fn) if isinstance(node, ast.Attribute)}
+    assert not {name for name in identifiers if "n_eff" in name.lower()}, (
+        f"选型分支出现 N_eff 标识符：{sorted(n for n in identifiers if 'n_eff' in n.lower())}"
+    )
+    best_calls = [
+        node
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "should_update_best"
+    ]
+    assert best_calls, "train_phase15 未调用 should_update_best"
+    for call in best_calls:
+        assert getattr(call.args[0], "id", None) == "val_nll"
+        assert any(
+            kw.arg == "minimize" and isinstance(kw.value, ast.Constant) and kw.value.value
+            for kw in call.keywords
+        ), "should_update_best 未按最小化（严格 <）调用"
+    summary_keys = {
+        key.value
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Assign)
+        and any(getattr(t, "id", None) == "summary" for t in node.targets)
+        and isinstance(node.value, ast.Dict)
+        for key in node.value.keys
+        if isinstance(key, ast.Constant)
+    }
+    assert {"stop_reason", "best_step", "best_val_nll", "best_val_nll_per_tier"} <= summary_keys
+    literals = {
+        node.value for node in ast.walk(fn) if isinstance(node, ast.Constant)
+    }
+    assert {"val_nll_patience", "budget_exhausted"} <= literals
+
+    data_dir = _write_tiny_field_dataset(tmp_path / "ds")
+    small = {"max_steps": 4, "eval_every": 2, "patience": 10, "batch": 4,
+             "base": 24, "num_levels": 3, "blocks": 1, "device": "cpu"}
+    out_dir = tmp_path / "run_budget"
+    summary = train(_phase15_config(data_dir, "joint", 100, out_dir, **small))
+
+    assert summary["phase"] == "1.5" and summary["stop_reason"] == "budget_exhausted"
+    assert summary["steps"] == 4 == summary["max_steps"]
+    history = [entry["val_nll"] for entry in summary["val_nll_history"]]
+    assert len(history) == 2 and summary["best_val_nll"] == min(history)
+    assert summary["best_step"] == 2 * (int(np.argmin(history)) + 1)
+    assert set(summary["best_val_nll_per_tier"]) == {str(tier) for tier in _PHASE15_TIERS}
+    assert all(np.isfinite(list(summary["best_val_nll_per_tier"].values())))
+    # 混合档留痕：逐档抽批数之和 = 步数（机制确实在跑，且档集与 config 一致）
+    assert summary["tier_draws"] == summary["val_nll_history"][-1]["tier_draws"]
+    assert sum(summary["tier_draws"].values()) == summary["steps"] == 4
+    assert set(summary["tier_draws"]) == {str(tier) for tier in _PHASE15_TIERS}
+    log = [
+        json.loads(line)
+        for line in (out_dir / "train_log.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert [entry["step"] for entry in log] == [2, 4]
+    assert {"step", "train_nll", "val_nll", "val_nll_per_tier", "lr", "grad_norm"} <= set(log[0])
+    assert (out_dir / "best_val.ckpt").is_file() and (out_dir / "last.ckpt").is_file()
+    best_payload = torch.load(out_dir / "best_val.ckpt", map_location="cpu", weights_only=True)
+    assert best_payload["step"] == summary["best_step"]
+    assert best_payload["best_val_nll"] == summary["best_val_nll"]
+    assert best_payload["master_seed"] == 100
+    on_disk = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert on_disk == summary
+
+    # patience 路径：lr=0 ⇒ 权重不变 ⇒ 首次评估后不再严格下降，patience=2 在第 3 步触发
+    patience_dir = tmp_path / "run_patience"
+    stopped = train(
+        _phase15_config(
+            data_dir, "joint", 100, patience_dir,
+            max_steps=10, eval_every=1, patience=2, batch=4, lr=0.0,
+            base=24, num_levels=3, blocks=1, device="cpu",
+        )
+    )
+    assert stopped["stop_reason"] == "val_nll_patience"
+    assert stopped["steps"] == 3 and len(stopped["val_nll_history"]) == 3
+    values = [entry["val_nll"] for entry in stopped["val_nll_history"]]
+    assert values[1] == values[2] == stopped["best_val_nll"]  # 持平不更新（严格 <）
+    assert stopped["best_step"] == 1
+
+    # 独立臂走同一条 Phase 1.5 路径（κ v2 由 ckpt config 分派）
+    indep_dir = tmp_path / "run_indep"
+    indep = train(
+        _phase15_config(
+            data_dir, "independent", 101, indep_dir,
+            max_steps=2, eval_every=2, patience=10, batch=4,
+            num_levels=3, ind_base=16, ind_blocks=1, device="cpu",
+        )
+    )
+    assert indep["variant"] == "independent" and indep["stop_reason"] == "budget_exhausted"
+    assert indep["kappa"] == "v2" and indep["best_step"] == 2
+    assert torch.load(indep_dir / "best_val.ckpt", map_location="cpu",
+                      weights_only=True)["config"]["kappa"] == "v2"
+
+
+def test_phase15_training_deterministic_same_seed(tmp_path: Path) -> None:
+    """`50` Global Constraints（确定性）：同 config 同种子重训，val_nll 轨迹逐位一致。
+
+    训练侧随机性只有两处——torch 初始化/优化器（``set_deterministic``）与混合档批序
+    （``SeedSequence(20260913)`` 派生）；两者都确定，故两次 run 的逐评估周期读数必须
+    逐位相同（v1 侧同款断言见 ``test_train_smoke_and_determinism``）。
+    """
+    from src.line2.training.train import train
+
+    data_dir = _write_tiny_field_dataset(tmp_path / "ds")
+    over = {"max_steps": 3, "eval_every": 1, "patience": 10, "batch": 4,
+            "base": 24, "num_levels": 3, "blocks": 1, "device": "cpu", "val_beams": 1}
+    first = train(_phase15_config(data_dir, "joint", 103, tmp_path / "run_a", **over))
+    second = train(_phase15_config(data_dir, "joint", 103, tmp_path / "run_b", **over))
+
+    def trajectory(summary: dict) -> list[dict]:
+        return [
+            {key: value for key, value in entry.items() if key != "elapsed_s"}
+            for entry in summary["val_nll_history"]
+        ]
+
+    assert trajectory(first) == trajectory(second)
+    assert first["best_step"] == second["best_step"] == 3
+    assert first["best_val_nll"] == second["best_val_nll"]
+    third = train(_phase15_config(data_dir, "joint", 104, tmp_path / "run_c", **over))
+    assert trajectory(third) != trajectory(first)
+
+
+def test_selection_reading_delegates_to_s3_aggregate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`50` [S3] C1/C2 单点化：训练侧把 (束, 子样本) NLL 矩阵转发给 `metrics.decisions`。
+
+    探针替换 [S3] 的两个聚合函数并记录其输入，跑 1 次评估的小 run：每个档位收到的
+    矩阵 SHALL 为 (val 束 × k_train) 二维矩阵；summary 的 best_val_nll 与各档分项
+    SHALL 等于按 [S3] 口径对该矩阵的重算值——训练侧没有自己的池化读法。
+    """
+    from src.line2.metrics import decisions
+    from src.line2.training.train import train
+
+    data_dir = _write_tiny_field_dataset(
+        tmp_path / "ds", splits={"train": [0, 1, 2], "val": [3, 4], "test": []}
+    )
+    seen: dict[int, list[np.ndarray]] = {}
+    real_tier, real_selection = decisions.tier_reading, decisions.selection_reading
+
+    def record(per_tier) -> None:
+        for tier, matrix in per_tier.items():
+            seen.setdefault(int(tier), []).append(np.asarray(matrix, dtype=np.float64).copy())
+
+    def tier_spy(per_tier, tier: int) -> float:
+        record(per_tier)
+        return real_tier(per_tier, tier)
+
+    def selection_spy(per_tier) -> float:
+        record(per_tier)
+        return real_selection(per_tier)
+
+    monkeypatch.setattr(decisions, "tier_reading", tier_spy)
+    monkeypatch.setattr(decisions, "selection_reading", selection_spy)
+    summary = train(
+        _phase15_config(
+            data_dir, "joint", 100, tmp_path / "run",
+            max_steps=2, eval_every=2, patience=10, batch=3,
+            base=24, num_levels=3, blocks=1, device="cpu",
+        )
+    )
+
+    assert set(seen) == set(_PHASE15_TIERS)
+    for tier, matrices in seen.items():
+        for matrix in matrices:
+            assert matrix.shape == (2, 5)  # 2 val 束 × k_train 5（未池化的逐 (束, 子样本) 读数）
+        assert summary["best_val_nll_per_tier"][str(tier)] == pytest.approx(
+            real_tier({tier: matrices[-1]}, tier)
+        )
+    assert summary["best_val_nll"] == pytest.approx(
+        float(np.mean([real_tier({t: m[-1]}, t) for t, m in seen.items()]))
+    )

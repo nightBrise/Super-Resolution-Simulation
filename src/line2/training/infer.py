@@ -17,8 +17,8 @@ import numpy as np
 import torch
 
 from .common import config_hash
-from .train import build_model
-from .unet import condition_vector, normalize_input_group
+from .train import build_model, kappa_version_of
+from .unet import kappa_for, normalize_input_group
 
 __all__ = ["infer", "load_ckpt_payload", "main"]
 
@@ -93,10 +93,11 @@ def _forward(
     # κ（联合版）与独立版条件的 log₁₀N_low 一律从**输入计数和**派生，与训练侧
     # condition_vector(log_n_low=None) / _forward_variant 同口径：名义档位与实际计数和
     # 不符时（跨站套用、子样本缺粒）不会给网络喂一个训练期从未见过的条件值。
+    # κ 口径由 ckpt 的 config 决定（`50` [S4] C1：``kappa`` = "v1"/"v2"）。
+    kappa_version = kappa_version_of(cfg)
     with torch.no_grad():
         if variant == "joint":
-            kappa = condition_vector(counts_t, edges_t)
-            p = net(shape_maps, kappa)  # (1, 6, 128, 128)
+            p = net(shape_maps, kappa_for(counts_t, edges_t, kappa_version))  # (1, 6, 128, 128)
         else:
             log_n = torch.log10(counts_t.sum(dim=(1, 2, 3)).clamp_min(1.0))
             p = net(shape_maps, edges_t, log_n)

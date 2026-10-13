@@ -88,6 +88,10 @@ def clamp_table(table: np.ndarray, edges: np.ndarray) -> tuple[np.ndarray, np.nd
     越界粒子计入最近边界格（`50` [S2] C6 / D13）；夹取后整表落在 edges 内，故
     :func:`six_projections` 的零截断守卫给出计数守恒（∑counts = 输入行数）复核。
     纵向列（如有）逐位保留。
+
+    第二个返回值为**逐轴诊断计数**（双轴越界者在两轴上各计一次，可作保守上界）；
+    `50` [S2] C6 的报告/保险丝口径 = 任一轴越界的**粒子数**，见
+    :func:`count_oob_particles`。
     """
     out = table.copy()
     counts = np.zeros(len(AXES), dtype=np.int64)

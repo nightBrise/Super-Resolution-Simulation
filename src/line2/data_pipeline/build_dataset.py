@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--v1-dir", type=Path,
                         default=Path("studies/line2_particle_sr/data/line2_ds_v1"))
     parser.add_argument("--max-clamp-frac", type=float, default=None,
-                        help=f"v2 夹取占比上限（默认 {MAX_CLAMP_FRAC_V2}，`50` [S2] C6 硬线）；生产口径应保持默认，覆盖仅供测试/诊断"
+                        help=f"v2 夹取占比上限（默认 {MAX_CLAMP_FRAC_V2}，`50` [S2] C6 硬线）；生产口径应保持默认，覆盖仅供测试/诊断")
     parser.add_argument("--reconcile-only", action="store_true",
                         help="只做 C1 重传对账（不构建数据集）")
     args = parser.parse_args(argv)

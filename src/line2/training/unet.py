@@ -6,6 +6,8 @@ GroupNorm+SiLU、FiLM 层），head 替换为 6 通道；输出经 Softplus 后�
 
 κ（条件向量，11 维 = 输入图组 10 维 Σ 摘要 + log₁₀N_low）SHALL 仅由输入
 图组派生（`30` [S1] C5 防泄露；输入自归一 + 粗矩 FiLM = F8 (a)+(b)）。
+Phase 1.5 的 κ v2 只改 Σ 摘要的归一化（除以 s_i·s_j，`50` [S4] C1），
+两条口径经 ``kappa_for`` 分派，v1 语义逐位不变。
 """
 
 from __future__ import annotations
@@ -35,6 +37,8 @@ def condition_vector(
     """F8(b) 条件向量 κ ∈ ℝ¹¹：输入图组 10 维 Σ 摘要（对角 4 + 上三角 6）+ log₁₀N_low。
 
     SHALL 仅由输入派生（`30` [S1] C5 防泄露）。edges: (4, 129) 或 (B, 4, 129)。
+    Phase 1 口径（Σ 分量为物理单位²，量级 10⁻¹¹…10⁻⁷，见 `30` D20）；Phase 1.5 的
+    无量纲口径见 :func:`condition_vector_v2`。
     """
     sigma = batch_sigma_from_counts(counts, edges)
     i_idx, j_idx = torch.triu_indices(4, 4)  # 10 个唯一分量（含对角）
@@ -45,8 +49,48 @@ def condition_vector(
     return torch.cat([comp, log_n_low.to(comp.dtype)], dim=1)
 
 
+def reference_scales(edges: torch.Tensor) -> torch.Tensor:
+    """参考尺度 s_i = 坐标 i 的公共域半宽 (max−min)/2（`50` [S1]）。
+
+    edges (4, 129) → (4,)，(B, 4, 129) → (B, 4)。由边界本身导出，训练/推理零额外配置
+    （`50` D2）。
+    """
+    return 0.5 * (edges[..., -1] - edges[..., 0])
+
+
+def condition_vector_v2(
+    counts: torch.Tensor, edges: torch.Tensor, log_n_low: torch.Tensor | None = None
+) -> torch.Tensor:
+    """κ v2（`50` [S4] C1）：Σ_ij/(s_i·s_j) 的 10 个唯一分量 + log₁₀(6·N_low)。
+
+    与 :func:`condition_vector` 的唯一差异是**归一化**（s_i 为公共域半宽）：Σ 摘要走
+    同一条 :func:`batch_sigma_from_counts` 管线与同一分量次序（`30` [S1] 顺序），
+    log 维沿用 v1 实现语义 ``counts.sum = 6·N_low``（`30` D14/D20）。
+    """
+    sigma = batch_sigma_from_counts(counts, edges)
+    i_idx, j_idx = torch.triu_indices(4, 4)
+    scale = reference_scales(edges)
+    denom = (
+        scale[i_idx] * scale[j_idx]
+        if scale.dim() == 1
+        else scale[:, i_idx] * scale[:, j_idx]
+    )
+    comp = sigma[:, i_idx, j_idx] / denom  # (B, 10) 无量纲
+    if log_n_low is None:
+        n_low = counts.sum(dim=(1, 2, 3)).clamp_min(1.0)
+        log_n_low = torch.log10(n_low.float()).unsqueeze(1)
+    return torch.cat([comp, log_n_low.to(comp.dtype)], dim=1)
+
+
+def kappa_for(counts: torch.Tensor, edges: torch.Tensor, version: str = "v1") -> torch.Tensor:
+    """κ 入口：``version="v1"`` → 物理单位²（Phase 1）；``"v2"`` → 无量纲（Phase 1.5）。"""
+    if version == "v2":
+        return condition_vector_v2(counts, edges)
+    return condition_vector(counts, edges)
+
+
 def batch_sigma_from_counts(counts: torch.Tensor, edges: torch.Tensor) -> torch.Tensor:
-    """由计数图组计算每样本 4×4 Σ（归一化坐标；首现占位，与 `20` 一致）。
+    """由计数图组计算每样本 4×4 Σ（物理坐标；首现占位，与 `20` 一致）。
 
     edges：共享 (4, 129) 或逐样本 (B, 4, 129)（混合束/站台 batch；抖动使各束
     bin 边界不同）。逐样本循环（batch ≤ 16，成本可忽略）。

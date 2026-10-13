@@ -25,7 +25,9 @@ __all__ = [
     "reconstruct_sigma",
     "sigma_errors",
     "halo_fraction_gap",
+    "hf_energy_ratios",
     "hf_energy_ratio_gap",
+    "signed_hf_energy_ratio_gap",
     "evaluate_group",
 ]
 
@@ -211,16 +213,35 @@ def halo_fraction_gap(
     return float(np.mean(np.abs(gaps)))
 
 
+def hf_energy_ratios(group: np.ndarray) -> np.ndarray:
+    """六投影的高频结构能量比 ‖H_hp‖₁/ΣH（M6 的单一实现点，`20` [S1] M6）。
+
+    固定 σ_smooth = 1 bin 高斯高通（D5 预注册禁调）。比值型量，不做总计数归一；
+    逐投影独立计算后返回 (6,) 数组。
+    """
+    out = np.empty(group.shape[0], dtype=np.float64)
+    for gi in range(group.shape[0]):
+        img = group[gi].astype(np.float64)
+        hp = img - gaussian_filter(img, _HF_SIGMA_BINS)
+        out[gi] = float(np.abs(hp).sum() / max(img.sum(), _EPS))
+    return out
+
+
 def hf_energy_ratio_gap(group: np.ndarray, group_ref: np.ndarray) -> float:
     """M6：固定 σ_smooth=1 bin 高通能量比 |Δ| 的六投影平均（比值型，不需归一）。"""
-    gaps = []
-    for gi in range(group.shape[0]):
-        ratios = []
-        for img in (group[gi].astype(np.float64), group_ref[gi].astype(np.float64)):
-            hp = img - gaussian_filter(img, _HF_SIGMA_BINS)
-            ratios.append(float(np.abs(hp).sum() / max(img.sum(), _EPS)))
-        gaps.append(abs(ratios[0] - ratios[1]))
-    return float(np.mean(gaps))
+    gaps = np.abs(hf_energy_ratios(group) - hf_energy_ratios(group_ref))
+    return float(np.mean([float(v) for v in gaps]))
+
+
+def signed_hf_energy_ratio_gap(group: np.ndarray, group_ref: np.ndarray) -> float:
+    """M6 的**带符号**版本（诊断量，不进口径）：六投影能量比差的平均。
+
+    `20` [S1] M6 在 13 维观测量里先取 |·|，符号被抹掉；容差线的去偏（`50` [S3] C3）
+    需要偏差的符号才能估计并扣除其机械成分，故此处保留原方向。逐投影符号差的
+    平均值取绝对值后即 ``hf_energy_ratio_gap`` 在各投影同号时的对应量。
+    """
+    gaps = hf_energy_ratios(group) - hf_energy_ratios(group_ref)
+    return float(np.mean([float(v) for v in gaps]))
 
 
 def evaluate_group(

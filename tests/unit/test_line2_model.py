@@ -35,7 +35,9 @@ from src.line2.training.unet import (
     Phase1Net,
     batch_sigma_from_counts,
     condition_vector,
+    condition_vector_v2,
     normalize_input_group,
+    reference_scales,
 )
 from tests.conftest import derive_seed
 
@@ -715,3 +717,265 @@ def test_proj_condition_matches_metric_sigma_convention() -> None:
         assert abs(var_i - sigma[i, i]) / sigma[i, i] < 1e-4, (ai, aj, var_i, sigma[i, i])
         assert abs(var_j - sigma[j, j]) / sigma[j, j] < 1e-4, (ai, aj, var_j, sigma[j, j])
         assert abs(cov_ij - sigma[i, j]) / abs(sigma[i, j]) < 1e-4
+
+
+# ------------------------------------------------- `50` [S4] κ v2 与混合档（Phase 1.5）
+_V2_DIR = _REPO_ROOT / "studies" / "line2_particle_sr" / "data" / "line2_ds_v2"
+#: 混合档训练档集与 k_train（`50` [S4] item 2 预注册）
+_PHASE15_TIERS = (3_000, 10_000, 100_000)
+_PHASE15_K_TRAIN = 5
+#: log₁₀(6·N_low) 的三档取值（`50` [S4] C2）
+_LOGN_TIERS = {3_000: 4.255273, 10_000: 4.778151, 100_000: 5.778151}
+#: κ 的 10 个唯一分量在 `torch.triu_indices(4, 4)` 序下的位置分类
+_TRIU = tuple((i, j) for i in range(4) for j in range(i, 4))
+_KAPPA_DIAGONAL = tuple(_TRIU.index((i, i)) for i in range(4))
+_KAPPA_SAME_PLANE = (_TRIU.index((0, 1)), _TRIU.index((2, 3)))
+_KAPPA_CROSS_PLANE = tuple(
+    _TRIU.index(pair) for pair in ((0, 2), (0, 3), (1, 2), (1, 3))
+)
+
+
+def _v2_dir_or_skip() -> pathlib.Path:
+    """生产 v2 数据集目录（`*.h5` 不入库：缺失时跳过，与同批其他 v2 用例同约定）。"""
+    if not (_V2_DIR / "manifest.json").is_file():
+        pytest.skip(f"line2_ds_v2 生产数据不在本机：{_V2_DIR}")
+    return _V2_DIR
+
+
+def _v2_manifest(path: pathlib.Path) -> dict:
+    return json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+
+
+def _v2_sample(
+    path: pathlib.Path, split: str, beam: int, tier: int, sub: int, station: int = 0
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """单样本 (counts (1,6,128,128), edges (1,4,129))——生产 h5 的实际落盘张量。"""
+    import h5py
+
+    with h5py.File(path / f"{split}.h5", "r") as h5:
+        dset = h5[f"beam_{beam:04d}"][f"station{station}"][
+            f"tier_{tier:06d}_sub_{sub:02d}"
+        ]
+        counts = torch.from_numpy(dset[...].astype(np.float32)).unsqueeze(0)
+        edges = torch.from_numpy(
+            np.asarray(dset.attrs["bin_edges"], dtype=np.float32)
+        ).unsqueeze(0)
+    return counts, edges
+
+
+def _v2_kappa_rows(
+    path: pathlib.Path,
+    split: str,
+    beams: list[int],
+    tiers: tuple[int, ...],
+    subs: tuple[int, ...],
+) -> np.ndarray:
+    """真实数据集上逐 (束, 档, 子样本) 的 κ v2（11 维：10 无量纲分量 + log₁₀(6·N_low)）。"""
+    rows = []
+    for beam in beams:
+        for tier in tiers:
+            for sub in subs:
+                counts, edges = _v2_sample(path, split, beam, tier, sub)
+                rows.append(condition_vector_v2(counts, edges)[0].numpy())
+    return np.asarray(rows)
+
+
+def test_kappa_dimensionless() -> None:
+    """`50` [S4] C1：κ 全部分量无量纲（单位缩放不变）+ 量级回归钉。
+
+    无量纲的可证伪形式 = **换单位不变**：把各轴 edges 乘以 λ_k（= 该轴换一套单位），
+    则 Σ_ij 与 s_i·s_j 同乘 λ_i·λ_j ⇒ κ 逐位不变（float32 容差）；同输入下 v1 口径的
+    κ 随 λ² 变（本用例一并断言，防"恒等变换"式空断言），且 v2 前 10 维 = v1 同量除以
+    s_i·s_j（钉住"C1 相对 v1 只改归一化"）。
+
+    **偏差（记录，不改 spec）**：C1 的 |κ_i| ≥ 10⁻³ 下界对四个**跨平面**协方差分量不成立。
+    本批晶格 x/y 间无耦合（`50` [S1] 元件集 = 四极 + 漂移），cov_xy/(s_x·s_y) 只是子样本
+    噪声：150 val 束 × 3 档 × subs 0–4 实测中位 ~1.5×10⁻⁴、最小 2.5×10⁻⁸（v1 全域
+    5.6×10⁻¹¹…1.2×10⁻⁷ 的反向回归钉即在 6 个分量上成立：实测 min 6.4×10⁻³）。
+    故本用例对 6 个分量（对角 + 同平面）断言 C1 的带 [10⁻³, 10³]，对跨平面 4 分量
+    断言其真实的 Cauchy–Schwarz 界与该分量族的区间 [0, 10⁻²]。
+    """
+    path = _v2_dir_or_skip()
+    manifest = _v2_manifest(path)
+    val_beams = [int(b) for b in manifest["splits"]["val"]]
+    kappa = _v2_kappa_rows(path, "val", val_beams, _PHASE15_TIERS, (0, 1))
+    assert kappa.shape == (len(val_beams) * len(_PHASE15_TIERS) * 2, 11)
+    assert np.isfinite(kappa).all()
+    kappa = kappa[:, :10]
+
+    # C1 带内的 6 个分量：对角 var_i/s_i² 与同平面协方差（含全部束、三档）
+    band = kappa[:, list(_KAPPA_DIAGONAL + _KAPPA_SAME_PLANE)]
+    assert np.abs(band).min() >= 1e-3, f"C1 下界失守：{np.abs(band).min():.3e}"
+    assert np.abs(band).max() <= 1e3, f"C1 上界失守：{np.abs(band).max():.3e}"
+
+    # 跨平面协方差：|κ| ≤ sqrt(κ_ii·κ_jj)（Cauchy–Schwarz），实测远低于 1e-2
+    cross = kappa[:, list(_KAPPA_CROSS_PLANE)]
+    assert np.abs(cross).max() <= 1e-2, f"跨平面 |κ| = {np.abs(cross).max():.3e}"
+    for i, j in ((0, 2), (0, 3), (1, 2), (1, 3)):
+        bound = np.sqrt(kappa[:, _TRIU.index((i, i))] * kappa[:, _TRIU.index((j, j))])
+        assert np.abs(kappa[:, _TRIU.index((i, j))]).max() <= bound.max() * (1 + 1e-3)
+    # 偏差本体（机器可验）：跨平面下界 < 1e-3，即 C1 的全局下界在本数据上不可能成立
+    assert np.abs(cross).min() < 1e-3
+
+    # 无量纲：逐轴换单位 ⇒ κ 逐位不变；v1 口径同输入下随 λ² 变（断言非空）
+    lam = torch.tensor([2.5, 0.4, 1.7, 0.9])
+    iu, ju = torch.triu_indices(4, 4)
+    for beam in val_beams[:2]:
+        counts, edges = _v2_sample(path, "val", beam, 10_000, 0)
+        scaled_edges = edges * lam[:, None]
+        base = condition_vector_v2(counts, edges)
+        scaled = condition_vector_v2(counts, scaled_edges)
+        torch.testing.assert_close(scaled, base, rtol=1e-4, atol=0.0)
+        raw = condition_vector(counts, edges)
+        assert not torch.allclose(raw, condition_vector(counts, scaled_edges))
+        scales = reference_scales(edges)[0]
+        torch.testing.assert_close(
+            base[0, :10], raw[0, :10] / (scales[iu] * scales[ju]), rtol=1e-4, atol=0.0
+        )
+        torch.testing.assert_close(base[0, 10], raw[0, 10], rtol=0.0, atol=0.0)
+
+    # 第 11 维（log₁₀(6·N_low)，`30` D14/D20 语义）在档内恒定、跨档取值 = C2 的三值
+    observed = np.unique(_v2_kappa_rows(path, "val", val_beams[:3], _PHASE15_TIERS, (0,))[:, 10])
+    assert observed.size == len(_PHASE15_TIERS)
+    for value, expected in zip(observed, _LOGN_TIERS.values(), strict=True):
+        assert float(value) == pytest.approx(expected, abs=1e-5)
+
+
+def test_kappa_logn_informative_mixed_tiers() -> None:
+    """`50` [S4] C2：混合档训练集的 log₁₀N 维非常数（std > 0）且三档取值各出现。
+
+    两层证据：① 结构面——混合 loader 整体（700 train 束 × k_train=5 × 三档）的
+    log₁₀N 取值集 = {4.255273, 4.778151, 5.778151}，std > 0；② 实测面——实际抽出的批
+    逐样本由真实 counts.sum 求和得 log₁₀(6·N_low)，等于该批档位的取值，且不同批之间
+    取值随档变化（`30` D20 的"log 维在 run 内恒定"缺陷被结构性修复）。
+    """
+    from src.line2.training.data import Line2Pairs, MixedTierBatcher
+
+    path = _v2_dir_or_skip()
+    manifest = _v2_manifest(path)
+    train_beams = [int(b) for b in manifest["splits"]["train"]]
+    train_sets = {
+        tier: Line2Pairs(
+            path / "train.h5",
+            train_beams,
+            n_low=tier,
+            stations=(0,),
+            subs=tuple(range(_PHASE15_K_TRAIN)),
+        )
+        for tier in _PHASE15_TIERS
+    }
+    for tier, dset in train_sets.items():
+        assert len(dset) == len(train_beams) * _PHASE15_K_TRAIN
+        assert np.log10(6.0 * tier) == pytest.approx(_LOGN_TIERS[tier], abs=1e-6)
+
+    logs = np.array(
+        [np.log10(6.0 * tier) for tier, dset in train_sets.items() for _ in range(len(dset))]
+    )
+    assert logs.std() > 0
+    assert np.round(np.unique(logs), 6).tolist() == sorted(_LOGN_TIERS.values())
+
+    batcher = MixedTierBatcher(train_sets, batch_size=3, seed=100)
+    batches = iter(batcher)
+    seen: dict[int, float] = {}
+    for _ in range(3 * len(_PHASE15_TIERS)):
+        batch = next(batches)
+        observed = np.log10(batch["counts"].sum(dim=(1, 2, 3)).numpy())
+        assert observed.max() - observed.min() < 1e-6  # 批内恒为 6·N_low（每档每束 k 子样本）
+        assert observed[0] == pytest.approx(_LOGN_TIERS[batch["tier"]], abs=1e-6)
+        seen[int(batch["tier"])] = float(observed[0])
+    assert set(seen) == set(_PHASE15_TIERS)
+    assert len({round(value, 6) for value in seen.values()}) == len(_PHASE15_TIERS)
+
+
+class _FakePairs(torch.utils.data.Dataset):
+    """最小 (束, 子样本) 数据集替身：counts 值编码 (档标记, 样本序号)，供批源结构断言。"""
+
+    def __init__(self, n: int, marker: float) -> None:
+        self.n = int(n)
+        self.marker = float(marker)
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, i: int):
+        counts = torch.full((6, 2, 2), self.marker + i)
+        return {
+            "counts": counts,
+            "target": counts.clone(),
+            "edges": torch.zeros(4, 5),
+            "beam_id": i,
+            "station": 0,
+            "sub_idx": i,
+        }
+
+
+def test_mixed_tier_batcher_deterministic_and_streams_independent() -> None:
+    """`50` [S4] item 2 + D7：同 seed 批序列逐位一致；档位流与批序流独立 spawn。
+
+    可证伪形式：把 ``batch_size`` 从 4 改成 8（批序流的消耗量随之改变）后档位序列
+    必须不变——若两条流共用 RNG 或联动，档位序列会跟着漂移。
+    """
+    from src.line2.training.data import MixedTierBatcher
+
+    sets = {tier: _FakePairs(24, marker) for tier, marker in
+            zip(_PHASE15_TIERS, (1.0, 2.0, 3.0), strict=True)}
+    batches_a = iter(MixedTierBatcher(sets, batch_size=4, seed=100))
+    batches_b = iter(MixedTierBatcher(sets, batch_size=4, seed=100))
+    first = [next(batches_a) for _ in range(12)]
+    second = [next(batches_b) for _ in range(12)]
+    assert [b["tier"] for b in first] == [b["tier"] for b in second]
+    for left, right in zip(first, second, strict=True):
+        assert torch.equal(left["counts"], right["counts"])
+        assert left["station"] == right["station"] == [0] * 4
+    assert len(set(b["tier"] for b in first)) == len(_PHASE15_TIERS)  # 三档都抽到
+
+    batches_c = iter(MixedTierBatcher(sets, batch_size=8, seed=100))
+    assert [next(batches_c)["tier"] for _ in range(12)] == [b["tier"] for b in first]
+
+    batches_d = iter(MixedTierBatcher(sets, batch_size=4, seed=101))
+    assert [next(batches_d)["tier"] for _ in range(12)] != [b["tier"] for b in first]
+
+
+def test_independent_kappa_v2_normalized() -> None:
+    """`50` [S4] C1（独立臂）：(var_i/s_i², var_j/s_j², cov_ij/(s_i·s_j)) 无量纲且逐轴换单位不变。
+
+    与联合臂同源的归一化：同一网格上 v2 条件 = v1 条件除以 s_i²、s_j²、s_i·s_j
+    （log 维不变）；换单位（centers 与 scales 同乘 λ）后 v2 条件逐位不变。
+    """
+    table = _particle_table(81) * np.array([1.0, 0.5, 1.4, 0.8])
+    edges_np, edges = _station_edges(table)
+    shape = _group(table, edges_np)[0]  # (6, 128, 128) 计数图组
+    centers = 0.5 * (edges[:, :-1] + edges[:, 1:])
+    lam = torch.tensor([2.5, 0.4, 1.7, 0.9])
+    scales = reference_scales(edges)
+
+    for gi, (ai, aj) in enumerate(PROJECTION_ORDER):
+        i, j = AXES.index(ai), AXES.index(aj)
+        raw = proj_condition(shape[gi], centers[i], centers[j], 4.0)
+        v2 = proj_condition(
+            shape[gi], centers[i], centers[j], 4.0, scales[i], scales[j]
+        )
+        torch.testing.assert_close(v2[0], raw[0] / scales[i] ** 2, rtol=1e-5, atol=0.0)
+        torch.testing.assert_close(v2[1], raw[1] / scales[j] ** 2, rtol=1e-5, atol=0.0)
+        torch.testing.assert_close(
+            v2[2], raw[2] / (scales[i] * scales[j]), rtol=1e-5, atol=0.0
+        )
+        torch.testing.assert_close(v2[3], raw[3], rtol=0.0, atol=0.0)
+        scaled = proj_condition(
+            shape[gi], centers[i] * lam[i], centers[j] * lam[j], 4.0,
+            scales[i] * lam[i], scales[j] * lam[j],
+        )
+        torch.testing.assert_close(scaled[:3], v2[:3], rtol=1e-4, atol=0.0)
+        assert 1e-3 <= float(v2[:3].abs().max()) <= 1e3
+
+    # 独立臂 v2 只在构造开关下生效：整网前向对同一输入给出与 v1 不同的输出
+    net_v1 = IndependentEnsemble(base=24, num_levels=3, blocks=1)
+    net_v2 = IndependentEnsemble(base=24, num_levels=3, blocks=1, kappa_version="v2")
+    net_v2.load_state_dict(net_v1.state_dict())
+    net_v1.eval(), net_v2.eval()
+    shapes, _totals = normalize_input_group(shape.unsqueeze(0))
+    log_n = torch.log10(shape.sum().reshape(1))
+    with torch.no_grad():
+        out_v1 = net_v1(shapes, edges, log_n)
+        out_v2 = net_v2(shapes, edges, log_n)
+    assert not torch.equal(out_v1, out_v2)

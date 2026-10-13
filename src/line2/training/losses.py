@@ -9,20 +9,29 @@ import torch
 
 from .unet import batch_sigma_from_counts
 
-__all__ = ["poisson_nll", "psd_penalty", "total_loss"]
+__all__ = ["poisson_terms", "poisson_nll", "psd_penalty", "total_loss"]
+
+
+def poisson_terms(
+    prob: torch.Tensor, target_counts: torch.Tensor, n_high: float
+) -> torch.Tensor:
+    """逐格 Poisson NLL 项：rate − c·ln(rate) + lgamma(c+1)（形状同输入）。
+
+    rate = p·N_high（逐格期望计数）；c = 目标计数（2e5 全量直方图）。
+    Phase 1.5 的 val 选型读数需要**逐 (束, 子样本)** 的 NLL（`50` [S3] C2），
+    故把逐格式与聚合拆开：本函数是唯一的 Poisson 项实现点，``poisson_nll``
+    与训练/评估侧的逐样本聚合都从这里取。
+    """
+    rate = prob * float(n_high)
+    c = target_counts.to(prob.dtype)
+    return rate - c * torch.log(rate.clamp_min(1e-12)) + torch.lgamma(c + 1.0)
 
 
 def poisson_nll(
     prob: torch.Tensor, target_counts: torch.Tensor, n_high: float
 ) -> torch.Tensor:
-    """Poisson NLL（micro 平均）：L = mean_Ω [rate − c·ln(rate) + lgamma(c+1)]。
-
-    rate = p·N_high（逐格期望计数）；c = 目标计数（2e5 全量直方图）。
-    """
-    rate = prob * float(n_high)
-    c = target_counts.to(prob.dtype)
-    nll = rate - c * torch.log(rate.clamp_min(1e-12)) + torch.lgamma(c + 1.0)
-    return nll.mean()
+    """Poisson NLL（micro 平均）：L = mean_Ω [rate − c·ln(rate) + lgamma(c+1)]。"""
+    return poisson_terms(prob, target_counts, n_high).mean()
 
 
 def batch_lambda_min(prob: torch.Tensor, edges: torch.Tensor) -> torch.Tensor:

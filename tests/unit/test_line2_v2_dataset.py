@@ -34,6 +34,7 @@ from src.line2.data_pipeline.projections import (
     N_BINS,
     POOLED_PAD_FRAC,
     clamp_table,
+    count_oob_particles,
     edges_sha256,
     six_projections,
     station_edges,
@@ -379,25 +380,29 @@ def test_dataset_v2_manifest(anchor: np.ndarray, small_v2: pathlib.Path) -> None
 def test_clamp_accounting(anchor: np.ndarray, tmp_path: pathlib.Path) -> None:
     """[S2] C6：域外粒子夹取至最近边界格、计数守恒、逐束计账，占比超限即构建失败。
 
-    机制（合成用例）：越界粒子被夹到该轴边界值，投影计数总和不变。
-    构建（真实锚点小规模）：manifest/CSV 的逐 (束, 站) 夹取计数与独立重算一致；
-    每个 dataset 六通道计数和 = 其粒子数（``00`` GC5 在夹取后仍守恒）；
-    ``max_clamp_frac=0.0`` 时同一构建以 RuntimeError 中止且不落盘。
+    机制（合成用例）：越界粒子被夹到该轴边界值，投影计数总和不变；含**双轴越界**粒子，
+    据以钉死 D16 口径——报告量 = 任一轴越界的粒子数（逐轴诊断计数会把该粒子计两次）。
+    构建（真实锚点小规模）：manifest/CSV/h5 attr 的逐 (束, 站) 夹取粒子数与独立重算
+    （``count_oob_particles``）一致；每个 dataset 六通道计数和 = 其粒子数（``00`` GC5
+    在夹取后仍守恒）；``max_clamp_frac=0.0`` 时同一构建以 RuntimeError 中止且不落盘。
     """
-    # (a) 机制：越界粒子被夹到最近边界格
+    # (a) 机制：越界粒子被夹到最近边界格 + 报告口径 = 任一轴越界的粒子数（D16）
     rng = np.random.default_rng(np.random.SeedSequence([20260825, 13, 1]))
     table = np.stack([rng.normal(0.0, 0.5, 500)] * 4, axis=1)
     edges = np.stack([np.linspace(-6.0, 6.0, N_BINS + 1)] * 4)
     outside = table.copy()
     outside[0, 0], outside[1, 0] = -8.0, +8.0   # x 下 / 上越界
     outside[2, 1], outside[3, 1] = -9.0, +9.0   # xp 下 / 上越界
+    outside[4, 0], outside[4, 1] = -8.0, +9.0   # 粒子 4 双轴越界
     clamped, axis_counts = clamp_table(outside, edges)
-    assert axis_counts.tolist() == [2, 2, 0, 0]
+    assert axis_counts.tolist() == [3, 3, 0, 0]          # 逐轴诊断计数：双轴越界者计两次
+    assert count_oob_particles(outside, edges) == 5      # 报告口径（`50` D16）：该粒子只计一次
     assert clamped[0, 0] == edges[0][0] and clamped[1, 0] == edges[0][-1]
     assert clamped[2, 1] == edges[1][0] and clamped[3, 1] == edges[1][-1]
+    assert clamped[4, 0] == edges[0][0] and clamped[4, 1] == edges[1][-1]
     np.testing.assert_array_equal(clamped[[0, 1], 1], outside[[0, 1], 1])
     np.testing.assert_array_equal(clamped[[2, 3], 0], outside[[2, 3], 0])
-    np.testing.assert_array_equal(clamped[4:, :4], outside[4:, :4])
+    np.testing.assert_array_equal(clamped[5:, :4], outside[5:, :4])
     images = six_projections(clamped, edges)
     for gi in range(6):
         assert int(images[gi].sum()) == table.shape[0]
@@ -415,8 +420,10 @@ def test_clamp_accounting(anchor: np.ndarray, tmp_path: pathlib.Path) -> None:
     assert len(rows) == N_BEAMS * 2
     recounted = {
         (int(r["beam_id"]), int(r["station"])):
-        int(clamp_table(transport_beam(anchor, beam_idx=int(r["beam_id"]))[int(r["station"])],
-                        edges_by_station[int(r["station"])])[1].sum())
+        count_oob_particles(
+            transport_beam(anchor, beam_idx=int(r["beam_id"]))[int(r["station"])],
+            edges_by_station[int(r["station"])],
+        )
         for r in rows
     }
     for row in rows:
@@ -448,7 +455,32 @@ def test_clamp_accounting(anchor: np.ndarray, tmp_path: pathlib.Path) -> None:
                         image = st[name][...]
                         assert [int(image[gi].sum()) for gi in range(6)] == [expected_count] * 6
 
-    # (c) 保险丝：上限 0 且确有夹取 ⇒ 中止且不落盘
+    # (c) 双轴越界场景（D16 口径的判别用例）：束窗口被压到远小于抖动幅度 ⇒ 大量越界且含
+    #     双轴越界粒子。预检/写盘同为粒子数口径 ⇒ 守卫不误报；落盘值按粒子数（逐轴和会更大）
+    scaled = anchor.copy()
+    scaled[:, :4] *= 1e-3
+    out_scaled = build_dataset(
+        tmp_path / "scaled", scaled, n_beams=N_BEAMS, data_version=V2_DATA_VERSION,
+        tiers=(SMALL_TIERS[0],), k=1, max_clamp_frac=1.0, print_every=100,
+    )
+    manifest_scaled = json.loads((out_scaled / "manifest.json").read_text(encoding="utf-8"))
+    edges_scaled = _manifest_edges(manifest_scaled)
+    with (out_scaled / "clamp_accounting.csv").open(encoding="utf-8") as fh:
+        rows_scaled = list(csv.DictReader(fh))
+    double_axis = 0
+    for row in rows_scaled:
+        beam_id, station_idx = int(row["beam_id"]), int(row["station"])
+        table = transport_beam(scaled, beam_idx=beam_id)[station_idx]
+        particles = count_oob_particles(table, edges_scaled[station_idx])
+        assert int(row["n_clamped"]) == particles
+        double_axis += int(clamp_table(table, edges_scaled[station_idx])[1].sum()) > particles
+    assert double_axis > 0  # 场景确实含双轴越界粒子（否则该分支未被覆盖）
+    assert manifest_scaled["clamp"]["clamped_particles"] == sum(
+        int(row["n_clamped"]) for row in rows_scaled
+    )
+    assert manifest_scaled["clamp"]["clamped_frac"] > 0.0
+
+    # (d) 保险丝：上限 0 且确有夹取 ⇒ 中止且不落盘
     with pytest.raises(RuntimeError, match="夹取占比"):
         build_dataset(
             tmp_path / "fused", anchor, n_beams=N_BEAMS, data_version=V2_DATA_VERSION,
