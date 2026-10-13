@@ -128,6 +128,14 @@
 **Spec section:** [S5] G1–G5（判定）、[S3] C5（仪器）；关联 `40` D21/D22
 **Status:** live
 
+## D16: n_clamped 口径 = 任一轴越界的粒子数（验收审查 m-1）
+**Phase:** implementation
+**Chosen:** `[S2]` C6 的 ``n_clamped`` 采用 `count_oob_particles`（任一轴越界计一次）口径；`clamp_table` 的逐轴计数仅保留给预检保险丝（检测"是否存在越界"，求和不影响其判定）。
+**Rationale:** 一审 m-1：逐轴求和会把双轴越界粒子计两次，与 C6"夹取**粒子**占比（分母 = 粒子总数）"的字面口径不一致。生产实测夹取 = 0/400,002,000，两种口径数值相同——修正不影响已构建产物的任何数字，但口径必须在首个非零场景出现前钉死。
+**Rejected:** 保留逐轴求和（保守上界口径）——字面与 spec 不符；同时上报两口径——冗余且无消费者。
+**Spec section:** [S2] C6
+**Status:** live
+
 ## Progress
 
 | [Sn] | commit | review | status |

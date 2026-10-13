@@ -8,9 +8,14 @@
   按 (ai, aj) 语义消费的调用方（`20` 的 M4 Σ 重构/M5 椭圆/B-moment、`30` 的 Σ 摘要）
   SHALL 自行先转置。
 - 坐标 ↔ [-1, 1] 归一化按 bin 边界线性映射，可逆。
+- **公共域（`50` [S1]/[S2] C2）**：同站同轴的 129 边界跨全部束共享，由 train 束
+  该站全量表的池化 [min, max] 外扩 5% 导出；域外粒子按 [S2] C6 夹取至最近边界格
+  （:func:`clamp_table`），计数守恒由 :func:`six_projections` 的零截断守卫复核。
 """
 
 from __future__ import annotations
+
+import hashlib
 
 import numpy as np
 
@@ -18,8 +23,14 @@ __all__ = [
     "PROJECTION_ORDER",
     "AXES",
     "N_BINS",
+    "POOLED_PAD_FRAC",
     "axis_edges",
     "station_edges",
+    "pooled_axis_edges",
+    "pooled_station_edges",
+    "clamp_table",
+    "count_oob_particles",
+    "edges_sha256",
     "normalize_axis",
     "denormalize_axis",
     "six_projections",
@@ -31,6 +42,8 @@ PROJECTION_ORDER: tuple[tuple[str, str], ...] = (
 )
 N_BINS = 128
 _PAD_FRAC = 0.01
+#: v2 公共域外扩比例（`50` [S1] 公共域定义：train 池化 + 5% 外扩）
+POOLED_PAD_FRAC = 0.05
 
 
 def axis_edges(lo: float, hi: float, n_bins: int = N_BINS) -> np.ndarray:
@@ -45,6 +58,68 @@ def station_edges(table: np.ndarray) -> np.ndarray:
     """站级 (4, 129) 边界矩阵——由该站全量表定标（[S4] C1 前提）。"""
     return np.stack([axis_edges(float(table[:, i].min()), float(table[:, i].max()))
                      for i in range(len(AXES))])
+
+
+def pooled_axis_edges(
+    lo: float, hi: float, n_bins: int = N_BINS, pad_frac: float = POOLED_PAD_FRAC
+) -> np.ndarray:
+    """公共域单轴 bin 边界：池化 [lo, hi] 外扩 ``pad_frac``（`50` [S1] 公共域规则）。"""
+    if not (hi > lo):
+        raise ValueError(f"退化公共域（max <= min）：[{lo}, {hi}]")
+    pad = (hi - lo) * pad_frac
+    return np.linspace(lo - pad, hi + pad, n_bins + 1)
+
+
+def pooled_station_edges(
+    bounds: np.ndarray, n_bins: int = N_BINS, pad_frac: float = POOLED_PAD_FRAC
+) -> np.ndarray:
+    """站级 (4, 129) 公共域边界矩阵；``bounds`` = (4, 2) 的逐轴池化 [min, max]。"""
+    bounds = np.asarray(bounds, dtype=np.float64)
+    if bounds.shape != (len(AXES), 2):
+        raise ValueError(f"bounds 形状应为 (4, 2)，实得 {bounds.shape}")
+    return np.stack([
+        pooled_axis_edges(float(b[0]), float(b[1]), n_bins, pad_frac) for b in bounds
+    ])
+
+
+def clamp_table(table: np.ndarray, edges: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """把 (N, ≥4) 粒子表的横向前 4 列夹取进 ``edges``，返回 (夹取后表, 逐轴夹取计数)。
+
+    越界粒子计入最近边界格（`50` [S2] C6 / D13）；夹取后整表落在 edges 内，故
+    :func:`six_projections` 的零截断守卫给出计数守恒（∑counts = 输入行数）复核。
+    纵向列（如有）逐位保留。
+    """
+    out = table.copy()
+    counts = np.zeros(len(AXES), dtype=np.int64)
+    for axis in range(len(AXES)):
+        row = edges[axis]
+        column = table[:, axis]
+        counts[axis] = int(np.count_nonzero((column < row[0]) | (column > row[-1])))
+        np.clip(column, row[0], row[-1], out=out[:, axis])
+    return out, counts
+
+
+def count_oob_particles(table: np.ndarray, edges: np.ndarray) -> int:
+    """任一轴越界的**粒子数**（`50` [S2] C6 的 ``n_clamped`` 口径，验收审查 m-1）。
+
+    与 :func:`clamp_table` 返回的逐轴计数不同：双轴越界的粒子在此只计一次
+    （分母 = 粒子总数，占比语义为"被夹取的粒子占比"）。
+    """
+    oob = np.zeros(table.shape[0], dtype=bool)
+    for axis in range(len(AXES)):
+        row = edges[axis]
+        column = table[:, axis]
+        oob |= (column < row[0]) | (column > row[-1])
+    return int(np.count_nonzero(oob))
+
+
+def edges_sha256(edges: np.ndarray) -> str:
+    """边界数组的规范化 SHA256（小端 float64 连续字节，与平台字节序无关）。
+
+    适用于任一级：单轴 (129,)、站级 (4, 129)、跨站 (2, 4, 129)。
+    """
+    canonical = np.ascontiguousarray(np.asarray(edges, dtype=np.float64), dtype="<f8")
+    return hashlib.sha256(canonical.tobytes()).hexdigest()
 
 
 def normalize_axis(coords: np.ndarray, edges: np.ndarray) -> np.ndarray:
@@ -66,8 +141,10 @@ def six_projections(table: np.ndarray, edges: np.ndarray) -> np.ndarray:
 
     **零截断守卫（`10` [S4] C1 / 决策 D7）**：分箱后逐投影核对计数和是否等于输入
     行数；出现截断（粒子落在 edges 之外）即抛 ``ValueError``，不做静默丢弃。
-    生产路径上 edges 由同一张全量表定标并外扩 1%，该守卫恒不触发，只防误用
-    （例如传入未按该站定标的 edges）。
+    v1 逐束自定标口径下该守卫恒不触发，只防误用（例如传入未按该站定标的
+    edges）；v2 公共域口径（`50` [S2]）下域外粒子已被 :func:`clamp_table`
+    夹取至边界格，本守卫成为**夹取后计数守恒的承重复核**——计数和若仍不等于
+    输入行数，说明夹取/分箱实现有误。
     """
     idx = {a: i for i, a in enumerate(AXES)}
     out = np.zeros((len(PROJECTION_ORDER), N_BINS, N_BINS), dtype=np.int32)

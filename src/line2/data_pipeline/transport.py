@@ -9,6 +9,9 @@
 P1 档物理声明：传输仅作用于横向 4D (x, x′, y, y′)；纵向 (t, p) 列逐粒子原样
 保留（线性横场的路径长度效应为二阶小量，纵向属本线 Out of Scope）——实现层
 记录于本模块 docstring 与 .decisions.md。
+
+两个等价入口：:func:`transport_beam`（锚点 + 束种子参数，生产路径）与
+:func:`transport_with_params`（显式参数，单旋钮扫掠用）。
 """
 
 from __future__ import annotations
@@ -21,8 +24,10 @@ from .seeds import JITTER_BRANCH, rng_for
 
 __all__ = [
     "JITTER_NOMINAL_F", "JITTER_DELTA_RANGE", "JITTER_KICK_RAD", "JITTER_DRIFT_MM",
+    "IDENTITY_JITTER",
     "FODO_N_CELLS", "FODO_MU_DEG", "FODO_HALF_DRIFT_M", "QUAD_LENGTH_M",
-    "jitter_params", "apply_jitter", "transport_beam", "fodo_phase_advance_deg",
+    "jitter_params", "beam_jitter_params", "apply_jitter",
+    "transport_beam", "transport_with_params", "fodo_phase_advance_deg",
 ]
 
 # 抖动分布（预注册，冻结于 spec line2/10 [S3] 批准）
@@ -30,6 +35,14 @@ JITTER_NOMINAL_F = 10.0          # m，前置薄透镜标称焦距
 JITTER_DELTA_RANGE = (-0.05, +0.05)
 JITTER_KICK_RAD = 10e-6          # ±10 µrad
 JITTER_DRIFT_MM = (495.0, 505.0)
+
+#: 无抖动基准束（`00` [S1] 的束 0）等价参数：零漂移、零踢角、无限大焦距
+IDENTITY_JITTER: dict[str, float] = {
+    "f_j": float("inf"),
+    "theta_x_rad": 0.0,
+    "theta_y_rad": 0.0,
+    "drift_m": 0.0,
+}
 
 # 共同 FODO（定死，2026-09-14：M1 修复）
 FODO_N_CELLS = 2
@@ -135,18 +148,25 @@ def transport_beam(
     束 0 为无抖动基准束（`00` [S1]）：恒等参数（零漂移/零踢角/无限大焦距）。
     输入/输出均为 (N, 6) 粒子表 (x, x′, y, y′, t, p)；行数守恒；确定性。
     """
+    return transport_with_params(particles, beam_jitter_params(beam_idx))
+
+
+def beam_jitter_params(beam_idx: int) -> dict[str, float]:
+    """束 i 的两站传输参数：束 0 = 恒等基准，其余 = :func:`jitter_params` 的种子抽样。"""
+    return dict(IDENTITY_JITTER) if beam_idx == 0 else jitter_params(beam_idx)
+
+
+def transport_with_params(
+    particles: np.ndarray, params: dict[str, float]
+) -> tuple[np.ndarray, np.ndarray]:
+    """给定抖动参数的两站快照（站 0 = 抖动后，站 1 = 共同 FODO 后）。
+
+    单旋钮扫掠（`50` [S2] C3/C4 的 θ/δ/ℓ 通道检验）经此入口注入参数；与
+    :func:`transport_beam` 共用同一条传输代码路径。
+    """
     from ocelot.cpbd.beam import ParticleArray
     from ocelot.cpbd.track import track
 
-    if beam_idx == 0:
-        params = {
-            "f_j": float("inf"),
-            "theta_x_rad": 0.0,
-            "theta_y_rad": 0.0,
-            "drift_m": 0.0,
-        }
-    else:
-        params = jitter_params(beam_idx)
     s0 = apply_jitter(particles, params)
     p_arr = ParticleArray(s0.shape[0])
     p_arr.rparticles[:4, :] = s0[:, :4].T
