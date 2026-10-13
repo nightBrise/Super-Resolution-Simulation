@@ -41,7 +41,7 @@
 
 **Dependencies (optional):** [S1]、[S2]、`10` [S5]、`20` [S3]
 
-- AdamW（lr ∈ {1×10⁻⁴, 3×10⁻⁴}，weight_decay 1×10⁻⁴）；batch_size（config，默认 16）；梯度裁剪（max_norm=1.0）；**max_steps = 50000（预注册，config 必填）**；早停 patience = 10 个评估周期、评估周期 = 1000 步；早停与选型准绳 = **val N_eff**（`20` [S3]，val 束上计算）；checkpoint = best_val + last（含 config 哈希、master_seed）。
+- AdamW（lr ∈ {1×10⁻⁴, 3×10⁻⁴}，weight_decay 1×10⁻⁴）；batch_size（config，默认 16）；梯度裁剪（max_norm=1.0）；**max_steps = 50000（预注册，config 必填）**；早停 patience = 10 个评估周期、评估周期 = 1000 步；早停与选型准绳 = **val N_eff**（`20` [S3]，val 束上计算）；checkpoint = best_val + last（含 config 哈希、master_seed）。**（Phase 1.5 修订，99 v1.1：Phase 1.5 起早停与选型准绳改为 val_nll——`50` [S3] C2 定义、`50` [S4] C4 选型；本条 val N_eff 语义仅适用 Phase 1 批次的已执行 run。）**
 - DDP 双卡 / 单卡 fallback（沿 line1 `train.py` 骨架）；数据加载顺序由种子派生（`00` GC2）。
 - **确定性条款（审核 M6）**：CPU 单元/集成测试 SHALL 逐位确定；GPU 训练 SHALL 启用确定性模式（`torch.use_deterministic_algorithms(True)` + cudnn deterministic），同硬件同版本下重训轨迹 SHALL 逐位一致；WHEN 存在不可确定算子 THEN SHALL 记录执行模式并放宽为"val N_eff 轨迹相对偏差 < 0.5% 的容差一致"（决策日志 D8 记录实际取用）。
 - 种子执行计划（F9，用户确认）：调参探索期每配置 1 seed；最终配置与主对比 ≥5 seeds。

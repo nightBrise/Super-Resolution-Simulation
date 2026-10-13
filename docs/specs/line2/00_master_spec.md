@@ -46,25 +46,25 @@
 
 ### Claims
 
-- C6: 每条 Phase 门禁 SHALL 恰好对应 `40` 中一个可执行判定表达式（脚本消费落盘 summary，无人工干预）。
+- C6: 每条 Phase 门禁 SHALL 恰好对应一个可执行判定表达式（脚本消费落盘 summary，无人工干预）——Phase 1 门禁在 `40`，Phase 1.5 门禁（G1–G5）在 `50` [S5]（99 v1.1）。
 - C7: Phase 1 交付物清单（三条门禁枚举结论 + 方法可用域地图主曲线 + 报告）SHALL 可由文件存在性检查验证。
 
 ## [S4] spec 索引与变更规则
 
-- 索引：`10_data_pipeline_spec.md`（锚点数据管线，L1）；`20_metrics_spec.md`（判据与 N_eff，L2）；`30_model_training_spec.md`（Phase 1 主模型，L3b）；`40_experiment_spec.md`（实验矩阵与判定，L4+L5+L7 图像级）。
+- 索引：`10_data_pipeline_spec.md`（锚点数据管线，L1）；`20_metrics_spec.md`（判据与 N_eff，L2）；`30_model_training_spec.md`（Phase 1 主模型，L3b）；`40_experiment_spec.md`（实验矩阵与判定，L4+L5+L7 图像级）；`50_phase15_respec_spec.md`（Phase 1.5 协议修正与重训批次）。
 - 变更规则：line2 变更日志为 `99_change_log.md`（本目录）；先记录后修改；冻结 spec 在实现期不得修改（歧义记入对应 `.decisions.md`）；一次只修改一个模块。
 - Phase 2/3 的 spec（束流接口 L9、分辨率扩展 L8）不在本批次，届时另行冻结。
 
 ### Claims
 
-- C8: 本目录 SHALL 存在 00/10/20/30/40 五份 spec 与 `99_change_log.md`，且 [S4] 索引与实际文件一一对应。
+- C8: 本目录 SHALL 存在 00/10/20/30/40/50 六份 spec 与 `99_change_log.md`，且 [S4] 索引与实际文件一一对应（99 v1.1）。
 - C9: WHEN 修改任何 line2 spec THEN `99_change_log.md` SHALL 先于该修改包含对应记录（审计项：人工/脚本核对，非自动化断言）。
 
 ## Global Constraints
 
 - **GC1 束级切分**：同一束的任何派生数据（任意站的任意 N 子样本图组）SHALL NOT 跨 train/val/test。
-- **GC2 种子纪律**：一切随机性 SHALL 经 `SeedSequence(master_seed=20260913)` 派生（`spawn` 链：束 → 抖动参数/子样本/切分/训练），禁止模块级全局随机源；同 master_seed 重跑 SHALL 逐位可复现。
-- **GC3 主指标准绳**：N_eff（`20` [S3]）为唯一主指标；模型选型、变体路由与早停只以 **val** N_eff 为准绳；test 集在调参期零接触、全程只评一次（评估调度唯一归 `40`）。
+- **GC2 种子纪律**：一切随机性 SHALL 经 `SeedSequence(master_seed=20260913)` 派生（`spawn` 链：束 → 抖动参数/子样本/切分/训练），禁止模块级全局随机源；同 master_seed 重跑 SHALL 逐位可复现。（**Phase 1.5 增注，99 v1.1**：分析/仪器/打乱/合成随机性根种子 = SeedSequence(20260825)，与数据/训练链独立 spawn。）
+- **GC3 主指标准绳**：N_eff（`20` [S3]）为唯一主指标；模型选型、变体路由与早停只以 **val** N_eff 为准绳；test 集在调参期零接触、全程只评一次（评估调度唯一归 `40`）。**（Phase 1.5 修订，99 v1.1：Phase 1 批次维持本条；Phase 1.5 起选型/路由/早停准绳改为 val_nll（`50` [S3] C1、[S4] C4），N_eff 保留计算与落盘、降级为叙事尺度；Phase 1.5 批次的 test 评估调度归 `50` [S5]。）**
 - **GC4 公平性**：同一实验内全部变体（独立/联合、不同种子）SHALL 使用相同数据集、相同切分、相同传输物理档、相同 max_steps 预算（= 50000，预注册于 `30` [S3]）。
 - **GC5 单位与计数语义**：p = βγ；投影图元素为非负整数计数且 ∑counts = 该子样本粒子数；坐标归一化 SHALL 可逆。网络输出的比较语义（总计数归一）定义于 `20` [S1] M1。
 - **GC6 禁止断言研究结果**：测试与门禁脚本 SHALL NOT 断言研究方向（如"网络优于基线"），只断言协议、不变量与判定表达式的机械执行。
