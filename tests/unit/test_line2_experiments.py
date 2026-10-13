@@ -1270,3 +1270,739 @@ def test_selection_reading_delegates_to_s3_aggregate(
     assert summary["best_val_nll"] == pytest.approx(
         float(np.mean([real_tier({t: m[-1]}, t) for t, m in seen.items()]))
     )
+
+
+# ============================ `50` [S5] Phase 1.5：E0' 门禁 / G1–G5 / 矩阵与编排 =====
+from src.line2.experiments import (  # noqa: E402
+    phase15_configs,
+    phase15_gates,
+    phase15_orchestrator,
+)
+
+#: 生产口径的 test 束集（`50` [S1]：150 束）；门禁判定域由数据契约冻结
+_E15_BEAMS = list(range(150))
+#: E0' 三件产物的时间戳（构造用；全部早于训练启动）
+_E0_DONE = "2026-10-13T10:00:00+00:00"
+_TRAIN_START = "2026-10-13T11:00:00+00:00"
+
+
+def _e15_eval(
+    run_id: str,
+    *,
+    variant: str,
+    seed: int,
+    tier: int,
+    station: int,
+    err_by_beam: dict[int, float],
+    obs_by_beam: dict[int, list[float]] | None = None,
+    split: str = "test",
+) -> dict:
+    """Phase 1.5 评估产物（字段 = `evaluate.evaluate_run` 的 v1 schema，`50` [S5] C8）。"""
+    per_beam = []
+    for beam in sorted(err_by_beam):
+        obs = (obs_by_beam or {}).get(beam, [0.0] * 13)
+        per_beam.append(
+            {
+                "beam_id": int(beam),
+                "err": float(err_by_beam[beam]),
+                "n_eff": 50_000.0,          # 披露字段：判定不得消费（`50` [S3] C1）
+                "n_eff_flag": None,
+                "obs": [float(v) for v in obs],
+                "n_eff_median": 50_000.0,
+                "m2_buckets": {
+                    name: {
+                        "n_cells": 400, "insufficient": False, "model_median": 0.5,
+                        "bare_median": 1.0, "relative_improvement": 0.5,
+                    }
+                    for name in ("B0", "B1", "B2", "B3")
+                }
+                | {"improvement": {"B0": 0.5, "B1": 0.5}},
+            }
+        )
+    errs = np.asarray([entry["err"] for entry in per_beam], dtype=np.float64)
+    return {
+        "run_id": run_id, "variant": variant, "seed": int(seed), "split": split,
+        "station": int(station), "n_low": int(tier), "subs": list(range(20)),
+        "curve": {"path": "e0_curve_v2.json", "beams_scope": "valtest",
+                  "reference_noise_floor": 0.5},
+        "n_beams": len(per_beam), "n_groups": len(per_beam) * 20,
+        "err_median": float(np.median(errs)), "n_eff": 50_000.0, "n_eff_flag": None,
+        "per_beam": per_beam, "code_version": "a" * 40,
+    }
+
+
+def _e15_bconst_station(err_by_beam: dict[int, float]) -> dict:
+    values = np.asarray(list(err_by_beam.values()), dtype=np.float64)
+    return {
+        "group_projection_sums": [1.0] * 6,
+        "group_sha256": "b" * 64,
+        "n_eval_beams": len(err_by_beam),
+        "eval_split": "test",
+        "per_beam_m1": {str(b): float(v) for b, v in sorted(err_by_beam.items())},
+        "err_median": float(np.median(values)),
+        "err_min": float(values.min()),
+        "err_max": float(values.max()),
+    }
+
+
+def _e15_alignment(
+    run_id: str, seed: int, *, cos_ci: tuple[float, float] = (0.5, 0.7),
+    drop_frac: float = 0.90, tier: int = 10_000, station: int = 0,
+) -> dict:
+    return {
+        "run_id": run_id, "variant": "joint", "seed": int(seed), "split": "test",
+        "station": int(station), "n_low": int(tier), "subs": list(range(5)),
+        "n_beams": 150, "n_subs": 5, "cos_true": 0.6, "cos_scr": 0.05,
+        "drop_frac": float(drop_frac), "disp_ratio": 1.1,
+        "cos_true_ci95": [float(cos_ci[0]), float(cos_ci[1])],
+        "cos_scr_ci95": [0.0, 0.1],
+        "bootstrap": {"n_boot": 10_000, "root_seed": 20_260_825, "unit": "beam"},
+    }
+
+
+def _write_e0_prime(
+    results: Path,
+    *,
+    data_dir: str,
+    completed_at: str = _E0_DONE,
+    tolerance_completed_at: str | None = None,
+    drop_curve_meta: bool = False,
+    tolerance_tiers: tuple[str, ...] = ("3000", "10000", "100000"),
+    bconst_stations: tuple[str, ...] = ("0", "1"),
+    with_groups: bool = True,
+    data_dir_tag: str | None = None,
+) -> None:
+    """v2 E0' 三件产物（可注入违例：缺 meta、时间戳偏移、缺档、缺站）。"""
+    results.mkdir(parents=True, exist_ok=True)
+    tag = data_dir if data_dir_tag is None else data_dir_tag
+    (results / "e0_curve_v2.json").write_text(
+        json.dumps({"points": [{"n_low": 10_000, "median": 1.2}], "beam_ids": [0, 1]}),
+        encoding="utf-8",
+    )
+    if not drop_curve_meta:
+        (results / "e0_curve_v2.meta.json").write_text(
+            json.dumps({"completed_at": completed_at, "data_dir": tag,
+                        "data_version": "line2_ds_v2", "beams_scope": "valtest",
+                        "stations": [0, 1], "tiers": [1000, 3000, 10000, 30000, 100000]}),
+            encoding="utf-8",
+        )
+    (results / "tolerance_v2.json").write_text(
+        json.dumps({
+            "completed_at": tolerance_completed_at or completed_at,
+            "data_dir": tag, "data_version": "line2_ds_v2",
+            "dev_table": {tier: [0.1] * 13 for tier in tolerance_tiers},
+        }),
+        encoding="utf-8",
+    )
+    (results / "bconst_v2.json").write_text(
+        json.dumps({
+            "completed_at": completed_at, "data_dir": tag, "data_version": "line2_ds_v2",
+            "station": {s: _e15_bconst_station({b: 0.5 for b in _E15_BEAMS})
+                        for s in bconst_stations},
+        }),
+        encoding="utf-8",
+    )
+    if with_groups:
+        np.savez_compressed(
+            results / "bconst_v2_groups.npz",
+            **{f"station{s}": np.zeros((6, 4, 4), dtype=np.float32) for s in bconst_stations},
+        )
+
+
+def _write_e15_summary(
+    run_dir: Path, *, variant: str, seed: int, val_nll: float, tier_1e4: float | None = None
+) -> None:
+    """run 的 val 段读数（`50` [S3] C2：三档等权 val_nll + 各档分项）。"""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "summary.json").write_text(
+        json.dumps({
+            "phase": "1.5", "variant": variant, "seed": int(seed),
+            "best_val_nll": float(val_nll),
+            "best_val_nll_per_tier": {
+                "3000": float(val_nll), "10000": float(tier_1e4 if tier_1e4 is not None else val_nll),
+                "100000": float(val_nll),
+            },
+            "tiers": [3000, 10000, 100000], "stations": [0], "k_train": 5,
+        }),
+        encoding="utf-8",
+    )
+
+
+def _write_phase15_results(
+    tmp_root: Path, *, beams: int = 12, model_err: float = 0.2, ref_err: float = 0.5
+) -> Path:
+    """C7/C9 的最小 Phase 1.5 results 目录：E0' 三件 + 10 run 的 summary + 60 评估 + 5 对齐。
+
+    构造使五条门禁全部落"成立"（模型优于 B-const、观测量达标、站 1 退化比 < 1、对齐落差
+    大）；改一个变量即可验证单条门禁（正/反例在各自的 gate 测试里另作构造）。
+    """
+    results = tmp_root / "results"
+    data_dir = tmp_root / "line2_ds_v2"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "manifest.json").write_text(
+        json.dumps({"data_version": "line2_ds_v2", "splits": {},
+                    "spec_version": "line2-spec-v1.1"}),
+        encoding="utf-8",
+    )
+    _write_e0_prime(results, data_dir=str(data_dir))
+    beam_ids = list(range(beams))
+    for tag, variant, val_nll in (("joint", "joint", 1.0), ("indep", "independent", 2.0)):
+        for index, seed in enumerate(_PHASE15_SEEDS):
+            run_id = f"e15_{tag}_s{index}"
+            _write_e15_summary(results / run_id, variant=variant, seed=seed, val_nll=val_nll)
+            for tier in (3_000, 10_000, 100_000):
+                for station in (0, 1):
+                    err = model_err if tag == "joint" else model_err + 0.1
+                    err += 0.05 * (station == 1)
+                    errs = {b: err for b in beam_ids}
+                    payload = _e15_eval(
+                        run_id, variant=variant, seed=seed, tier=tier, station=station,
+                        err_by_beam=errs,
+                    )
+                    phase15_gates.eval_path(results, run_id, tier, station).write_text(
+                        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                    )
+    bconst = {
+        "data_version": "line2_ds_v2", "data_dir": str(data_dir),
+        "completed_at": _E0_DONE,
+        "station": {
+            "0": _e15_bconst_station({b: ref_err for b in beam_ids}),
+            "1": _e15_bconst_station({b: ref_err - 0.1 for b in beam_ids}),
+        },
+    }
+    (results / "bconst_v2.json").write_text(json.dumps(bconst), encoding="utf-8")
+    for index, seed in enumerate(_PHASE15_SEEDS):
+        run_id = f"e15_joint_s{index}"
+        (results / phase15_gates.align_filename(run_id)).write_text(
+            json.dumps(_e15_alignment(run_id, seed)), encoding="utf-8"
+        )
+    # 路由先行（链序：route → align → gates）；获胜臂由 val 段 val_nll 决定
+    phase15_gates.write_routing(
+        results,
+        {"joint": [f"e15_joint_s{i}" for i in range(5)],
+         "independent": [f"e15_indep_s{i}" for i in range(5)]},
+    )
+    return results
+
+
+# --------------------------------------------------------------- C1：E0' 时间戳门禁
+def test_e0_prime_before_training(tmp_path: Path) -> None:
+    """`50` [S5] C1：E0' 三件落盘时间戳须早于 run 启动，违例拒绝启动（含可控 clock）。"""
+    results = tmp_path / "results"
+    data_dir = tmp_path / "line2_ds_v2"
+    data_dir.mkdir(parents=True)
+    _write_e0_prime(results, data_dir=str(data_dir))
+
+    out = phase15_orchestrator.check_e0_prime_precedes(
+        results, started_at=_TRAIN_START, data_dir=data_dir
+    )
+    assert set(out["products"]) == {"curve", "tolerance", "bconst"}
+    assert out["products"]["bconst"]["stations"] == [0, 1]
+    assert out["started_at"] == _TRAIN_START
+
+    # 可控 clock：未显式给 started_at 时取 clock()（编排器每个 run 启动前调用）
+    clocked = phase15_orchestrator.check_e0_prime_precedes(
+        results, clock=lambda: _TRAIN_START, data_dir=data_dir
+    )
+    assert clocked["started_at"] == _TRAIN_START
+
+    # 反例 1：容差线完成晚于 run 启动
+    late = tmp_path / "late"
+    _write_e0_prime(late, data_dir=str(data_dir),
+                    tolerance_completed_at="2026-10-13T12:00:00+00:00")
+    with pytest.raises(ValueError, match="C1"):
+        phase15_orchestrator.check_e0_prime_precedes(
+            late, started_at=_TRAIN_START, data_dir=data_dir
+        )
+    # 反例 2：曲线 meta 缺失（时间戳无来源）
+    no_meta = tmp_path / "no_meta"
+    _write_e0_prime(no_meta, data_dir=str(data_dir), drop_curve_meta=True)
+    with pytest.raises(ValueError, match="completed_at 无来源"):
+        phase15_orchestrator.check_e0_prime_precedes(
+            no_meta, started_at=_TRAIN_START, data_dir=data_dir
+        )
+    # 反例 3：容差线缺档 / B-const 缺站 / 尺子量的是别的数据集
+    for label, kwargs, pattern in (
+        ("缺档", {"tolerance_tiers": ("10000",)}, "容差线缺档"),
+        ("缺站", {"bconst_stations": ("0",)}, "两站口径"),
+        ("异源", {"data_dir_tag": "somewhere/else"}, "不同源"),
+    ):
+        broken = tmp_path / f"broken_{label}"
+        _write_e0_prime(broken, data_dir=str(data_dir), **kwargs)
+        with pytest.raises(ValueError, match=pattern):
+            phase15_orchestrator.check_e0_prime_precedes(
+                broken, started_at=_TRAIN_START, data_dir=data_dir
+            )
+
+    # 编排器入口同款：违例时连 run_meta.json 都不落、不触 GPU
+    configs = tmp_path / "configs"
+    configs.mkdir()
+    out_dir = tmp_path / "run_out"
+    (configs / "e15_joint_s0.json").write_text(
+        json.dumps(phase15_configs.build_config(
+            "joint", 100, data_dir=data_dir, out_dir=out_dir, code_version="a" * 40
+        )),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="C1"):
+        phase15_orchestrator.run_one_train(
+            configs, late, data_dir, "e15_joint_s0", gpu=0,
+            clock=lambda: _TRAIN_START, free_mib={0: 24_000},
+        )
+    assert not (late / "e15_joint_s0" / "run_meta.json").exists()
+
+
+# ------------------------------------------------------------------- C2：G1 判定
+def test_gate_g1() -> None:
+    """`50` [S5] C2：G1 四值映射（含正/反例构造）与判定输入快照。"""
+    # 纯映射（CI 由构造给定，逐分支覆盖四类）
+    assert phase15_gates.g1_verdict(1.00, [0.1, 0.4]) == "成立"
+    assert phase15_gates.g1_verdict(0.93, [0.1, 0.4]) == "成立"
+    assert phase15_gates.g1_verdict(0.89, [0.1, 0.4]) == "方向成立"
+    assert phase15_gates.g1_verdict(0.10, [-0.4, -0.1]) == "不成立"
+    assert phase15_gates.g1_verdict(0.99, [-0.1, 0.4]) == "不可判定"
+    assert phase15_gates.g1_verdict(1.00, [float("nan"), float("nan")]) == "不可判定"
+
+    reference = _e15_bconst_station({b: 0.5 for b in _E15_BEAMS})
+
+    def _adv(deltas: dict[int, float]) -> list[dict]:
+        return [
+            _e15_eval(f"e15_joint_s{i}", variant="joint", seed=100 + i, tier=10_000, station=0,
+                      err_by_beam={b: 0.5 - d for b, d in deltas.items()})
+            for i in range(5)
+        ]
+
+    strong = phase15_gates.gate_g1(_adv({b: 0.4 for b in _E15_BEAMS}), reference)
+    assert strong["verdict"] == "成立"
+    assert strong["win_rate"] == 1.0 and strong["ci95"][0] > 0
+    assert strong["n_beams"] == 150 and len(strong["inputs"]["delta"]) == 150
+    assert strong["thresholds"]["win_rate_min"] == 0.90
+
+    # 方向成立：赢率 0.8933（=134/150 < 0.90）但优势强正 ⇒ CI 下界 > 0
+    mixed = {b: 0.2 for b in _E15_BEAMS[:134]} | {b: -1e-9 for b in _E15_BEAMS[134:]}
+    directional = phase15_gates.gate_g1(_adv(mixed), reference)
+    assert directional["win_rate"] < 0.90 and directional["ci95"][0] > 0
+    assert directional["verdict"] == "方向成立"
+
+    negative = phase15_gates.gate_g1(_adv({b: -0.3 for b in _E15_BEAMS}), reference)
+    assert negative["verdict"] == "不成立"
+    assert negative["ci95"][1] <= 0
+
+    # 反例：模型几何平均与参照无差别（75 正 75 负）⇒ CI 跨 0 ⇒ 不可判定
+    zero = {b: 0.1 for b in _E15_BEAMS[:75]} | {b: -0.1 for b in _E15_BEAMS[75:]}
+    indeterminate = phase15_gates.gate_g1(_adv(zero), reference)
+    assert indeterminate["verdict"] == "不可判定"
+    assert indeterminate["ci95"][0] <= 0 < indeterminate["ci95"][1]
+
+    missing_eval = phase15_gates.gate_g1([], reference)
+    assert (missing_eval["verdict"], missing_eval["reason_code"]) == ("不可判定", "eval_missing")
+    missing_ref = phase15_gates.gate_g1(_adv({b: 0.4 for b in _E15_BEAMS}), None)
+    assert (missing_ref["verdict"], missing_ref["reason_code"]) == ("不可判定", "bconst_missing")
+    # 束集不一致：不静默收窄统计域
+    with pytest.raises(ValueError, match="束集不一致"):
+        phase15_gates.gate_g1(_adv({b: 0.4 for b in _E15_BEAMS[:100]}), reference)
+
+
+# ------------------------------------------------------------------- C3：G2 判定
+def test_gate_g2() -> None:
+    """`50` [S5] C3：G2 的 k_a/k_and 四值映射（正/反例）与缺读数降级。"""
+    def _seeds(ci_lo: list[float], drop: list[float]) -> dict[int, dict]:
+        return {
+            seed: _e15_alignment(f"e15_joint_s{i}", seed, cos_ci=(lo, 0.9), drop_frac=d)
+            for i, (seed, lo, d) in enumerate(zip(_PHASE15_SEEDS, ci_lo, drop))
+        }
+
+    five = [0.5] * 5
+    high = [0.9] * 5
+    assert phase15_gates.gate_g2(_seeds(five, high))["verdict"] == "成立"
+    assert phase15_gates.gate_g2(_seeds(five, [0.9, 0.9, 0.9, 0.2, 0.2]))["verdict"] == "方向成立"
+    # k_a = 3 / k_a ≥ 4 且 k_and ≤ 2 → 不可判定（两个不同入口）
+    three = phase15_gates.gate_g2(_seeds([0.5, 0.5, 0.5, -0.1, -0.1], high))
+    assert three["k_a"] == 3 and three["verdict"] == "不可判定"
+    and_low = phase15_gates.gate_g2(_seeds(five, [0.9, 0.9, 0.1, 0.1, 0.1]))
+    assert (and_low["k_a"], and_low["k_and"]) == (5, 2) and and_low["verdict"] == "不可判定"
+    negative = phase15_gates.gate_g2(_seeds([0.5, 0.5, -0.1, -0.1, -0.1], high))
+    assert negative["k_a"] == 2 and negative["verdict"] == "不成立"
+    # 四值映射的合法枚举与计数快照
+    for payload in (three, and_low, negative):
+        assert payload["verdict"] in ("成立", "方向成立", "不成立", "不可判定")
+        assert set(payload["per_seed"]) == {str(s) for s in _PHASE15_SEEDS}
+    missing = phase15_gates.gate_g2({100: _e15_alignment("e15_joint_s0", 100)})
+    assert (missing["verdict"], missing["reason_code"]) == ("不可判定", "alignment_missing")
+    with pytest.raises(ValueError, match="档位/站不符"):
+        phase15_gates.gate_g2(_seeds(five, high) | {}, tier=3_000)
+
+
+# ------------------------------------------------------------------- C4：G3 判定
+def test_gate_g3() -> None:
+    """`50` [S5] C4：G3 按评估档直接索引容差线 + 达标率四值映射（正/反例）。"""
+    tolerance = [0.1] * 13
+
+    def _evals(passing_pairs: int) -> list[dict]:
+        total = 150 * 13
+        obs = {}
+        for beam in _E15_BEAMS:
+            row = []
+            for j in range(13):
+                index = beam * 13 + j
+                row.append(0.0 if index < passing_pairs else 0.2)
+            obs[beam] = row
+        assert total == 1950
+        return [
+            _e15_eval(f"e15_joint_s{i}", variant="joint", seed=100 + i, tier=10_000, station=0,
+                      err_by_beam={b: 0.2 for b in _E15_BEAMS}, obs_by_beam=obs)
+            for i in range(5)
+        ]
+
+    perfect = phase15_gates.gate_g3(_evals(1950), tolerance)
+    assert perfect["verdict"] == "成立" and perfect["pass_rate"] == 1.0
+    directional = phase15_gates.gate_g3(_evals(1300), tolerance)
+    assert 0.50 < directional["pass_rate"] < 0.80 and directional["verdict"] == "方向成立"
+    negative = phase15_gates.gate_g3(_evals(0), tolerance)
+    assert negative["verdict"] == "不成立" and negative["pass_rate"] == 0.0
+    assert len(negative["per_observable"]) == 13
+    # 容差线/评估缺失 → 不可判定（不现场猜容差）
+    assert phase15_gates.gate_g3(_evals(1950), None)["reason_code"] == "tolerance_missing"
+    assert phase15_gates.gate_g3([], tolerance)["reason_code"] == "eval_missing"
+    with pytest.raises(ValueError, match="容差线形状"):
+        phase15_gates.gate_g3(_evals(1950), [0.1] * 12)
+
+
+# ------------------------------------------------------------------- C5：G4 判定
+def test_gate_g4() -> None:
+    """`50` [S5] C5：G4 的 R_diff 三分类 + 原始比并列披露（不进判定）。"""
+    reference_s0 = _e15_bconst_station({b: 0.5 for b in _E15_BEAMS})
+    reference_s1 = _e15_bconst_station({b: 0.4 for b in _E15_BEAMS})
+
+    def _evals(err: float, station: int) -> list[dict]:
+        return [
+            _e15_eval(f"e15_joint_s{i}", variant="joint", seed=100 + i, tier=10_000, station=station,
+                      err_by_beam={b: err for b in _E15_BEAMS})
+            for i in range(5)
+        ]
+
+    pass_case = phase15_gates.gate_g4(
+        _evals(0.2, 0), _evals(0.25, 1), reference_s0, reference_s1
+    )
+    assert pass_case["verdict"] == "成立" and pass_case["r_diff"] == pytest.approx(0.5)
+    assert pass_case["raw_err_ratio"] == pytest.approx(1.25)
+
+    # 方向成立：R_diff = 1.2（原始比 < 1——难度归一后才看得见的退化）
+    directional = phase15_gates.gate_g4(
+        _evals(0.5, 0), _evals(0.46, 1),
+        _e15_bconst_station({b: 0.2 for b in _E15_BEAMS}),
+        _e15_bconst_station({b: 0.1 for b in _E15_BEAMS}),
+    )
+    assert directional["r_diff"] == pytest.approx(1.2)
+    assert directional["verdict"] == "方向成立"
+
+    # 反例：原始比 0.7（"站 1 更优"）但难度归一后 R_diff = 1.5 ⇒ 不成立
+    negative = phase15_gates.gate_g4(
+        _evals(0.5, 0), _evals(0.35, 1),
+        _e15_bconst_station({b: 0.3 for b in _E15_BEAMS}),
+        _e15_bconst_station({b: 0.05 for b in _E15_BEAMS}),
+    )
+    assert negative["raw_err_ratio"] == pytest.approx(0.7)
+    assert negative["r_diff"] == pytest.approx(1.5) and negative["verdict"] == "不成立"
+
+    missing = phase15_gates.gate_g4(_evals(0.2, 0), [], reference_s0, reference_s1)
+    assert (missing["verdict"], missing["reason_code"]) == ("不可判定", "input_missing")
+    assert phase15_gates.gate_g4(
+        _evals(0.2, 0), _evals(0.25, 1), reference_s0, None
+    )["verdict"] == "不可判定"
+
+
+# ------------------------------------------------------------------- C6：G5 判定
+def test_gate_g5() -> None:
+    """`50` [S5] C6：G5 两档分别四值判定 + 组合规则（含 4×4 组合表）。"""
+    reference = _e15_bconst_station({b: 0.5 for b in _E15_BEAMS})
+
+    def _tier_evals(deltas: dict[int, float]) -> list[dict]:
+        return [
+            _e15_eval(f"e15_joint_s{i}", variant="joint", seed=100 + i, tier=1, station=0,
+                      err_by_beam={b: 0.5 - d for b, d in deltas.items()})
+            for i in range(5)
+        ]
+
+    strong = {b: 0.4 for b in _E15_BEAMS}
+    weak = {b: 0.2 for b in _E15_BEAMS[:134]} | {b: -1e-9 for b in _E15_BEAMS[134:]}
+    zero = {b: 0.1 for b in _E15_BEAMS[:75]} | {b: -0.1 for b in _E15_BEAMS[75:]}
+    bad = {b: -0.4 for b in _E15_BEAMS}
+
+    both_pass = phase15_gates.gate_g5(
+        {3_000: _tier_evals(strong), 100_000: _tier_evals(strong)}, reference
+    )
+    assert both_pass["verdict"] == "成立"
+    assert both_pass["tier_verdicts"] == {"3000": "成立", "100000": "成立"}
+    assert set(both_pass["per_tier"]) == {"3000", "100000"}
+
+    mixed = phase15_gates.gate_g5(
+        {3_000: _tier_evals(strong), 100_000: _tier_evals(weak)}, reference
+    )
+    assert (mixed["tier_verdicts"], mixed["verdict"]) == (
+        {"3000": "成立", "100000": "方向成立"}, "方向成立"
+    )
+    indeterminate = phase15_gates.gate_g5(
+        {3_000: _tier_evals(strong), 100_000: _tier_evals(zero)}, reference
+    )
+    assert indeterminate["verdict"] == "不可判定"
+    negative = phase15_gates.gate_g5(
+        {3_000: _tier_evals(strong), 100_000: _tier_evals(bad)}, reference
+    )
+    assert negative["verdict"] == "不成立"
+    # ①优先于②：一档不成立 + 一档不可判定 ⇒ 不成立
+    priority = phase15_gates.gate_g5(
+        {3_000: _tier_evals(bad), 100_000: _tier_evals(zero)}, reference
+    )
+    assert priority["verdict"] == "不成立"
+    # 档缺失 → 该档不可判定（不静默丢弃该档）
+    absent = phase15_gates.gate_g5({3_000: _tier_evals(strong)}, reference)
+    assert absent["verdict"] == "不可判定"
+    assert absent["per_tier"]["100000"]["reason_code"] == "eval_missing"
+
+    # 组合规则表（4×4 全枚举，与 `50` [S5] C6 的四条规则逐格一致）
+    rule = {
+        ("成立", "成立"): "成立",
+        ("不成立", "成立"): "不成立", ("成立", "不成立"): "不成立",
+        ("不成立", "不成立"): "不成立",
+        ("不可判定", "成立"): "不可判定", ("成立", "不可判定"): "不可判定",
+        ("不可判定", "不可判定"): "不可判定", ("不可判定", "不成立"): "不成立",
+        ("不成立", "不可判定"): "不成立",
+        ("方向成立", "成立"): "方向成立", ("成立", "方向成立"): "方向成立",
+        ("方向成立", "方向成立"): "方向成立",
+        ("方向成立", "不可判定"): "不可判定", ("方向成立", "不成立"): "不成立",
+        ("不可判定", "方向成立"): "不可判定", ("不成立", "方向成立"): "不成立",
+    }
+    for (a, b), expected in rule.items():
+        assert phase15_gates.g5_combine({3_000: a, 100_000: b}) == expected, (a, b)
+
+
+# ---------------------------------------------------- C7：e15_gates.json 载荷与纪律
+def test_e15_gates_payload(tmp_path: Path) -> None:
+    """`50` [S5] C7：五门禁结论 + 每条输入快照 + routing + 暗桶，脚本化且逐位可复现。"""
+    results = _write_phase15_results(tmp_path)
+    payload = phase15_gates.evaluate_e15_gates_from_disk(results)
+
+    # 五条结论 + 每条门禁的判定表达式输入快照
+    assert payload["verdicts"] == {
+        "G1": "成立", "G2": "成立", "G3": "成立", "G4": "成立", "G5": "成立",
+    }
+    for name in ("G1", "G2", "G3", "G4", "G5"):
+        gate = payload[name]
+        assert gate["gate"] == name and gate["verdict"] == "成立"
+        assert gate["thresholds"] and "source" in gate
+    assert payload["G1"]["win_rate"] == 1.0 and len(payload["G1"]["inputs"]["delta"]) == 12
+    assert payload["G3"]["pass_rate"] == 1.0 and len(payload["G3"]["per_observable"]) == 13
+    assert payload["G4"]["r_diff"] == pytest.approx(0.5)
+    assert set(payload["G5"]["tier_verdicts"]) == {"3000", "100000"}
+    assert payload["G2"]["k_a"] == 5 and payload["G2"]["k_and"] == 5
+
+    # routing（获胜臂 + 依据 val_nll）与暗桶 M2 分项
+    assert payload["routing"]["basis"] == "val_nll"
+    assert payload["routing"]["winner_arm"] == "joint"
+    assert payload["routing"]["arm_reading"]["joint"] < payload["routing"]["arm_reading"]["independent"]
+    assert payload["routing"]["reading_disagreement"] is False
+    dark = payload["dark_bucket_m2"]
+    assert set(dark) >= {"B0", "B1", "B0B1_combined", "aggregation", "runs_without_m2"}
+    assert dark["B1"]["relative_improvement"] == pytest.approx(0.5)
+    assert payload["products"]["bconst"]["stations"] == [0, 1]
+
+    # 落盘 == 返回；同输入两次调用逐位一致（脚本化判定的确定性）
+    gates_path = results / "e15_gates.json"
+    assert json.loads(gates_path.read_text(encoding="utf-8")) == payload
+    first = gates_path.read_bytes()
+    again = phase15_gates.evaluate_e15_gates_from_disk(results)
+    assert gates_path.read_bytes() == first and again == payload
+
+    # 汇总统计：3 档 × 2 站 × 5 run（获胜臂的 6 评估/run 全被消费）
+    snapshot = payload["inputs_snapshot"]
+    assert len(snapshot["gate_evals"]) == 5 and len(snapshot["cross_station_evals"]) == 5
+    assert sum(len(v) for v in snapshot["g5_evals"].values()) == 10
+
+    # 两段式纪律：门禁只吃 test 段（把一份被消费的评估改成 val 段即报错）
+    victim = phase15_gates.eval_path(results, "e15_joint_s0", 10_000, 0)
+    original = victim.read_text(encoding="utf-8")
+    broken = json.loads(original)
+    broken["split"] = "val"
+    victim.write_text(json.dumps(broken), encoding="utf-8")
+    with pytest.raises(ValueError, match="只消费 test 段"):
+        phase15_gates.evaluate_e15_gates_from_disk(results)
+    victim.write_text(original, encoding="utf-8")
+
+    # 路由只吃 val 段：summary.json 以外的路径一律拒绝
+    with pytest.raises(ValueError, match="val 段"):
+        phase15_gates.assert_val_segment_paths([victim])
+    with pytest.raises(ValueError, match="test 段"):
+        phase15_gates.assert_test_segment_paths([results / "e15_joint_s0" / "summary.json"])
+    # 缺 routing 时门禁拒绝启动（不猜获胜臂）
+    (results / "e15_routing.json").unlink()
+    with pytest.raises(FileNotFoundError):
+        phase15_gates.evaluate_e15_gates_from_disk(results)
+
+    # 判定侧静态纪律：phase15_gates 不出现 N_eff 类标识符（`50` [S3] C1 / [S5] p4）
+    tree = ast.parse(Path(phase15_gates.__file__).read_text(encoding="utf-8"))
+    identifiers = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)} | {
+        node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+    }
+    offenders = sorted(name for name in identifiers if "n_eff" in name.lower())
+    assert not offenders, f"门禁模块出现 N_eff 标识符：{offenders}"
+
+
+def test_e15_routing_val_segment_and_reading_disagreement(tmp_path: Path) -> None:
+    """`50` [S5] 路由：只读 val 段 val_nll、臂级取 5 种子中位数、两读法不一致时显式登记。"""
+    results = tmp_path / "results"
+    results.mkdir()
+    for tag, variant, val_nll, tier_1e4 in (
+        ("joint", "joint", 1.0, 0.9), ("indep", "independent", 1.2, 2.0),
+    ):
+        for index, seed in enumerate(_PHASE15_SEEDS):
+            _write_e15_summary(
+                results / f"e15_{tag}_s{index}", variant=variant, seed=seed,
+                val_nll=val_nll, tier_1e4=tier_1e4,
+            )
+    routing = phase15_gates.write_routing(
+        results, {"joint": [f"e15_joint_s{i}" for i in range(5)],
+                  "independent": [f"e15_indep_s{i}" for i in range(5)]}
+    )
+    assert routing["winner_arm"] == "joint"          # 三档等权读数（[S3] C2）占优
+    assert routing["winner_by_tier_1e4"] == "joint"
+    assert routing["reading_disagreement"] is False
+    assert routing["arm_reading"]["joint"] == pytest.approx(1.0)
+    assert sorted(routing["per_arm"]["joint"]["per_seed_val_nll"]) == [str(s) for s in _PHASE15_SEEDS]
+
+    # 1e4 单档读法的胜者相反 ⇒ 显式登记不一致（不静默择一）
+    for index in range(5):
+        _write_e15_summary(results / f"e15_joint_s{index}", variant="joint", seed=100 + index,
+                           val_nll=1.0, tier_1e4=2.5)
+        _write_e15_summary(results / f"e15_indep_s{index}", variant="independent", seed=100 + index,
+                           val_nll=1.2, tier_1e4=2.0)
+    flipped = phase15_gates.write_routing(
+        results, {"joint": [f"e15_joint_s{i}" for i in range(5)],
+                  "independent": [f"e15_indep_s{i}" for i in range(5)]}
+    )
+    assert flipped["winner_arm"] == "joint" and flipped["winner_by_tier_1e4"] == "independent"
+    assert flipped["reading_disagreement"] is True
+    assert json.loads((results / "e15_routing.json").read_text(encoding="utf-8")) == flipped
+
+
+# ------------------------------------------------------------------ C9：v2 渲染
+def test_map_report_v2(tmp_path: Path) -> None:
+    """`50` [S5] C9：map_report 适配 v2 路径并渲染 e15_gates.json（G1–G5、B-const、暗桶）。"""
+    from src.line2.experiments.map_report import generate_v2, load_e15_gates
+
+    results = _write_phase15_results(tmp_path)
+    phase15_gates.evaluate_e15_gates_from_disk(results)
+    reports = tmp_path / "reports"
+
+    # v1 路径缺失不算数：v2 剖面只认 *_v2 产物（`50` [S5] C9 的路径适配）
+    v1_only = tmp_path / "v1_only"
+    v1_only.mkdir()
+    (v1_only / "e0_curve.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(FileNotFoundError, match="e15_gates.json"):
+        generate_v2(v1_only, reports_dir=tmp_path / "r1")
+
+    first = generate_v2(results, reports_dir=reports)
+    digest = hashlib.sha256(first["report"].read_bytes()).hexdigest()
+    text = first["report"].read_text(encoding="utf-8")
+    assert first["report"] == reports / "phase15_gates_report.md"
+    assert first["winner_arm"] == "joint" and first["n_evals"] == 20
+
+    # G1–G5 各自成节、结论字面量 + 判定表达式 + 判定表达式的标量输入
+    for index, name in enumerate(("G1", "G2", "G3", "G4", "G5"), start=1):
+        assert f"### 3.{index} {name}：**成立**" in text, name
+    assert text.count("判定表达式（`50` [S5]）：") == 5
+    for row in ("| win_rate | 1 |", "| advantage |", "| k_a | 5 |", "| k_and | 5 |",
+                "| pass_rate | 1 |", "| r_diff | 0.5 |", "| raw_err_ratio | 1.25 |",
+                "| tier_verdicts | 100000=成立, 3000=成立 |"):
+        assert row in text, row
+    # v2 路径适配：报告引用 v2 产物名而非 v1
+    assert "e0_curve_v2.json" in text and "tolerance_v2.json" in text
+    assert "bconst_v2.json" in text and "e15_gates.json" in text
+    assert "e0_curve.json`" not in text.replace("e0_curve_v2.json", "")
+    # B-const（两站）与暗桶 M2 单独成节
+    assert "## 4. B-const（零信息常数解，两站）" in text
+    assert "| 0 |" in text and "| 1 |" in text
+    assert "## 5. 暗桶 M2（单独报告，不并入 G1–G5）" in text
+    assert "B0B1_combined" in text and "0.5" in text
+    # 路由段披露获胜臂与两读法一致性
+    assert "获胜臂：**joint**" in text and "两种读法一致" in text
+
+    # 只读：输入目录逐字不变、只落一份报告
+    before = {p: hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in sorted(results.rglob("*")) if p.is_file()}
+    second = generate_v2(results, reports_dir=reports)
+    assert hashlib.sha256(second["report"].read_bytes()).hexdigest() == digest
+    after = {p: hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in sorted(results.rglob("*")) if p.is_file()}
+    assert before == after
+    assert sorted(p.name for p in reports.rglob("*")) == ["phase15_gates_report.md"]
+
+    # 门禁产物缺段 ⇒ 报错，不静默省略
+    gates_path = results / "e15_gates.json"
+    payload = json.loads(gates_path.read_text(encoding="utf-8"))
+    del payload["dark_bucket_m2"]
+    gates_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="dark_bucket_m2"):
+        load_e15_gates(results)
+    payload["G3"] = dict(payload["G3"], verdict="也许")
+    payload["dark_bucket_m2"] = {"B0": {}}
+    gates_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="合法枚举"):
+        load_e15_gates(results)
+
+
+# ------------------------------------ 矩阵 config 生成 + val_beams 守卫（[S5] 矩阵）
+def test_phase15_configs_and_val_beams_guard(tmp_path: Path) -> None:
+    """`50` [S5]：configs 生成器落 10 份 config + 矩阵记录；`val_beams` 只许缺省或 150。"""
+    from src.line2.training.config_check import validate_phase15_matrix
+
+    data_dir = _write_tiny_field_dataset(tmp_path / "ds")
+    out = phase15_configs.generate(
+        results_dir=tmp_path / "results", data_dir=data_dir, code_version="b" * 40
+    )
+    assert out["configs"] and len(out["configs"]) == 10
+    configs_dir = Path(out["config_dir"])
+    assert sorted(p.stem for p in configs_dir.glob("e15_*.json")) == sorted(phase15_configs.run_ids())
+    assert out["validation"]["station_check"] == f"ok:{data_dir}"
+    assert (tmp_path / "results" / "e15_matrix.json").is_file()
+    cfg = json.loads((configs_dir / "e15_joint_s0.json").read_text(encoding="utf-8"))
+    for key, value in (
+        ("phase", "1.5"), ("kappa", "v2"), ("data_version", "line2_ds_v2"),
+        ("spec_version", "line2-spec-v1.1"), ("code_version", "b" * 40),
+        ("stations", [0]), ("k_train", 5), ("tiers", [3000, 10000, 100000]),
+    ):
+        assert cfg[key] == value, key
+    assert "val_beams" not in cfg                     # `50` [S3] C2：val 集不截短
+    assert cfg["out_dir"].endswith("results/e15_joint_s0")
+
+    # `val_beams` 守卫：缺省 / 恰 150 通过，其余拒绝（`50` [S3] C2 的 val_nll 定义域）
+    matrix = phase15_configs.build_matrix(
+        results_dir=tmp_path / "results", data_dir=data_dir, code_version="b" * 40
+    )
+    validate_phase15_matrix(matrix, data_dir=data_dir)
+    validate_phase15_matrix(
+        [dict(cfg_, val_beams=150) for cfg_ in matrix], data_dir=data_dir
+    )
+    for bad in (1, 100, 200):
+        with pytest.raises(ValueError, match="val_beams"):
+            validate_phase15_matrix(
+                [dict(cfg_, val_beams=bad) for cfg_ in matrix], data_dir=data_dir
+            )
+
+
+# ------------------------------------------------- 双卡队列（按臂整分）与编排入口
+def test_plan_arm_queues_assigns_one_arm_per_gpu() -> None:
+    """`50` [S5]：双卡队列按臂整分（joint → GPU0、independent → GPU1），run 不重不漏。"""
+    runs = phase15_configs.run_ids()
+    queue = phase15_orchestrator.plan_arm_queues(runs, [0, 1])
+    assert queue[0] == [f"e15_joint_s{i}" for i in range(5)]
+    assert queue[1] == [f"e15_indep_s{i}" for i in range(5)]
+    assert sorted(queue[0] + queue[1]) == sorted(runs)
+    single = phase15_orchestrator.plan_arm_queues(runs, [0])
+    assert single[0] == [f"e15_joint_s{i}" for i in range(5)] + [
+        f"e15_indep_s{i}" for i in range(5)
+    ]
+    with pytest.raises(ValueError, match="臂标记"):
+        phase15_orchestrator.plan_arm_queues(["e15_x_s0"], [0])
+    with pytest.raises(ValueError, match="重复"):
+        phase15_orchestrator.plan_arm_queues(["e15_joint_s0", "e15_joint_s0"], [0])

@@ -144,13 +144,27 @@
 **Spec section:** [S4] C1/C2；关联 `30` D13/D17/D20
 **Status:** live
 
+## D18: 路由读法裁决——三档等权为主键，1×10⁴ 单档分量并列披露
+**Phase:** implementation
+**Chosen:** [S5] 路由主键 = [S3] C2 的 val_nll（三档等权，5 种子中位数）；1×10⁴ 单档分量同时落盘并按同一排序求解；两读法胜者不一致时 `reading_disagreement=true` 并在报告披露（不静默择一、不阻断）。
+**Rationale:** [S5] 文字"按站 0 @1×10⁴ 的 val 段 val_nll 排序"与 [S3] C2/D9 的三档等权定义存在两种可通读法；实现取 [S3] C2 为主键（D9 的选型单准绳即三档等权），并把分叉显式化——若两读法胜者不同，说明结论对口径敏感，须升级闸口而非静默择一。
+**Rejected:** 只用 1×10⁴ 单档排序——与 [S3] C2/D9 的三档定义冲突；只检测分歧不落盘分量——失去口径敏感性审计线索。
+**Spec section:** [S5]（路由）
+**Status:** live
+
 ## Progress
 
 | [Sn] | commit | review | status |
 |---|---|---|---|
-| [S1] | — | — | pending |
-| [S2] | — | — | pending |
-| [S3] | — | — | pending |
-| [S4] | — | — | pending |
-| [S5] | — | — | pending |
-| [S6] | — | — | pending |
+| [S1] | a93561c（00 四处增补）+ 70c5f24（SPEC_PATTERN 修复 + spec_terms 测试） | spec 六轮审核 + [S5] 轮核验（[S1] C5 补完有效、索引 32 条 line2/50） | implemented（C1–C4 冻结时落地；C5 = `test_line2_spec_terms.py` 2 passed；C6 随 [S2] manifest） |
+| [S2] | 9732122 | 验收审查 approve（C1–C6 全过 + 独立复算：143 束重传、700 束池化重算、全量 h5 扫描） | implemented（v2 构建 5.0 GB；clean-commit 重建与首建**逐字节一致**；夹取 0/4.0 亿） |
+| [S3] | 70c5f24 | 合并验收 approve（M6 分半真实现核读 + B-const 全量独立复算 1.575/1.510 + v1 校准 0.1944/0.0352） | implemented（24 项具名测试全过） |
+| [S4] | 70c5f24 | 合并验收 approve（κ 换单位不变 rtol 1e-4、8 类负例全拒、同 seed 逐位；D17 裁决登记） | implemented（冒烟两臂 4 步 run；生产参数量 joint 10,708,710 / indep 10,092,870） |
+| [S5] | （本提交） | 验收审查 approve——可执行 `phase15_chain.sh`（C1–C9 逐条 + p1–p6 闭合；无 must-fix 项） | implemented（13 具名测试 + 冒烟全链 tiny fixture 跑通；**矩阵执行待链启动**） |
+| [S6] | — | — | pending（阶段报告待门禁产出后） |
+
+## 执行备注（矩阵链）
+
+- 启动前提已核：`results/` 无 `e15_*` 残留；GPU 0/1 空闲；v2 数据集重建逐字节一致（确定性）；三件 E0' 产物中 tolerance/bconst 已刷新（curve 由链内步骤 1 生成）。
+- 预计墙钟 20–35 h（E0' ≈10 min；10 runs 双卡按臂整分 ≈16–31 h；60 evals ≈2 h；align ≈20 min；gates/map 秒级）。
+- 观察点：每 run 启动前 E0' 时间戳门禁；`e15_routing.json.reading_disagreement`（True 须报告披露，不阻断）；G2 的 5 份 `e15_align_*.json` 齐备。

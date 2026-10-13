@@ -79,11 +79,18 @@ __all__ = [
     "run_dir_triple",
     "write_n_eff_table",
     "generate",
+    "load_e15_gates",
+    "generate_v2",
     "main",
     "TABLE_COLUMNS",
     "FIGURE_NAME",
     "TABLE_NAME",
     "REPORT_NAME",
+    "V2_CURVE_FILENAME",
+    "V2_GATES_FILENAME",
+    "V2_TOLERANCE_FILENAME",
+    "V2_BCONST_FILENAME",
+    "V2_REPORT_NAME",
 ]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -1253,20 +1260,353 @@ def generate(
     }
 
 
+# ---------------------------------------------- `50` [S5] C9：v2 路径剖面（门禁渲染）
+V2_CURVE_FILENAME = "e0_curve_v2.json"        # `50` [S5] C1 的曲线产物（v1 曲线另有其名）
+V2_E0_META_FILENAME = "e0_curve_v2.meta.json"
+V2_GATES_FILENAME = "e15_gates.json"          # phase15_gates.evaluate_e15_gates_from_disk 产物
+V2_TOLERANCE_FILENAME = "tolerance_v2.json"   # `50` [S3] C3 容差线（按评估档索引）
+V2_BCONST_FILENAME = "bconst_v2.json"         # `50` [S3] C4 B-const 两站
+V2_REPORT_NAME = "phase15_gates_report.md"
+
+#: `e15_gates.json` 的必需顶层段（缺一即报错——五条门禁结论是报告第 3 章的唯一来源）
+V2_GATES_REQUIRED_KEYS = (
+    "gate_dims", "routing", "arms", "G1", "G2", "G3", "G4", "G5", "verdicts",
+    "dark_bucket_m2", "inputs_snapshot",
+)
+#: 每条门禁的必需键（判定表达式的最小快照；缺 verdict 的段不是结论）
+V2_GATE_REQUIRED_KEYS = ("gate", "verdict")
+#: 合法门禁结论枚举（`50` [S5] C2–C6 的四值；报告侧按字面量独立裁定，不随实现常量自证）
+V2_VERDICTS = ("成立", "方向成立", "不成立", "不可判定")
+#: 逐门禁在报告里披露的快照键（有则渲染、无则以 reason_code 显式登记，不静默省略）
+V2_GATE_SNAPSHOT_KEYS = {
+    "G1": ("verdict", "reason_code", "tier", "station", "n_beams", "win_rate", "advantage",
+           "ci95", "thresholds", "aggregation", "bootstrap"),
+    "G2": ("verdict", "reason_code", "tier", "station", "n_seeds", "k_a", "k_and", "thresholds"),
+    "G3": ("verdict", "reason_code", "tier", "station", "n_beams", "pass_rate",
+           "thresholds", "aggregation"),
+    "G4": ("verdict", "reason_code", "tier", "r_diff", "raw_err_ratio", "err_median",
+           "bconst_median", "excess", "thresholds"),
+    "G5": ("verdict", "reason_code", "station", "tiers", "tier_verdicts", "thresholds",
+           "combine_rule"),
+}
+#: 冻结判定表达式（`50` [S5] C2–C6；报告据此说明快照数字如何被消费）
+V2_GATE_RULES = {
+    "G1": "密度反超先验：获胜臂 @1e4 站 0 对 B-const 站 0 的配对逐束优势——成立 ⟺ "
+          "win_rate ≥ 0.90 且 advantage 的 95% CI 下界 > 0；方向成立 ⟺ CI 下界 > 0 且 "
+          "win_rate < 0.90；不成立 ⟺ CI 上界 ≤ 0；CI 跨 0 或评估缺失 ⟺ 不可判定。",
+    "G2": "个体信息：获胜臂 5 种子（选型 ckpt）@1e4 站 0，prior = B-const 站 0——k_a = "
+          "cos_true 的 95% CI > 0 的种子数、k_and = 同时满足 CI > 0 且 drop_frac ≥ 0.80 的"
+          "种子数；成立 ⟺ k_a ≥ 4 且 k_and ≥ 4；方向成立 ⟺ k_a ≥ 4 且 k_and = 3；"
+          "不可判定 ⟺ k_a = 3 或（k_a ≥ 4 且 k_and ≤ 2）；不成立 ⟺ k_a ≤ 2。",
+    "G3": "观测量达标：获胜臂 @1e4 站 0 对 v2 容差线（按评估档索引、M6 已去偏）、逐观测量"
+          "先对 5 种子取中位数再判达标——成立 ⟺ 达标率 ≥ 0.80；方向成立 ⟺ 0.50 < 达标率 "
+          "< 0.80；不成立 ⟺ 达标率 ≤ 0.50；容差线/评估缺失 ⟺ 不可判定。",
+    "G4": "跨站真迁移：获胜臂站 1 @1e4，R_diff = (err_s1 − B_s1)/(err_s0 − B_s0)（各量取"
+          "束级读数中位数）——成立 ⟺ R_diff ≤ 1.10；方向成立 ⟺ 1.10 < R_diff ≤ 1.25；"
+          "不成立 ⟺ R_diff > 1.25；站 1 评估或 B_s1 缺失 ⟺ 不可判定；原始比 err_s1/err_s0 "
+          "仅作披露、不进判定。迁移限于 [S1] 晶格边界的站 0 → 站 1。",
+    "G5": "N 泛化：获胜臂 @3×10³ 与 @1×10⁵ 站 0（参照同一 B-const 站 0 均值图）各按 G1 同款"
+          "四值判定，再按组合规则合成：①任一档不成立→不成立；②否则任一档不可判定→不可判定；"
+          "③两档均成立→成立；④其余→方向成立。",
+}
+
+
+def load_e15_gates(results_dir: str | Path) -> dict:
+    """读 ``e15_gates.json`` 并校验五门禁段 + routing + 暗桶齐备（`50` [S5] C7 的落盘契约）。
+
+    缺段即报错：五条结论是报告第 3 章的唯一来源，半份产物比没有更危险。
+    """
+    path = Path(results_dir) / V2_GATES_FILENAME
+    gates = _read_json(path, "Phase 1.5 出口门禁产物（phase15_gates.evaluate_e15_gates_from_disk）")
+    _require_keys(gates, V2_GATES_REQUIRED_KEYS, _display_path(path), "`50` [S5] C7 门禁段")
+    for name in ("G1", "G2", "G3", "G4", "G5"):
+        gate = gates[name]
+        if not isinstance(gate, Mapping):
+            raise ValueError(f"{_display_path(path)}:{name} 应为携带判定快照的对象")
+        _require_keys(gate, V2_GATE_REQUIRED_KEYS, f"{_display_path(path)}:{name}",
+                      "`50` [S5] 门禁段的最小字段（gate/verdict）")
+        if str(gate["verdict"]) not in V2_VERDICTS:
+            raise ValueError(
+                f"{_display_path(path)}:{name} 的 verdict={gate['verdict']!r} 不在合法枚举 "
+                f"{V2_VERDICTS}"
+            )
+    if not isinstance(gates["dark_bucket_m2"], Mapping):
+        raise ValueError(f"{_display_path(path)}：dark_bucket_m2 应为对象（`40` [S3] H8 的暗桶段）")
+    return gates
+
+
+def _v2_input_lines(results_dir: Path, gates: Mapping) -> list[str]:
+    """第 1 章：v2 输入清单（曲线/容差线/B-const/评估产物/对齐读数）。"""
+    lines = [
+        "## 1. 输入清单（v2 路径）",
+        "",
+        "| 产物 | 路径 | 状态 |",
+        "|---|---|---|",
+    ]
+    products = gates.get("products", {})
+    rows = [
+        ("曲线（裸误差–N，`50` [S5] C1）", results_dir / V2_CURVE_FILENAME),
+        ("容差线（v2，按评估档索引）", results_dir / V2_TOLERANCE_FILENAME),
+        ("B-const 两站", results_dir / V2_BCONST_FILENAME),
+        ("门禁产物", results_dir / V2_GATES_FILENAME),
+    ]
+    for label, path in rows:
+        exists = "存在" if path.is_file() else "缺失"
+        extra = ""
+        if label.startswith("容差线") and products.get("tolerance_tiers"):
+            extra = f"（档 {_fmt(sorted(products['tolerance_tiers']))}）"
+        if label.startswith("B-const") and products.get("bconst", {}).get("stations"):
+            extra = f"（站 {_fmt(products['bconst']['stations'])}）"
+        lines.append(f"| {label} | {_display_path(path)} | {exists}{extra} |")
+    snapshot = gates.get("inputs_snapshot", {})
+    evals = list(snapshot.get("gate_evals", ())) + list(snapshot.get("cross_station_evals", ()))
+    for tier, paths in sorted(snapshot.get("g5_evals", {}).items()):
+        evals.extend(paths)
+    lines += [
+        "",
+        f"- 获胜臂 {_fmt(gates['arms'].get('winner'))}，跑 {_fmt(gates['arms'].get('n_runs'))} 个 run、"
+        f"{_fmt(len(snapshot.get('alignment', {})))} 份对齐读数；"
+        f"消费评估产物 {_fmt(len(evals))} 份（逐 run：@1e4 站 0/站 1 + @3×10³ 与 @1×10⁵ 站 0）。",
+        f"- 门禁聚合维度：{_fmt(gates.get('gate_dims'))}。",
+        "",
+        "清单内的路径是该报告数字的唯一来源；逐条评估产物：",
+        "",
+    ]
+    for path in sorted(set(evals)):
+        lines.append(f"- `{_display_path(path)}`")
+    lines.append("")
+    return lines
+
+
+def _v2_routing_lines(gates: Mapping) -> list[str]:
+    """第 2 章：路由（获胜臂、依据 val_nll、臂级读数与两读法一致性）。"""
+    routing = gates["routing"]
+    per_arm = routing.get("per_arm", {})
+    lines = [
+        "## 2. 路由（val 段 val_nll）",
+        "",
+        f"- 获胜臂：**{_fmt(routing.get('winner_arm'))}**（{_fmt(routing.get('spec'))}；"
+        f"依据 = {_fmt(routing.get('source', {}).get('summary'))}）。",
+        f"- 臂级读数（{_fmt(routing.get('arm_reading', {}).get('aggregation'))}）：{_fmt(routing.get('arm_reading'))}。",
+        f"- 1×10⁴ 单档分量：{_fmt(routing.get('tier_1e4_reading'))}"
+        f"（该读法下的胜者 = {_fmt(routing.get('winner_by_tier_1e4'))}；"
+        f"两种读法{'不一致' if routing.get('reading_disagreement') else '一致'}）。",
+        "",
+        "| 臂 | 种子 | val_nll（三维等权） | @1e4 分量 | summary |",
+        "|---|---|---|---|---|",
+    ]
+    for arm in sorted(per_arm):
+        entry = per_arm[arm]
+        seeds = sorted(entry.get("per_seed_val_nll", {}), key=lambda s: int(s))
+        for seed in seeds:
+            lines.append(
+                f"| {arm} | {seed} | {_fmt(entry['per_seed_val_nll'][seed])} | "
+                f"{_fmt(entry.get('per_seed_tier_1e4', {}).get(seed))} | "
+                f"`{_display_path(str(entry.get('summary_paths', {}).get(seed, '')))}` |"
+            )
+    lines.append("")
+    return lines
+
+
+def _v2_gate_lines(name: str, gate: Mapping) -> list[str]:
+    """单条门禁小节：结论 + 判定表达式 + 快照表。"""
+    index = {"G1": 1, "G2": 2, "G3": 3, "G4": 4, "G5": 5}[name]
+    lines = [f"### 3.{index} {name}：**{_fmt(gate['verdict'])}**", ""]
+    lines.append(f"判定表达式（`50` [S5]）：{V2_GATE_RULES[name]}")
+    lines.append("")
+    if gate.get("reason_code"):
+        lines.append(f"降级原因：`{gate['reason_code']}`")
+        lines.append("")
+    rows = [
+        (key, gate[key]) for key in V2_GATE_SNAPSHOT_KEYS[name] if key in gate
+    ]
+    lines += _md_table(("项", "值"), rows)
+    if "inputs" in gate:
+        lines.append("")
+        lines.append(
+            "逐束输入快照（beam_ids / model_err / reference_err / delta）见门禁产物的 "
+            f"`{name}.inputs`（本报告只渲染判定表达式的标量输入）。"
+        )
+    if name == "G5":
+        for tier, entry in sorted(gate.get("per_tier", {}).items()):
+            lines.append("")
+            lines.append(f"档 {tier} 的分项：")
+            lines.append("")
+            lines += _md_table(
+                ("项", "值"),
+                [(key, entry[key]) for key in
+                 ("verdict", "reason_code", "n_beams", "win_rate", "advantage", "ci95")
+                 if key in entry],
+            )
+    if name == "G3" and gate.get("per_observable"):
+        lines.append("")
+        lines.append("逐观测量达标率：")
+        lines.append("")
+        lines += _md_table(
+            ("观测量", "达标数", "束数", "达标率"),
+            [(row["name"], row["n_pass"], row["n_beams"], row["pass_rate"])
+             for row in gate["per_observable"]],
+        )
+    lines.append("")
+    return lines
+
+
+def _v2_bconst_lines(gates: Mapping, results_dir: Path) -> list[str]:
+    """第 4 章：B-const（两站）——G1/G4/G5 的参照及其溯源（数字取门禁产物的输入快照）。"""
+    products = gates.get("products", {})
+    bconst = products.get("bconst", {})
+    lines = [
+        "## 4. B-const（零信息常数解，两站）",
+        "",
+        f"来源：`{_display_path(str(bconst.get('path', results_dir / V2_BCONST_FILENAME)))}`；"
+        f"组图 `{_display_path(str(products.get('bconst_groups', '')))}`"
+        f"（存在 = {_fmt(products.get('bconst_groups_present'))}）；"
+        f"完成于 {_fmt(bconst.get('completed_at'))}。",
+        "",
+    ]
+    per_station = bconst.get("per_station") or {}
+    if per_station:
+        lines += _md_table(
+            ("站", "组图 SHA256（前 16 位）", "逐束 M1 中位", "最小", "最大", "评估束数"),
+            [
+                (station, str(entry.get("group_sha256", ""))[:16], entry.get("err_median"),
+                 entry.get("err_min"), entry.get("err_max"), entry.get("n_eval_beams"))
+                for station, entry in sorted(per_station.items())
+            ],
+        )
+    else:
+        lines.append("（门禁产物未带逐站快照：见 B-const 产物本体。）")
+    lines.append("")
+    lines.append("B-const = 站 s 的 train 束该站全量目标图在 v2 公共域下逐投影归一的均值图；"
+                 "不含任何 test/束个体信息（`50` [S1]，`20` [S5] 基线族成员）。")
+    lines.append("")
+    return lines
+
+
+def _v2_dark_bucket_lines(gates: Mapping) -> list[str]:
+    """第 5 章：暗桶 M2 单独报告（`40` [S3] H8 条款沿用，不并入任何门禁判定）。"""
+    dark = gates["dark_bucket_m2"]
+    lines = [
+        "## 5. 暗桶 M2（单独报告，不并入 G1–G5）",
+        "",
+        f"口径：{_fmt(dark.get('note'))}",
+        "",
+        f"聚合：{_fmt(dark.get('aggregation'))}；覆盖 {_fmt(dark.get('n_runs'))} 个 run × "
+        f"{_fmt(dark.get('n_beams_total'))} 束。",
+        "",
+    ]
+    rows = []
+    for bucket in ("B0", "B1", "B0B1_combined"):
+        entry = dark.get(bucket) or {}
+        rows.append((
+            bucket, entry.get("bare_median"), entry.get("model_median"),
+            entry.get("relative_improvement"), entry.get("n_beams"),
+        ))
+    lines += _md_table(("桶", "裸输入 M2 中位", "模型 M2 中位", "相对改进", "束数"), rows)
+    if dark.get("runs_without_m2"):
+        lines += ["", f"缺暗桶数据的 run：{_fmt(dark['runs_without_m2'])}"]
+    lines.append("")
+    return lines
+
+
+def _v2_why_lines() -> list[str]:
+    return [
+        "## 6. 设计理由（Why）",
+        "",
+        "- 门禁读数全部来自落盘产物（routing ← val 段 summary 的 val_nll；G1–G5 ← test 段"
+        " 评估读数 + 容差线 + B-const + 对齐仪器），报告不重算、不引入新数字："
+        "  `50` [S3] C1 的两段式白名单在取数入口即被断言（val 段只读 summary.json、"
+        "  test 段只读 eval_*.json），N_eff 类字段不进任何判定。",
+        "- G1/G4/G5 用 B-const 作零信息参照而非裸输入：B-const 是「不看束」的最优常数解，"
+        "  模型必须超过它才算带来个体信息（`50` [S3] C4）。",
+        "- G4 用难度归一残差比 R_diff 而非原始比：站 1 任务显著更易（B-const 下限更低），"
+        "  原始比会把「任务容易」读成「迁移无损」（`50` D5）。",
+        "- G3 的容差线按评估档直接索引 v2 表（M6 行已去偏）：容差线的档位语义在 v2 由"
+        "  评估档自身承载，不再经 N_eff 最近档映射（`50` [S3] C3 的取代条款）。",
+        "",
+        "> 报告为只读渲染：输入目录的产物在本脚本运行前后逐字不变。",
+        "",
+    ]
+
+
+def generate_v2(
+    results_dir: str | Path, reports_dir: str | Path | None = None
+) -> dict:
+    """Phase 1.5 门禁报告（`50` [S5] C9）：读 ``e15_gates.json`` → ``phase15_gates_report.md``。
+
+    ``reports_dir`` 默认 = ``<results_dir>/../reports``（`00` [S2] 研究线布局，随报告入库）。
+    本脚本只写这一份报告；v2 输入的曲线/容差线/B-const/评估产物一概不写。
+    """
+    results_dir = Path(results_dir)
+    if not results_dir.is_dir():
+        raise FileNotFoundError(f"results 目录不存在：{results_dir}")
+    reports_dir = Path(reports_dir) if reports_dir is not None else results_dir.parent / "reports"
+
+    gates = load_e15_gates(results_dir)
+    lines = ["# line2 Phase 1.5 出口门禁报告（G1–G5）", ""]
+    lines.append(
+        f"> 数据来源：`{_display_path(results_dir / V2_GATES_FILENAME)}`"
+        f"（`50` [S5] C7 的落盘产物）；本报告由 `map_report --profile phase15` 渲染，只读不重算。"
+    )
+    lines.append("")
+    lines += _v2_input_lines(results_dir, gates)
+    lines += _v2_routing_lines(gates)
+    lines += ["## 3. 门禁结论（G1–G5）", ""]
+    lines.append(f"门禁组合结论：{_fmt(gates['verdicts'])}")
+    lines.append("")
+    for name in ("G1", "G2", "G3", "G4", "G5"):
+        lines += _v2_gate_lines(name, gates[name])
+    lines += _v2_bconst_lines(gates, results_dir)
+    lines += _v2_dark_bucket_lines(gates)
+    lines += _v2_why_lines()
+
+    report_path = reports_dir / V2_REPORT_NAME
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    snapshot = gates.get("inputs_snapshot", {})
+    n_evals = len(snapshot.get("gate_evals", ())) + len(snapshot.get("cross_station_evals", ()))
+    for paths in snapshot.get("g5_evals", {}).values():
+        n_evals += len(paths)
+    return {
+        "report": report_path,
+        "winner_arm": gates["arms"].get("winner"),
+        "verdicts": dict(gates["verdicts"]),
+        "n_evals": n_evals,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m src.line2.experiments.map_report",
-        description="line2 Phase 1 三类产出物（spec 40 [S4]；只读落盘产物）",
+        description="line2 产出物（spec 40 [S4] Phase 1 / spec 50 [S5] Phase 1.5；只读落盘产物）",
     )
+    parser.add_argument("--profile", choices=("phase1", "phase15"), default="phase1",
+                        help="phase1 = 三类产出物（`40` [S4]）；phase15 = v2 门禁报告（`50` [S5] C9）")
     parser.add_argument("--results-dir", type=Path, required=True,
-                        help="results 目录（含 e0_curve.json / e1_gates.json / <run_id>/）")
+                        help="results 目录（phase1：e0_curve.json / e1_gates.json；"
+                             "phase15：e0_curve_v2.json / e15_gates.json）")
     parser.add_argument("--out-dir", type=Path, default=None,
                         help=f"N_eff 表输出目录（默认 = --results-dir；只落 {TABLE_NAME}）")
     parser.add_argument("--reports-dir", type=Path, default=None,
-                        help=f"报告输出目录（默认 = <results-dir>/../reports；落 {REPORT_NAME}）")
+                        help=f"报告输出目录（默认 = <results-dir>/../reports）")
     parser.add_argument("--figure-dir", type=Path, default=None,
                         help=f"地图输出目录（默认 = --reports-dir；落 {FIGURE_NAME}）")
     args = parser.parse_args(argv)
+    if args.profile == "phase15":
+        out = generate_v2(args.results_dir, reports_dir=args.reports_dir)
+        print(
+            json.dumps(
+                {
+                    "report": _display_path(out["report"]),
+                    "winner_arm": out["winner_arm"],
+                    "verdicts": out["verdicts"],
+                    "n_evals": out["n_evals"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
     out = generate(args.results_dir, out_dir=args.out_dir, reports_dir=args.reports_dir,
                    figure_dir=args.figure_dir)
     print(

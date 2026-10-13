@@ -35,8 +35,8 @@ from src.line2.data_pipeline.dataset import git_head
 from src.line2.metrics.metrics import bucketed_rel_rmse, group_rel_rmse
 from src.line2.metrics.n_eff import CurvePoint, CurveResult, n_eff_from_err
 from src.line2.metrics.tolerance import observable_vector
-from src.line2.training.train import build_model
-from src.line2.training.unet import condition_vector, normalize_input_group
+from src.line2.training.train import build_model, kappa_version_of
+from src.line2.training.unet import kappa_for, normalize_input_group
 
 __all__ = [
     "LoadedCurve",
@@ -161,7 +161,9 @@ def predict_group(
 
     变体分支与 `train.py::_forward_variant` 一致；``n_low`` 为调用方声明的档位
     （记账用），κ 的 log₁₀N 分量与训练同源——由 counts 派生而非取声明值，
-    以保证 test 端前向与训练前向逐位对齐（`30` [S1] C5）。
+    以保证 test 端前向与训练前向逐位对齐（`30` [S1] C5）。joint 臂的 **κ 口径**
+    （有无量纲归一）由 ckpt 的 ``config.kappa`` 决定（`50` [S4] C1：``"v2"`` = Phase 1.5、
+    缺省/``"v1"`` = Phase 1）：前向必须与训练同口径，否则网络收到量级错位的条件向量。
     """
     variant = str(cfg.get("variant", "joint"))
     dev = torch.device(device)
@@ -173,7 +175,8 @@ def predict_group(
         with torch.no_grad():
             shapes, _totals = normalize_input_group(counts_t)
             if variant == "joint":
-                prob = model(shapes, condition_vector(counts_t, edges_t))
+                kappa = kappa_for(counts_t, edges_t, kappa_version_of(cfg))
+                prob = model(shapes, kappa)
             elif variant == "independent":
                 n_low_vec = counts_t.sum(dim=(1, 2, 3)).clamp_min(1.0)
                 prob = model(shapes, edges_t, torch.log10(n_low_vec))

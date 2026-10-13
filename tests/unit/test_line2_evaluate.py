@@ -325,8 +325,84 @@ def test_evaluate_run_cli_writes_out(tmp_path: pathlib.Path, data_dir: pathlib.P
     assert not (ckpt.parent / "test_eval.json").exists()
 
 
+def test_predict_group_uses_ckpt_kappa_version(
+    group_sample: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> None:
+    """`50` [S4] C1：eval 前向的 κ 口径由 ckpt 的 config 决定（v2 ckpt 不得退回 v1 κ）。
+
+    鉴别力：v1 κ 的 Σ 分量是物理单位²（10⁻¹¹ 量级）、v2 κ 无量纲——前向若硬编码 v1 口径，
+    Phase 1.5 的全部评估读数都会在错配的条件向量上产生。
+    """
+    counts, edges, _ref = group_sample
+    v2_cfg = dict(JOINT_CFG, kappa="v2")
+    model = _new_model(v2_cfg, 17)
+    batch = {
+        "counts": torch.from_numpy(counts.astype(np.float32)).unsqueeze(0),
+        "target": torch.zeros(1, 6, 128, 128),
+        "edges": torch.from_numpy(edges.astype(np.float32)).unsqueeze(0),
+    }
+    got = predict_group(model, v2_cfg, counts, edges, N_LOW, "cpu")
+    expected_v2, _target, _edges = _forward_variant(
+        model, "joint", batch, torch.device("cpu"), "v2"
+    )
+    np.testing.assert_array_equal(got, expected_v2[0].detach().numpy().astype(np.float64))
+    expected_v1, _t, _e = _forward_variant(model, "joint", batch, torch.device("cpu"), "v1")
+    assert not np.allclose(got, expected_v1[0].detach().numpy().astype(np.float64))
+
+
+# ------------------------------------ `50` [S5] C8：六评估 schema 与站标记（Phase 1.5）
+PHASE15_EVAL_TIERS = (3_000, 10_000, 100_000)
+
+
+def test_phase15_eval_schema_station1(
+    data_dir: pathlib.Path, curve_path: pathlib.Path, tmp_path: pathlib.Path, test_beam: int
+) -> None:
+    """`50` [S5] C8：每 run × {3×10³,1×10⁴,1×10⁵} × 站 {0,1} 的评估产物 schema 与 v1 相容。
+
+    (station, n_low) 是评估自变量：站 1 是**纯迁移评估**（训练未见其粒子），站 0 @1e4 是
+    门禁口径——六份产物必须各自带正确的站/档标记，且字段与 v1 schema 相容
+    （``per_beam[].{beam_id, err, obs, m2_buckets}``）。站标记可证伪：同一 ckpt 同档下，
+    站 1 的参照是传输后的图组，误标（或误用站 0 数据）会直接改变 err。
+    """
+    from src.line2.experiments.phase15_gates import eval_filename
+
+    run_dir = tmp_path / "e15_joint_s0"
+    ckpt = _save_ckpt(run_dir, dict(JOINT_CFG, phase="1.5", kappa="v2"), seed=100)
+    for tier in PHASE15_EVAL_TIERS:
+        for station in (0, 1):
+            evaluate_run(
+                ckpt, data_dir, "test", station, tier, [0], curve_path,
+                out=run_dir / eval_filename(tier, station),
+            )
+    expected = sorted(
+        eval_filename(tier, station) for tier in PHASE15_EVAL_TIERS for station in (0, 1)
+    )
+    assert sorted(path.name for path in run_dir.glob("eval_*.json")) == expected
+
+    errors: dict[tuple[int, int], float] = {}
+    for tier in PHASE15_EVAL_TIERS:
+        for station in (0, 1):
+            payload = json.loads(
+                (run_dir / eval_filename(tier, station)).read_text(encoding="utf-8")
+            )
+            assert payload["run_id"] == "e15_joint_s0"
+            assert payload["variant"] == "joint" and payload["seed"] == 100
+            assert payload["split"] == "test"
+            assert payload["station"] == station and payload["n_low"] == tier
+            assert payload["subs"] == [0] and len(payload["per_beam"]) == 1
+            entry = payload["per_beam"][0]
+            assert {"beam_id", "err", "obs", "m2_buckets"} <= set(entry)
+            assert entry["beam_id"] == test_beam
+            assert len(entry["obs"]) == N_OBSERVABLES
+            assert set(entry["m2_buckets"]) == {"B0", "B1", "B2", "B3", "improvement"}
+            errors[(tier, station)] = float(entry["err"])
+
+    for tier in PHASE15_EVAL_TIERS:
+        assert errors[(tier, 0)] != errors[(tier, 1)], f"站标记未生效（tier={tier}）"
+    assert errors[(3_000, 0)] != errors[(10_000, 0)]  # 档位标记同理由输入图组区分
+
+
 def test_parse_subs_forms() -> None:
-    """--subs 的三种写法与默认全档（`20` [S2] k=20）。"""
     assert parse_subs("0-19") == list(range(20))
     assert parse_subs(None) == list(range(20))
     assert parse_subs(3) == [3]

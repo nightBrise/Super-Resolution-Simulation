@@ -3,7 +3,7 @@
 > 由 `scripts/check_spec_consistency.py` 自动生成。
 > 维护：每次 spec 修改后重新跑此脚本刷新本文件。
 
-总计 646 个 Claim。
+总计 678 个 Claim。
 
 | Claim ID | 文档 | 章节 | 简述（前 80 字）|
 |---|---|---|---|
@@ -577,9 +577,9 @@
 | line2/00.S1.C3 | line2/00 | [S1] | 束群构造 SHALL 可由锚点 + 种子链端到端重现（`10` [S3]），且任一束的抖动参数 SHALL 可由 (beam_id, master_seed) ... |
 | line2/00.S2.C4 | line2/00 | [S2] | WHEN 按 [S2] 布局执行数据管线 THEN 全部产物 SHALL 落于 `studies/line2_particle_sr/` 下对应目录（测试断言路... |
 | line2/00.S2.C5 | line2/00 | [S2] | `python -c "import ocelot, sdds"` SHALL 在 `sr-sim` 环境成功（check_env 校验项）。 |
-| line2/00.S3.C6 | line2/00 | [S3] | 每条 Phase 门禁 SHALL 恰好对应 `40` 中一个可执行判定表达式（脚本消费落盘 summary，无人工干预）。 |
+| line2/00.S3.C6 | line2/00 | [S3] | 每条 Phase 门禁 SHALL 恰好对应一个可执行判定表达式（脚本消费落盘 summary，无人工干预）——Phase 1 门禁在 `40`，Phase 1... |
 | line2/00.S3.C7 | line2/00 | [S3] | Phase 1 交付物清单（三条门禁枚举结论 + 方法可用域地图主曲线 + 报告）SHALL 可由文件存在性检查验证。 |
-| line2/00.S4.C8 | line2/00 | [S4] | 本目录 SHALL 存在 00/10/20/30/40 五份 spec 与 `99_change_log.md`，且 [S4] 索引与实际文件一一对应。 |
+| line2/00.S4.C8 | line2/00 | [S4] | 本目录 SHALL 存在 00/10/20/30/40/50 六份 spec 与 `99_change_log.md`，且 [S4] 索引与实际文件一一对应（9... |
 | line2/00.S4.C9 | line2/00 | [S4] | WHEN 修改任何 line2 spec THEN `99_change_log.md` SHALL 先于该修改包含对应记录（审计项：人工/脚本核对，非自动化断... |
 | line2/10.S1.C1 | line2/10 | [S1] | WHEN 执行入库脚本 THEN `studies/line2_particle_sr/data/anchor/injector.sdds` SHALL 存在、... |
 | line2/10.S1.C2 | line2/10 | [S1] | `anchor/twiss.json` SHALL 含以下字段且与独立重算一致：Σ(4×4，按 (x,x′,y,y′) 顺序)、α_x/β_x/α_y/β_y、... |
@@ -653,3 +653,35 @@
 | line2/40.S3.C4 | line2/40 | [S3] | 变体路由 SHALL 覆盖 H3 的全部四种计数分支（含 3/5 的 val 裁定），无悬空分支（测试：构造四种 summary 验证路由）。 |
 | line2/40.S4.C1 | line2/40 | [S4] | 三类产出物 SHALL 由一键脚本从 run 目录生成（同输入逐位一致）；方法可用域地图 SHALL 含 E0 参考线与参照噪声地板线（`20` [S2] C3... |
 | line2/40.S4.C2 | line2/40 | [S4] | 报告 SHALL 含设计理由章，且每条门禁结论 SHALL 附其判定表达式的输入数值快照。 |
+| line2/50.S1.C1 | line2/50 | [S1] | `00` [S4] 的 spec 索引 SHALL 增加行：`50_phase15_respec_spec.md（Phase 1.5 协议修正与重训批次）`。验... |
+| line2/50.S1.C2 | line2/50 | [S1] | `00` [S3] SHALL 增加一行：`Phase 1.5 出口 = 50 [S5] 的 G1–G5 判定（脚本化，枚举四值）`。验证 = 冻结时检查 `0... |
+| line2/50.S1.C3 | line2/50 | [S1] | `00` [S4] C8 的枚举 SHALL 由"00/10/20/30/40 五份"改为"00/10/20/30/40/50 六份"。验证 = 冻结时检查 `... |
+| line2/50.S1.C4 | line2/50 | [S1] | `00` GC2 SHALL 增注：数据/训练随机性经 SeedSequence(20260913) 派生；**分析/仪器/打乱/合成随机性根种子 = 2026... |
+| line2/50.S1.C5 | line2/50 | [S1] | 本 spec 的术语（B-const、公共域、s_i、win_rate/advantage/CI、cos_al/drop_frac/disp_ratio、R_d... |
+| line2/50.S1.C6 | line2/50 | [S1] | `data/line2_ds_v2/manifest.json` SHALL 含 edge_rule 版本串、8 组轴边界数值（4 轴 × 2 站）及其 SHA... |
+| line2/50.S2.C1 | line2/50 | [S2] | WHEN 构建 `data/line2_ds_v2/` THEN 粒子内容 SHALL 与 v1 同种子推导逐位一致：全部 1000 束 × 2 站重传对账（p... |
+| line2/50.S2.C2 | line2/50 | [S2] | 同站同轴的 bin_edges SHALL 跨全部 1000 束逐位相同，且由 [S1] 公共域规则（train 700 束池化 + 5% 外扩）确定性导出（重... |
+| line2/50.S2.C3 | line2/50 | [S2] | WHEN 对 v2 施加单旋钮 θ（踢角）扫掠（±10 µrad，其余旋钮为零）THEN 该束目标图组对基准束的 M1 SHALL ≥ 1×10⁻³。阈值依据：... |
+| line2/50.S2.C4 | line2/50 | [S2] | v2 的 θ（踢角）通道外的另两旋钮 δ（四极）与 ℓ（漂移）、以及站间传输行为 SHALL 与 v1 逐位一致（同一抖动分布与传输代码路径）。测试：`test... |
+| line2/50.S2.C5 | line2/50 | [S2] | manifest.json SHALL 含 data_version="line2_ds_v2"、code_version（完整 40 位 git HEAD）、... |
+| line2/50.S2.C6 | line2/50 | [S2] | WHEN 任意束的任一粒子落在其 (轴, 站) 公共域之外 THEN 构建 SHALL 将其**夹取至最近边界格**（计数守恒：∑counts = 该子样本粒子... |
+| line2/50.S3.C1 | line2/50 | [S3] | 判定输入 SHALL 按类别白名单化：**选型与路由**只消费 val 段 val_nll（[S3] C2 定义）；**出口门禁 G1–G5** 只消费 tes... |
+| line2/50.S3.C2 | line2/50 | [S3] | 选型读数 val_nll SHALL 定义为：逐 (束, 子样本) NLL → 每档对全束取中位数 → 三档等权算术平均；档集 {3×10³, 1×10⁴, 1... |
+| line2/50.S3.C3 | line2/50 | [S3] | v2 容差线表 SHALL 按 `20` [S4] 的"逐观测量 95 分位"口径在 v2 重造（13 项 × 3 训练档 × 站 0），其中 M6 行采用去偏... |
+| line2/50.S3.C4 | line2/50 | [S3] | B-const（两站）SHALL 入冻结基线族：站 0 与站 1 各自以 v2 公共域重算（各站 700 train 束均值图），并落盘两站的逐束误差向量（各 ... |
+| line2/50.S3.C5 | line2/50 | [S3] | 个体信息仪器 SHALL 函数化（输入 = 预测图组集合 + prior + 束表，输出 = cos_true / cos_scrambled / drop_f... |
+| line2/50.S4.C1 | line2/50 | [S4] | WHEN 任意 v2 数据批次计算 κ THEN 全部分量 SHALL 为无量纲量且 |κ_i| ∈ [10⁻³, 10³]（跨全集断言；v1 实测前 10 维... |
+| line2/50.S4.C2 | line2/50 | [S4] | WHEN 混合档训练集整体统计 THEN log₁₀N 维 SHALL 非常数（std > 0），且三档取值 4.255273/4.778151/5.77815... |
+| line2/50.S4.C3 | line2/50 | [S4] | run 配置断言 SHALL 自动校验：两臂种子集合逐元素相同 {100..104}、参数量差 ≤30%、训练档集 = {3×10³,1×10⁴,1×10⁵}、... |
+| line2/50.S4.C4 | line2/50 | [S4] | WHEN 训练结束 THEN summary SHALL 记录 stop_reason ∈ {val_nll_patience, budget_exhauste... |
+| line2/50.S5.C1 | line2/50 | [S5] | WHEN 编排器启动任一训练 THEN v2 E0' 三件产物（curve/tolerance/bconst 两站）的落盘时间戳 SHALL 早于该 run 启... |
+| line2/50.S5.C2 | line2/50 | [S5] | **G1 密度反超先验**（获胜臂 @1×10⁴ 站 0，参照 = B-const 站 0）：成立 = win_rate ≥ 0.90 且 advantage ... |
+| line2/50.S5.C3 | line2/50 | [S5] | **G2 个体信息**（获胜臂 5 种子，选型 ckpt，@1×10⁴ 站 0，prior = B-const 站 0）：记 k_a = 满足 [cos_tru... |
+| line2/50.S5.C4 | line2/50 | [S5] | **G3 观测量达标**（获胜臂 @1×10⁴ 站 0，v2 容差线、M6 去偏，官方聚合 = 逐观测量先对 5 种子取中位数再判达标）：成立 = 达标率 ≥ ... |
+| line2/50.S5.C5 | line2/50 | [S5] | **G4 跨站真迁移**（获胜臂站 1 @1×10⁴；限于 [S1] 晶格边界的站 0 → 站 1，不含任何跨晶格声明）：成立 = R_diff ≤ 1.10；... |
+| line2/50.S5.C6 | line2/50 | [S5] | **G5 N 泛化**（获胜臂 @3×10³ 与 @1×10⁵ 站 0，参照 = B-const 站 0——同一均值图两档共用）：两档分别按 G1 同款四值判定... |
+| line2/50.S5.C7 | line2/50 | [S5] | 五条门禁 SHALL 由脚本消费落盘产物判定（无人工干预），`e15_gates.json` SHALL 含五门禁结论 + 每条输入快照 + routing（获... |
+| line2/50.S5.C8 | line2/50 | [S5] | 全部 10 run × 6 评估（3 档 × 2 站）的 `eval_*.json` SHALL 落盘且字段与 v1 schema 相容（`per_beam[]... |
+| line2/50.S5.C9 | line2/50 | [S5] | `map_report` SHALL 适配 v2 路径并渲染 `e15_gates.json`（G1–G5、B-const、暗桶）。测试：`test_line2... |
+| line2/50.S6.C1 | line2/50 | [S6] | 阶段报告 SHALL 含"前后对照表"：每行一个量（Phase 1 官方 H1/H3/H8 口径、G1–G5、三点 err、模型 vs B-const），三列 ... |
+| line2/50.S6.C2 | line2/50 | [S6] | 交付物存在性 SHALL 可由文件枚举脚本验证（阶段报告、e15_gates.json、10×6 eval JSON、对照表 CSV）。测试：`test_lin... |

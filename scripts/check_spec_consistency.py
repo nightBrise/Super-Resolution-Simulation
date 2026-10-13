@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 SPECS_DIR = Path('docs/specs')
-SPEC_PATTERN = re.compile(r'^(\d{2})_([a-z_]+)\.md$')
+SPEC_PATTERN = re.compile(r'^(\d{2})_([a-z0-9_]+)\.md$')
 
 
 def spec_files() -> list:

@@ -14,6 +14,11 @@ config 字段即契约（Phase 1.5 相对 Phase 1 的差异集中在 ``phase``/`
      "tiers": [3000, 10000, 100000], "stations": [0], "k_train": 5,
      "max_steps": 50000, "eval_every": 1000, "patience": 10,
      "data_dir": ".../line2_ds_v2", "out_dir": "...", ...}
+
+``val_beams`` 是 Phase 1 遗留的评估开销控制键：它把 val 集截短，而 `50` [S3] C2 的
+val_nll（选型与路由的唯一准绳）冻结在**全 150 束 val 集**上定义，截短后读数不是
+val_nll、两臂不可比。故 Phase 1.5 的矩阵断言只接受 ``val_beams`` 缺省或恰等于 150
+（:data:`PHASE15_VAL_BEAMS`），见 :func:`validate_phase15_matrix`。
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ __all__ = [
     "PHASE15_SEEDS",
     "PHASE15_STATIONS",
     "PHASE15_K_TRAIN",
+    "PHASE15_VAL_BEAMS",
     "PARAM_TOLERANCE",
     "validate_run_config",
     "validate_phase15_matrix",
@@ -41,6 +47,8 @@ PHASE15_SEEDS = (100, 101, 102, 103, 104)
 PHASE15_STATIONS = (0,)
 #: 每档每束训练子样本数（本批预注册）
 PHASE15_K_TRAIN = 5
+#: val 集规模（`50` [S3] C2：val_nll 在全 150 束 val 集上定义）——``val_beams`` 只许缺省或等于此值
+PHASE15_VAL_BEAMS = 150
 #: 两臂参数量差上限（`30` [S4] C1 沿用）
 PARAM_TOLERANCE = 0.30
 #: 预注册训练预算与评估周期（`30` [S3] C1 的 max_steps=50000 沿用；`50` [S1] 每 1000 步评估）
@@ -81,6 +89,25 @@ def validate_run_config(cfg: Mapping) -> dict:
         "k_train": int(cfg["k_train"]),
         "kappa": str(cfg["kappa"]),
     }
+
+
+def _reject_val_beams_override(cfg: Mapping) -> None:
+    """拒绝截短 val 集的 ``val_beams``（`50` [S3] C2：val_nll 定义在全 150 束 val 集上）。
+
+    Phase 1 的该键用于降低评估开销；Phase 1.5 的 val_nll 是选型与路由的唯一准绳，
+    截短后读数只在被截的子集上定义、两臂不可比，故只接受缺省或恰等于
+    :data:`PHASE15_VAL_BEAMS`。守卫放在矩阵断言（而非单 run 入口）里：小规模冒烟
+    训练仍可按 Phase 1 口径截短 val 集，正式矩阵不许。
+    """
+    limit = cfg.get("val_beams")
+    if limit is None:
+        return
+    if int(limit) != PHASE15_VAL_BEAMS:
+        raise ValueError(
+            f"{cfg.get('out_dir', cfg.get('variant'))}：val_beams={limit!r} 不是 "
+            f"{PHASE15_VAL_BEAMS}（`50` [S3] C2 的 val_nll 定义在全 {PHASE15_VAL_BEAMS} 束 "
+            "val 集上，截短即不是 val_nll）——Phase 1.5 矩阵 config 只许缺省或等于该值"
+        )
 
 
 def _params_total(configs: Iterable[Mapping]) -> dict[str, int]:
@@ -152,6 +179,7 @@ def validate_phase15_matrix(
                     f"{cfg.get('out_dir', cfg['variant'])}：{key} 必须为 {expected}"
                     f"（`50` [S4] item 3 预注册），得到 {cfg.get(key)!r}"
                 )
+        _reject_val_beams_override(cfg)
 
     by_variant: dict[str, list[int]] = {}
     for cfg in configs:

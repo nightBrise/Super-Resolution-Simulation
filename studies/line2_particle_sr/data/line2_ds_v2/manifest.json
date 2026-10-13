@@ -9,7 +9,7 @@
     "per_beam_file_sha256": "b75cbd0b336f49def9f22f7f9c3cb68f51e77644dd5200ab82af2440e428c076",
     "total_particles": 400002000
   },
-  "code_version": "a93561ce5babf9923da54aa80d0530bc48e0d7a3",
+  "code_version": "70c5f24de3cdfc6caa4e8ef74da8073531c3d499",
   "data_version": "line2_ds_v2",
   "edge_rule": "common_train_pooled_min_max_pad5",
   "edge_rule_detail": {
